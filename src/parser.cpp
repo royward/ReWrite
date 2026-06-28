@@ -169,7 +169,7 @@ Expression parse_expression(Parser& parser, std::unordered_map<std::string, std:
         expr=Expression{CallInternal{prefix_id,std::move(expr_list)}};
     } else {
         switch(t.kind) {
-            case UnsignedInteger : expr=Expression{Const{DataElement{DataInt{-token_to_int(t)}}}}; break;
+            case UnsignedInteger : expr=Expression{Const{DataElement{DataInt{token_to_int(t)}}}}; break;
             case Identifier : {
                 if(parser.current().kind==LParen) {
                     parser.advance();

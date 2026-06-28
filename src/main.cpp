@@ -10,6 +10,7 @@
 #include <print>
 
 Program do_parse(std::string_view program_string);
+std::vector<DataElement> run(const Program& prog, std::string& fn, std::vector<DataElement>& args);
 
 std::string load_file(const std::filesystem::path& path) {
     std::ifstream file(path, std::ios::in | std::ios::binary);
@@ -30,11 +31,18 @@ int main(int argc, char** argv) {
     try {
         std::string s=load_file(filename);
         std::println("{}",s);
-        std::vector<Token> tokens=lex(s);
-        for (const auto& token : tokens) {
-            std::println("{}", token);
-        }
+        //std::vector<Token> tokens=lex(s);
+        //for (const auto& token : tokens) {
+        //    std::println("{}", token);
+        //}
         Program prog=do_parse(s);
+        std::vector<DataElement> inputs;
+        inputs.push_back(DataElement{DataInt{10}});
+        std::string fn="fact";
+        std::vector<DataElement> results=run(prog,fn,inputs);
+        //for (const auto& i : results) {
+        //    std::print("{},", i);
+        //}
         std::println("");
     } catch(const std::runtime_error& e) {
         std::println("Error: {}", e.what());
