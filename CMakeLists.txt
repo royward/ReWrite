@@ -20,6 +20,7 @@ add_executable(rewrite_cpp
     src/lexer.cpp
     src/parser.cpp
     src/program.cpp
+    src/program_call_internal.cpp
     src/main.cpp
     src/util.cpp
 )
