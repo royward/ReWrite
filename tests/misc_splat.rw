@@ -1,0 +1,9 @@
+// Example: miscellaneous examples using splat
+// This won't expand the stack
+// SPDX-License-Identifier: CC0-1.0
+
+// e.g middle({1,2,3,4}) returns {2,3}
+middle({_,..x,_}) -> x;
+
+// e.g flatten({{{1,2},{3,4}}}) returns {1,2,3,4}
+flatten(x) -> {.. ..x};
