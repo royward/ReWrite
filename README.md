@@ -54,7 +54,7 @@ It is designed to be embedded in other languages (currently C++, later will also
 ReWrite2 requires a C++23 compatible compiler (GCC 14+ or Clang 18+) and CMake 3.20+. It uses no platform-specific code and should work on any platform supporting these tools, but has only been tested on Linux.
 
 ```bash
-git clone https://github.com/[your-repo]/rewrite2.git
+git clone https://github.com/royward/rewrite2.git
 cd rewrite2
 cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
 cmake --build build/release
@@ -95,7 +95,107 @@ It is also possible to just use the classes directly (just look at `main.cpp` fo
 
 ## Language description
 
-(examples included in here)
+This section has examples which can all be found in the `tests` directory.
+
+#### General Structure
+
+The structure of a ReWrite2 program is simple - it is a list of functions, where each function is a list of rules of the form:
+
+```
+<function_name>(<match parameters>)[::<optional guard expression>] -> <expressions>;
+```
+
+and the language just fires the first rule that successfully matches (it is a runtime error if none of them fire - later versions might make this a compile time error).
+
+So for instance, in the example from earlier:
+
+```
+fact(0)->1;
+fact(n)->n*fact(n-1);
+```
+
+If `fact(3)` is evaluated, it fails to match with the first rule, matches with the second which fires, so `n*fact(n-1)` is evaluated, which calls `fact(2)`.
+
+When `fact(0)` is called, it will fire the first rule, but having succeeded, it will _not_ fire the second one - unlike Prolog or Mercury, there is no backtracking.
+
+#### Guards
+
+Guards are useful when the condition can't be expressed purely as a pattern match. They are expected to be an expression returning a single boolean.
+
+An alternative version of `fact` using a guard is:
+
+```
+fact(n)::n>0 -> n*fact(n-1);
+fact(_) -> 1;
+```
+
+The first rule will fire if `n` is matched (which will match to any single argument), but the rule will fire only if the guard condition is met: `n>0`, giving the same result as the first version (except it won't crash the stack like the first version would).
+
+The `_` is a special symbol that means "match with anything". Unlike a named parameter, it doesn't bind to anything, so you can use multiple `_` in the same rule without conflict.
+
+#### Multiple return values
+
+One unusual feature of ReWrite2 is that functions can return multiple values, and these will be taken as separate values when inserted into a list or another function call.
+
+For instance, in the following, `min_max` returns two values, the min and the max:
+
+```
+min_max(a,b) :: a<b -> a,b;
+min_max(a,b) -> b,a;
+```
+
+and this will be taken as two parameters by another function, for instance:
+
+```
+sub(a,b) -> b-a;
+```
+so `sub(min_max(10,3))` and `sub(min_max(3,10))` will both return `7`.
+
+It's worth unpacking what is going on here: `min_max(10,3)` returns the results `3` (the min) and `10` (the max). The `3` and `10` are passed as two arguments to `sub(a,b)`, so `sub(3,10)` is evaluated.
+
+One motivation for this (using features not yet in the language) was `polar_to_rectangular`:
+
+```
+// hypothetical - floating point not yet supported
+polar_to_rectangular(r, theta) -> r*cos(theta), r*sin(theta);
+```
+
+It naturally returns multiple values, and while many other languages allow the result to be returned as a pair (or more generally, a tuple), it then needs to be unpacked, usually by assigning it to something and getting out indexed values. ReWrite2 makes this much more natural - if the parameter order matches up (if it doesn't, ReWrite2 would easily support a one line shim to fix this).
+
+#### Lists and splat
+
+### More complex examples
+
+#### First n prime numbers
+
+#### N-Queens
 
 ## Road map
 
+ReWrite2 development will occur in phases:
+
+#### Phase 1: minimal interpreter
+
+This is mostly done - the only things left to complete this are:
+
+* char/string support
+* constants
+* additional library functions required by the phase 2 compiler
+
+#### Phase 2: compiling to VM
+
+This stage does not involve adding language features, but writing a ReWrite2 program that compiles itself to a VM targetted binary. Steps are:
+
+* write ReWrite2 -> VM compiler, written in ReWrite2 itself (self-hosting)
+* write the VM (probably in C++ or C - this will be fairly low level)
+
+#### Phase 3+: strong typing and other features
+
+Once ReWrite2 can build and run itself, the interpreter is no longer necessary, so other features can be added:
+
+* Interface from C, C++ and Rust
+* Strong static typing (types checked at compile time)
+* Structs
+* Better code optimization
+* More language features and libraries as useful.
+  
