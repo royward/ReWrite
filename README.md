@@ -128,10 +128,20 @@ An alternative version of `fact` using a guard is:
 fact(n)::n>0 -> n*fact(n-1);
 fact(_) -> 1;
 ```
-
 The first rule will fire if `n` is matched (which will match to any single argument), but the rule will fire only if the guard condition is met: `n>0`, giving the same result as the first version (except it won't crash the stack like the first version would).
 
 The `_` is a special symbol that means "match with anything". Unlike a named parameter, it doesn't bind to anything, so you can use multiple `_` in the same rule without conflict.
+
+### Pattern matching
+
+So far, all the examples have treated function parameters like they would appear in most other languages. ReWrite2 does full matching, which is richer than this - the same identifer can appear as part of a match multiple times, but then it must be bound to the same value. For instance:
+
+```
+equal(x,x) -> true;
+equal(_,_) -> false;
+```
+
+Will test for equality for the two parameters - if they are equal, the first rule will fire, otherwise the second one will.
 
 #### Multiple return values
 
@@ -163,6 +173,87 @@ polar_to_rectangular(r, theta) -> r*cos(theta), r*sin(theta);
 It naturally returns multiple values, and while many other languages allow the result to be returned as a pair (or more generally, a tuple), it then needs to be unpacked, usually by assigning it to something and getting out indexed values. ReWrite2 makes this much more natural - if the parameter order matches up (if it doesn't, ReWrite2 would easily support a one line shim to fix this).
 
 #### Lists and splat
+
+ReWrite2 has support for constructing lists, using `{ }`, so `{1,2,3}` is the list containing the three elements, 1,2,3. Lists can also be used as part of pattern matching:
+
+```
+// not in test directory as more powerful example below
+reverse3({x,y,z}) -> {z,y,x};
+```
+This will reverse a list of three elements. However this is not very general - we really want to reverse any sized list. To allow more powerful list processing, there is the splat `..` operator, which is effectively the inverse of the list operator. When used as part of a match, it means "take any number of elements and bind it to a list", when used as part of the expression on the right, it means "expand a list into its elements in the surrounding context", so `..{x}` = `x`, and {..list} = `list` (if `list` is a list).
+
+Here is a more generic reverse list function:
+
+```
+reverse({}) -> {};
+reverse({a,..rest}) -> {..reverse(rest),a};
+```
+
+Working through this, if `reverse({1,2,3})` is called, then `a` will bind to `1`, `rest` will bind to `{2,3}`. `reverse(rest)=reverse({2,3})` will return `{3,2}`, and the `..` will strip the brackets, so `{..{3,2},1}` = `{3,2,1}`. The first rule gives a terminating condition to the recursion.
+
+A splat doesn't need to be at the end of a list. An example that takes all the elements of a list except the first and last:
+
+```
+middle({_,..x,_}) -> x;
+```
+
+So `middle({1,2,3,4})` returns `{2,3}`.
+
+You might be tempted to use multiple splats:
+
+```
+// This won't work (yet)
+member(x,{.._,x,.._}) -> true;
+member(x,_) -> false;
+```
+
+This is conceptually nice, but the language doesn't (yet) support it - this is a minimal interpreter, and that would take a fair bit more machinery to get working.
+
+The following will work:
+
+```
+member(_,{}) -> false;
+member(x,{x,.._}) -> true;
+member(x,{_,..rest}) -> member(x,rest);
+```
+
+As part of an expression, splat can deal with more than one argument (if they are all lists):
+
+```
+flatten(x) -> {.. ..x};
+```
+
+Calling `flatten({{1,2},{3,4}})` returns `{1,2,3,4}`. `..{{1,2},{3,4}}` gives the two results `{1,2}`,`{3,4}` and the other `..` expands each of them to `1`,`2` and `3`,`4`, which is enclosed in a list giving `{1,2,3,4}`
+
+For another example using list and splat:
+
+```
+listn(0) -> {};
+listn(n) -> {..listn(n-1),n-1};
+```
+
+`listn(3)` returns `{0,1,2}`. I leave working through this as an exercise for the reader.
+
+### Tail recursion
+
+ReWrite2 uses a lot of recursion. One thing to be aware of is that each recursive call typically uses another frame on the stack, so deep recursions can cause a stack overflow. This is mitigated by tail recursion - a jump (tail call) is used on the last operation performed by a function. so in:
+
+```
+f(x) -> g(x),t(h(x))
+```
+
+the `g(x)` and `h(x)` will be called, creating another level on the stack, but when it gets to `t(x)`, that is done with a jump rather than a call, as there would be nothing left to do on return.
+
+Code can always be made tail recursive with appropriate restructuring. For instance, the `listn` above is not tail recursive, but the following is:
+
+```
+listn2(n) -> listn_aux(0,n,{});
+
+listn_aux(n,n,sofar) -> sofar;
+listn_aux(n,m,sofar) -> listn_aux(n+1,m,{..sofar,n});
+```
+
+This is a little more complicated than `listn`, but avoids the stack growing with the size of `n`. It basically sets up an accumulator `sofar`, so that `listn_aux` effectively becomes a loop.
 
 ### More complex examples
 
