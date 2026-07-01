@@ -42,6 +42,13 @@ As a secondary motivation, I was interested to see how well Modern C++ could be 
 
 ## Use cases
 
+ReWrite2 can be used for general programming, but is particularly good at dealing with complex-case logic. For instance, this makes it well suited to lexers, parsers and compilers. I also think it is going to have value in complex game logic (I haven't tested this yet), and converting a data structure into readable text (for example, planet descriptions).
+
+The example programs demonstrate recursive algorithms including prime generation and the n-queens problem, giving a sense of the language's expressive range beyond compiler construction.
+
+It is designed to be embedded in other languages (currently C++, later will also support C and Rust), so the plan is to use it for the logic that goes alongside heavy numerical computation in the embedding language.
+
+
 ## Installation
 
 ReWrite2 requires a C++23 compatible compiler (GCC 14+ or Clang 18+) and CMake 3.20+. It uses no platform-specific code and should work on any platform supporting these tools, but has only been tested on Linux.
