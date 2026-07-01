@@ -1,0 +1,7 @@
+// Example: min and max, showing multiple returns
+// SPDX-License-Identifier: CC0-1.0
+
+min_max(a,b) :: a<b -> a,b;
+min_max(a,b) -> b,a;
+
+sub(a,b) -> b-a;

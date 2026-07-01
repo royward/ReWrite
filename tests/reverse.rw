@@ -1,0 +1,5 @@
+// Example: reverse a list
+// SPDX-License-Identifier: CC0-1.0
+
+reverse({}) -> {};
+reverse({a,..rest}) -> {..reverse(rest),a};

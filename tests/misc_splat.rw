@@ -5,5 +5,5 @@
 // e.g middle({1,2,3,4}) returns {2,3}
 middle({_,..x,_}) -> x;
 
-// e.g flatten({{{1,2},{3,4}}}) returns {1,2,3,4}
+// e.g flatten({{1,2},{3,4}}) returns {1,2,3,4}
 flatten(x) -> {.. ..x};

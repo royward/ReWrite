@@ -1,0 +1,6 @@
+// Example: use matching to test for equality
+// This won't expand the stack
+// SPDX-License-Identifier: CC0-1.0
+
+equal(x,x) -> true;
+equal(_,_) -> false;
