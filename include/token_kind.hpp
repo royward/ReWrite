@@ -60,5 +60,8 @@ enum TokenKind {
     Xor,
     // some functions
     CountTrailingZeros,
+    // String stuff
+    String,
+    Chars,
     Eof,
 };

@@ -71,7 +71,9 @@ cmake --build build/debug
 
 I welcome bug reports if there is some issue where it won't build on another platform with a recent enough C++ compiler.
 
-Note that once ReWrite2 builds itself, compiling the VM will not require C++-23 - probably C++17 at most.
+Note that the phase 1 interpreter is not optimised for performance - it is merely a vehicle to bootstrap to phase 2 and beyond, where performance issues will be addressed.
+
+Note that once ReWrite2 builds itself in phase 2 and beyond, compiling the VM will not require C++-23 - probably C++17 at most.
 
 ## Usage
 
@@ -233,6 +235,54 @@ listn(n) -> {..listn(n-1),n-1};
 ```
 
 `listn(3)` returns `{0,1,2}`. I leave working through this as an exercise for the reader.
+
+#### Chars and Strings
+
+ReWrite2 has support for string and char. A char is a single character in single quotes `'a'`. As syntactic sugar, multiple characters can be put in single quotes and represents a list of chars, so `'ab'` = `'a','b'` - two char values.
+
+A string is a sequence of characters in double quotes: "abc", represented as a list of chars, so `"abc"` = `{'abc'}` = `{'a','b','c'}`, and `.."abc"` = `'abc'`.
+
+These can be matched as usual. Chars support all comparison operators and can have integers added or subtracted, returning a char.
+
+This allows for reasonably compact string pattern matching and string generation. Here is an example of Roman Numeral to and from integer conversion, that shows some of these capabilities:
+
+```
+// Convert integer to Roman Numeral.
+int_to_roman(i)::i>=1000 -> {'M',..int_to_roman(i-1000)};
+int_to_roman(i)::i>=900 -> {'CM',..int_to_roman(i-900)};
+int_to_roman(i)::i>=500 -> {'D',..int_to_roman(i-500)};
+int_to_roman(i)::i>=400 -> {'CD',..int_to_roman(i-400)};
+int_to_roman(i)::i>=100 -> {'C',..int_to_roman(i-100)};
+int_to_roman(i)::i>=90 -> {'XC',..int_to_roman(i-90)};
+int_to_roman(i)::i>=50 -> {'L',..int_to_roman(i-50)};
+int_to_roman(i)::i>=40 -> {'XL',..int_to_roman(i-40)};
+int_to_roman(i)::i>=10 -> {'X',..int_to_roman(i-10)};
+int_to_roman(i)::i>=9 -> {'IX',..int_to_roman(i-9)};
+int_to_roman(i)::i>=5 -> {'V',..int_to_roman(i-5)};
+int_to_roman(i)::i>=4 -> {'IV',..int_to_roman(i-4)};
+int_to_roman(i)::i>=1 -> {'I',..int_to_roman(i-1)};
+int_to_roman(_) -> "";
+
+to_uppercase(c)::c>='a' && c<='z' -> c-32;
+to_uppercase(c) -> c;
+
+// Convert Roman Numeral to integer. Does not validate that the Roman Numeral is well formed.
+roman_to_int_convert('I') -> 1;
+roman_to_int_convert('V') -> 5;
+roman_to_int_convert('X') -> 10;
+roman_to_int_convert('L') -> 50;
+roman_to_int_convert('C') -> 100;
+roman_to_int_convert('D') -> 500;
+roman_to_int_convert('M') -> 1000;
+
+roman_to_int_convert_case(x) -> roman_to_int_convert(to_uppercase(x));
+
+roman_to_int("") -> 0;
+roman_to_int({a,b,..rest})::roman_to_int_convert_case(a)<roman_to_int_convert_case(b) ->
+    roman_to_int_convert_case(b)-roman_to_int_convert_case(a)+roman_to_int(rest);
+roman_to_int({a,..rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
+
+```
 
 #### Tail recursion
 

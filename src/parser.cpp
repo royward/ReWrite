@@ -24,6 +24,7 @@
 #include <ranges>
 #include <charconv>
 
+
 void parse_error(const Token& token, std::vector<std::string_view> expected) {
     std::string message;
     if (expected.size() == 1) {
@@ -63,6 +64,24 @@ int64_t token_to_int(Token& token) {
 }
 
 std::vector<Parameter> parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, TokenKind end, TokenKind sep);
+
+std::vector<Parameter> string_to_paramlist(std::string_view s) {
+    std::vector<Parameter> chars;
+    chars.reserve(s.size());
+    for(char c : s) {
+        chars.push_back(Parameter{Const{DataElement{DataChar{c}}}});
+    }
+    return chars;
+}
+
+std::vector<Expression> string_to_exprlist(std::string_view s) {
+    std::vector<Expression> chars;
+    chars.reserve(s.size());
+    for(char c : s) {
+        chars.push_back(Expression{Const{DataElement{DataChar{c}}}});
+    }
+    return chars;
+}
 
 Parameter parse_param(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map) {
     Token t=parser.current();
@@ -107,6 +126,16 @@ Parameter parse_param(Parser& parser, std::unordered_map<std::string, std::size_
             std::vector<Parameter> list_internal=parse_param_list(parser, param_id_map, RBrace, Comma);
             return Parameter{ParamList{std::move(list_internal)}};
         }
+        case String: {
+            return Parameter{ParamList{string_to_paramlist(t.text)}};
+        }
+        case Chars: {
+            std::vector<Parameter> chars=string_to_paramlist(t.text);
+            if(chars.size()!=1) {
+                throw std::runtime_error(std::format("char expression is expected to be of size 1, found {}",chars.size()));
+            }
+            return std::move(chars[0]);
+        }
         default : parse_error(t,{"parameter"});
     }
     // never gets to here, but g++ doesn't know that
@@ -126,6 +155,10 @@ std::vector<Parameter> parse_param_list(Parser& parser, std::unordered_map<std::
             if(t.kind==end) {
                 parser.advance();
                 return param_list; // deal with trailing comma case
+            } else if(t.kind==Chars) {
+                std::vector<Parameter> chars=string_to_paramlist(t.text);
+                param_list.insert(param_list.end(),std::make_move_iterator(chars.begin()),std::make_move_iterator(chars.end()));
+                parser.advance();
             } else {
                 Parameter p2=parse_param(parser,param_id_map);
                 if(std::holds_alternative<ParamSplat>(p2.value) || std::holds_alternative<ParamSplatWild>(p2.value)) {
@@ -135,13 +168,13 @@ std::vector<Parameter> parse_param_list(Parser& parser, std::unordered_map<std::
                     }
                 }
                 param_list.push_back(std::move(p2));
-                separator_or_end=parser.current().kind;
-                if(separator_or_end!=sep && separator_or_end!=end) {
-                    parse_error(parser.current(),{token_kind_to_string(sep),token_kind_to_string(end)});
-                }
-                parser.advance();
             }
-        }
+            separator_or_end=parser.current().kind;
+            if(separator_or_end!=sep && separator_or_end!=end) {
+                parse_error(parser.current(),{token_kind_to_string(sep),token_kind_to_string(end)});
+            }
+            parser.advance();
+    }
     }
     return param_list;
 }
@@ -249,6 +282,16 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                 std::vector<Expression> list_internal=parse_expression_list(parser, param_id_map, RBrace, Comma);
                 expr=Expression{ExprList{std::move(list_internal)}};
             } break;
+            case String: {
+                return Expression{ExprList{string_to_exprlist(t.text)}};
+            }
+            case Chars: {
+                std::vector<Expression> chars=string_to_exprlist(t.text);
+                if(chars.size()!=1) {
+                    throw std::runtime_error(std::format("char expression is expected to be of size 1, found {}",chars.size()));
+                }
+                return std::move(chars[0]);
+            }
             case LParen: {
                 expr=parse_expression(parser, param_id_map,0);
                 if(parser.current().kind!=RParen) {
@@ -287,14 +330,18 @@ std::vector<Expression> Program::parse_expression_list(Parser& parser, std::unor
             if(t.kind==end) {
                 parser.advance();
                 return expr_list; // deal with trailing comma case
+            } else if(t.kind==Chars) {
+                std::vector<Expression> chars=string_to_exprlist(t.text);
+                expr_list.insert(expr_list.end(),std::make_move_iterator(chars.begin()),std::make_move_iterator(chars.end()));
+                parser.advance();
             } else {
                 expr_list.push_back(parse_expression(parser,param_id_map,0));
-                separator_or_end=parser.current().kind;
-                if(separator_or_end!=sep && separator_or_end!=end) {
-                    parse_error(parser.current(),{token_kind_to_string(sep),token_kind_to_string(end)});
-                }
-                parser.advance();
             }
+            separator_or_end=parser.current().kind;
+            if(separator_or_end!=sep && separator_or_end!=end) {
+                parse_error(parser.current(),{token_kind_to_string(sep),token_kind_to_string(end)});
+            }
+            parser.advance();
         }
     }
     return expr_list;

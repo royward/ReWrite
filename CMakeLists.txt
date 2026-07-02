@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(rewrite_cpp VERSION 0.0.1 LANGUAGES CXX)
+project(rewrite_cpp VERSION 0.0.2 LANGUAGES CXX)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)

@@ -26,7 +26,7 @@
 
 struct Token {
     TokenKind kind;
-    std::string_view text;
+    std::string text;
     uint32_t row;
     uint32_t start_column;
     uint32_t end_column;

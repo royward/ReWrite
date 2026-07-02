@@ -21,14 +21,40 @@
 #include <format>
 #include "token.hpp"
 
+std::string lex_string(std::string_view program, std::size_t& p, char term) {
+    std::string result;
+    std::size_t len=program.length();
+    while(p<len) {
+        char c=program[p];
+        p++;
+        if(c==term) {
+            return result;
+        }
+        if(c=='\\' && p<len) {
+            char esc=program[p];
+            p++;
+            switch(esc) {
+                case 't': c='\t'; break;
+                case 'r': c='\r'; break;
+                case 'n': c='\n'; break;
+                default: c=esc;
+            }
+        }
+        result+=c;
+    }
+    throw std::runtime_error(std::format("Unterminated {} string",term));
+}
+
 std::vector<Token> lex(std::string_view program) {
     std::vector<Token> result;
-    std::size_t p=0;
     std::size_t len=program.length();
+    std::size_t p=0;
     std::size_t offset_start_of_row=0;
     uint32_t row=0;
     while(p<len) {
         TokenKind token_kind;
+        bool use_transformed_string=false;
+        std::string transformed_string;
         std::size_t start_p=p;
         char c=program[p++];
         if(c=='_' || std::isalpha(static_cast<unsigned char>(c))) {
@@ -54,14 +80,15 @@ std::vector<Token> lex(std::string_view program) {
                 p++;
             }
             token_kind=UnsignedInteger;
-        } else if(c=='\n') {
-            row++;
-            offset_start_of_row=p;
-            continue; // NOTE: no token produced for newline
         } else if(std::isblank(static_cast<unsigned char>(c))) {
             continue; // NOTE: no token produced for whitespaces
         } else {
             switch(c) {
+                case '\n':{
+                    row++;
+                    offset_start_of_row=p;
+                    continue; // NOTE: no token produced for newline
+                }
                 case '{':token_kind=LBrace; break;
                 case '}':token_kind=RBrace; break;
                 case ',':token_kind=Comma; break;
@@ -161,7 +188,7 @@ std::vector<Token> lex(std::string_view program) {
                     }
                     break;
                 }
-               case '|': {
+                case '|': {
                     if(p<len && program[p]=='|') {
                         p++;
                         token_kind=OrOr;
@@ -170,12 +197,22 @@ std::vector<Token> lex(std::string_view program) {
                     }
                     break;
                 }
+                case '\'': {
+                    token_kind=Chars;
+                    use_transformed_string=true;
+                    transformed_string=lex_string(program,p,'\'');
+                } break;
+                case '\"': {
+                    token_kind=String;
+                    use_transformed_string=true;
+                    transformed_string=lex_string(program,p,'\"');
+                } break;
                 default:throw std::runtime_error(std::format("Unexpected character: {}", c));
             }
         }
         result.push_back(Token{
             .kind = token_kind,
-            .text = program.substr(start_p, p - start_p),
+            .text = use_transformed_string?transformed_string:static_cast<std::string>(program.substr(start_p, p - start_p)),
             .row = row,
             .start_column = static_cast<uint32_t>(start_p - offset_start_of_row),
             .end_column = static_cast<uint32_t>(p - offset_start_of_row),

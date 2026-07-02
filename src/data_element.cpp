@@ -19,6 +19,18 @@
 #include "data_element.hpp"
 #include <stdexcept>
 
+std::string display_single_char(char ch, char term) {
+    if(ch==term) {
+        return {'\\',term};
+    }
+    switch(ch) {
+        case '\t':return {'\\','t'};
+        case '\r':return {'\\','r'};
+        case '\n':return {'\\','n'};
+        default: return {ch};
+    }
+}
+
 namespace detail {
     inline std::string to_string_visit(const DataUnbound&) {
         throw std::runtime_error("Unbond variables cannot be displayed");
@@ -30,16 +42,40 @@ namespace detail {
         return std::to_string(i.value);
     }
     inline std::string to_string_visit(const DataChar& c) {
-        return std::string(1, c.value);
+        std::string s="\'";
+        s+=display_single_char(c.value,'\'');
+        s+="\'";
+        return s;
     }
     inline std::string to_string_visit(const DataList& l) {
-        std::string out = "{";
-        for (std::size_t i = 0; i < l.value.size(); i++) {
-            if (i != 0) out += ",";
-            out += l.value[i].to_string();
+        // first check if the whole list is a string
+        if(l.value.size()==0) {
+            return "{}";
         }
-        out += "}";
-        return out;
+        bool is_string=true;
+        for(const DataElement& e:l.value) {
+            if(!std::holds_alternative<DataChar>(e.value)) {
+                is_string=false;
+                break;
+            }
+        }
+        if(is_string) {
+            // whole list is a string, display as such
+            std::string out = "\"";
+            for (const DataElement& e:l.value) {
+                out += display_single_char(std::get<DataChar>(e.value).value,'\"');
+            }
+            out += "\"";
+            return out;
+        } else {
+            std::string out = "{";
+            for (std::size_t i = 0; i < l.value.size(); i++) {
+                if (i != 0) out += ",";
+                out += l.value[i].to_string();
+            }
+            out += "}";
+            return out;
+        }
     }
 }
 

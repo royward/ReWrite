@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.2] - 2026-07-02
+
+### Added
+- String and char support
+- tests/roman_numerals.rw to demonstrate char and string support
+
+### Fixed
+- Segmentation fault when a function in the command line calling expression did not exist
+
 ## [0.0.1] - 2026-07-01 — Initial release
 
 ### Added
