@@ -42,43 +42,45 @@ DataElement compare_op(const char* op_name, const DataElement& a, const DataElem
     }
 }
 
+void check_arg_count(std::string_view function, const std::vector<DataElement>& args, std::size_t count) {
+    if(args.size()!=count) {
+        throw std::runtime_error(std::format("wrong arg count for {}: Found {}, expected {}",function,args.size(),count));
+    }
+}
+
+template<typename Type> void check_type(std::string_view function, const DataElement&a) {
+    if(!std::holds_alternative<Type>(a.value)) {
+        throw std::runtime_error(std::format("wrong type for {}: {}",function,a.value.index()));
+    }
+}
+
 void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::vector<DataElement>& sofar) {
     switch(op) {
         case CountTrailingZeros: {
-            if(args.size()!=1) {
-                throw std::runtime_error(std::format("wrong argument number for count_trailing_zeros: {}",args.size()));
-            }
-            if(args[0].value.index()==TYPE_I64) {
-                sofar.push_back(DataElement{DataInt{std::countr_zero(static_cast<uint64_t>(std::get<DataInt>(args[0].value).value))}});
-            } else {
-                throw std::runtime_error(std::format("wrong type count for trailing_zeros: {}",args[0].value.index()));
-            }
+            check_arg_count("count_trailing_zeros",args,1);
+            check_type<DataInt>("count_trailing_zeros",args[0]);
+            sofar.push_back(DataElement{DataInt{std::countr_zero(static_cast<uint64_t>(std::get<DataInt>(args[0].value).value))}});
         } break;
         case PopCount: {
-            if(args.size()!=1) {
-                throw std::runtime_error(std::format("wrong argument number for pop_count: {}",args.size()));
-            }
-            if(args[0].value.index()==TYPE_I64) {
-                sofar.push_back(DataElement{DataInt{std::popcount(static_cast<uint64_t>(std::get<DataInt>(args[0].value).value))}});
-            } else {
-                throw std::runtime_error(std::format("wrong type for pop_count: {}",args[0].value.index()));
-            }
-        } break;
+            check_arg_count("pop_count",args,1);
+            check_type<DataInt>("pop_count",args[0]);
+            sofar.push_back(DataElement{DataInt{std::popcount(static_cast<uint64_t>(std::get<DataInt>(args[0].value).value))}});
+         } break;
         case Print: {
-            if(args.size()!=1) {
-                throw std::runtime_error(std::format("wrong argument number for print: {}",args.size()));
-            }
+            check_arg_count("print",args,1);
+            check_type<DataList>("print",args[0]);
             const DataList& content_list = std::get<DataList>(args[0].value);
             for(const DataElement& e : content_list.value) {
+                check_type<DataChar>("print",e);
                 putchar(std::get<DataChar>(e.value).value);
             }
         } break;
         case PrintLn: {
-            if(args.size()!=1) {
-                throw std::runtime_error(std::format("wrong argument number for print: {}",args.size()));
-            }
+            check_arg_count("println",args,1);
+            check_type<DataList>("println",args[0]);
             const DataList& content_list = std::get<DataList>(args[0].value);
             for(const DataElement& e : content_list.value) {
+                check_type<DataChar>("println",e);
                 putchar(std::get<DataChar>(e.value).value);
             }
             putchar('\n');
@@ -93,13 +95,13 @@ void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::ve
             putchar('\n');
         } break;
         case LoadTextFile: {
-            if(args.size()!=1) {
-                throw std::runtime_error(std::format("wrong argument number for load_text_file: {}",args.size()));
-            }
+            check_arg_count("load_text_file",args,1);
             // get filename from char list
+            check_type<DataList>("load_text_file",args[0]);
             const DataList& filename_list = std::get<DataList>(args[0].value);
             std::string filename;
             for(const DataElement& e : filename_list.value) {
+                check_type<DataChar>("load_text_file",e);
                 filename += std::get<DataChar>(e.value).value;
             }
             std::ifstream file(filename, std::ios::in | std::ios::binary);
@@ -115,13 +117,14 @@ void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::ve
             sofar.push_back(DataElement{DataList{std::move(chars)}});
         } break;
         case SaveTextFile: {
-            if(args.size()!=2) {
-                throw std::runtime_error(std::format("wrong argument number for save_text_file: {}",args.size()));
-            }
-            // get filename
+            check_arg_count("save_text_file",args,2);
+             // get filename
+            check_type<DataList>("save_text_file",args[0]);
+            check_type<DataList>("save_text_file",args[1]);
             const DataList& filename_list = std::get<DataList>(args[0].value);
             std::string filename;
             for(const DataElement& e : filename_list.value) {
+                check_type<DataChar>("save_text_file",e);
                 filename += std::get<DataChar>(e.value).value;
             }
             // get content
@@ -131,6 +134,7 @@ void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::ve
                 throw std::runtime_error(std::format("save_text_file: could not open file: {}", filename));
             }
             for(const DataElement& e : content_list.value) {
+                check_type<DataChar>("save_text_file",e);
                 file << std::get<DataChar>(e.value).value;
             }
         } break;

@@ -20,12 +20,17 @@ Program::Program(std::string_view source) {
     // for(auto t:parser.tokens) {
     //     std::println("{}",t.to_string());
     // }
-    while(!parser.eof()) {
-        if(parser.current().kind==ConstToken) {
-            parse_const(parser);
-        } else {
-            parse_rule(parser);
+    try {
+        while(!parser.eof()) {
+            if(parser.current().kind==ConstToken) {
+                parse_const(parser);
+            } else {
+                parse_rule(parser);
+            }
         }
+    } catch (const std::runtime_error& e) {
+        Token t=parser.current();
+        throw std::runtime_error(std::format("{} (row={}, col={})", e.what(), t.row+1, t.start_column+1));
     }
     function_names=indices_to_names(function_map);
 }
@@ -258,8 +263,7 @@ start:
             }
         }
 
-        throw std::runtime_error(std::format("{} (in {}({}))",
-            e.what(), name, argprint));
+        throw std::runtime_error(std::format("{} (in {}({}))", e.what(), name, argprint));
     }
     std::string name;
     for (const auto& [key, val] : function_map) {

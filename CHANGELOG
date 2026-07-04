@@ -14,7 +14,9 @@ All notable changes to this project will be documented in this file.
 - count_trailing_zeros is a proper function rather than operator
 
 ### Fixed
-- Various error message improvements
+- Fixed arg checking on library functions
+- Now Display the line numbers in parser errors
+- Various other error message improvements
 
 ## [0.0.2] - 2026-07-02
 

@@ -1,0 +1,140 @@
+// 1045,-217
+
+const And=1;
+const AndAnd=2;
+const Arrow=3;
+const Colon=4;
+const ColonColon=5;
+const Comma=6;
+const ConstToken=7;
+const Divide=8;
+const Dot=9;
+const Equal=10;
+const EqualEqual=11;
+const False=12;
+const Greater=13;
+const GreaterEqual=14;
+const GreedySplat=15;
+const Hash=16;
+const HashHash=17;
+const Identifier=18;
+const LBrace=19;
+const LBracket=20;
+const LParen=21;
+const Less=22;
+const LessEqual=23;
+const Minus=24;
+const Modulus=25;
+const Not=26;
+const NotEqual=27;
+const Or=28;
+const OrOr=29;
+const Plus=30;
+const RBrace=31;
+const RBracket=32;
+const RParen=33;
+const Semicolon=34;
+const ShiftLeft=35;
+const ShiftRight=36;
+const Splat=37;
+const Times=38;
+const True=39;
+const UnsignedInteger=40;
+const Wildcard=41;
+const Xor=42;
+const String=43;
+const Chars=44;
+
+is_start_token(c) -> c=='_' || (c>='a' && c<='z') || (c>='A' && c<='Z');
+
+is_rest_token(c) -> c=='_' || (c>='a' && c<='z') || (c>='A' && c<='Z') || (c>='0' && c<='9');
+
+is_digit(c) -> c>='0' && c<='9';
+
+is_whitespace(c) -> c==' ' || c=='\t' || c=='\r';
+
+lexer(s) -> lexer_aux({},0,0,s);
+
+lexer_aux(acc,_,_,{}) -> acc;
+lexer_aux(acc,row,col,{c,..rest})::is_start_token(c) -> lex_get_token(acc,row,col,col+1,{c},rest);
+lexer_aux(acc,row,col,{c,..rest})::is_digit(c) -> lex_get_digit(false,acc,row,col,col+1,{c},rest);
+lexer_aux(acc,row,col,{'-',c,..rest})::is_digit(c) -> lex_get_digit(true,acc,row,col,col+2,{c},rest);
+lexer_aux(acc,row,col,{c,..rest})::is_whitespace(c) -> lexer_aux(acc,row,col+1,rest);
+lexer_aux(acc,row,col,{'//',..rest}) -> lexer_aux_absorb_comment(acc,row,rest);
+lexer_aux(acc,row,col,{'\n',..rest}) -> lexer_aux(acc,row+1,0,rest);
+lexer_aux(acc,row,col,{'"',..rest}) -> lexer_string(acc,row,col,col+1,{},'"',String,rest);
+lexer_aux(acc,row,col,{'\'',..rest}) -> lexer_string(acc,row,col,col+1,{},'\'',Chars,rest);
+lexer_aux(acc,row,col,{c1,c2,..rest}) -> lexer_aux_check_double(acc,row,col,lexer_two_symbol(c1,c2),c1,c2,rest);
+lexer_aux(acc,row,col,{c}) -> lexer_aux_check_single(acc,row,col,lexer_one_symbol(c),c,{}); // deal with single char token at end
+
+lex_get_token(acc,row,start_col,col,sofar,{c,..rest})::is_rest_token(c) -> lex_get_token(acc,row,start_col,col+1,{..sofar,c},rest);
+lex_get_token(acc,row,start_col,col,sofar,rest) -> lexer_aux({..acc,{row,start_col,lex_check_spec_identifier(sofar)}},row,col,rest);
+
+lex_check_spec_identifier("true") -> True,"true";
+lex_check_spec_identifier("false") -> False,"false";
+lex_check_spec_identifier("const") -> ConstToken,"const";
+lex_check_spec_identifier(x) -> Identifier,x;
+
+lex_get_digit(neg,acc,row,start_col,col,sofar,{c,..rest})::is_digit(c) -> lex_get_digit(neg,acc,row,start_col,col+1,{..sofar,c},rest);
+lex_get_digit(neg,acc,row,start_col,col,sofar,rest) -> lexer_aux({..acc,{row,start_col,UnsignedInteger,{..lex_add_sign(neg),..sofar}}},row,col,rest);
+
+lex_add_sign(true) -> "-";
+lex_add_sign(false) -> "";
+
+lexer_aux_absorb_comment(acc,row,{}) -> lexer_aux(acc,row+1,0,{});
+lexer_aux_absorb_comment(acc,row,{'\n',..rest}) -> lexer_aux(acc,row+1,0,rest);
+lexer_aux_absorb_comment(acc,row,{_,..rest}) -> lexer_aux_absorb_comment(acc,row,rest);
+
+lexer_aux_check_double(acc,row,col,0,c1,c2,rest) -> lexer_aux_check_single(acc,row,col,lexer_one_symbol(c1),c1,{c2,..rest});
+lexer_aux_check_double(acc,row,col,token,c1,c2,rest) -> lexer_aux({..acc,{row,col,token,{c1,c2}}},row,col+2,rest);
+
+lexer_aux_check_single(acc,row,col,0,c,rest) -> #;
+lexer_aux_check_single(acc,row,col,token,c,rest) -> lexer_aux({..acc,{row,col,token,{c}}},row,col+1,rest);
+
+lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{endtok,..rest}) -> lexer_aux({..acc,{row,col,tok_kind,sofar}},row,col+1,rest);
+lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{'\\t',..rest}) -> lexer_string(acc,row,start_col,col+2,{..sofar,'\t'},endtok,tok_kind,rest);
+lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{'\\r',..rest}) -> lexer_string(acc,row,start_col,col+2,{..sofar,'\r'},endtok,tok_kind,rest);
+lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{'\\n',..rest}) -> lexer_string(acc,row,start_col,col+2,{..sofar,'\n'},endtok,tok_kind,rest);
+lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{'\\',c,..rest}) -> lexer_string(acc,row,start_col,col+2,{..sofar,c},endtok,tok_kind,rest);
+lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{c,..rest}) -> lexer_string(acc,row,start_col,col+1,{..sofar,c},endtok,tok_kind,rest);
+
+lexer_two_symbol('&&') -> AndAnd;
+lexer_two_symbol('->') -> Arrow;
+lexer_two_symbol('::') -> ColonColon;
+lexer_two_symbol('==') -> EqualEqual;
+lexer_two_symbol('>=') -> GreaterEqual;
+lexer_two_symbol('##') -> HashHash;
+lexer_two_symbol('<=') -> LessEqual;
+lexer_two_symbol('!=') -> NotEqual;
+lexer_two_symbol('||') -> OrOr;
+lexer_two_symbol('<<') -> ShiftLeft;
+lexer_two_symbol('>>') -> ShiftRight;
+lexer_two_symbol('..') -> Splat;
+lexer_two_symbol(_,_) -> 0;
+
+
+lexer_one_symbol(':') -> Colon;
+lexer_one_symbol(',') -> Comma;
+lexer_one_symbol('/') -> Divide;
+lexer_one_symbol('.') -> Dot;
+lexer_one_symbol('=') -> Equal;
+lexer_one_symbol('>') -> Greater;
+lexer_one_symbol('#') -> Hash;
+lexer_one_symbol('{') -> LBrace;
+lexer_one_symbol('[') -> LBracket;
+lexer_one_symbol('(') -> LParen;
+lexer_one_symbol('<') -> Less;
+lexer_one_symbol('-') -> Minus;
+lexer_one_symbol('%') -> Modulus;
+lexer_one_symbol('!') -> Not;
+lexer_one_symbol('|') -> Or;
+lexer_one_symbol('+') -> Plus;
+lexer_one_symbol('}') -> RBrace;
+lexer_one_symbol(']') -> RBracket;
+lexer_one_symbol(')') -> RParen;
+lexer_one_symbol(';') -> Semicolon;
+lexer_one_symbol('*') -> Times;
+lexer_one_symbol('^') -> Xor;
+lexer_one_symbol(_) -> 0;
+
+
