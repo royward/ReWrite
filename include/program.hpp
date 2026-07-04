@@ -51,9 +51,10 @@ struct ExprSplat { std::unique_ptr<Expression> inner; };
 struct ExprList { std::vector<Expression> items; };
 struct Call { uint32_t func_id; std::vector<Expression> args; };
 struct CallInternal { TokenKind func_id; std::vector<Expression> args; };
+struct CallLibrary { TokenKind func_id; std::vector<Expression> args; };
 struct Never {};
 
-using ExpressionVariant = std::variant <Id, ExprSplat, Const, ExprList, Call, CallInternal, Never>;
+using ExpressionVariant = std::variant <Id, ExprSplat, Const, ExprList, Call, CallInternal, CallLibrary, Never>;
 
 struct Expression {
     ExpressionVariant value;
@@ -76,12 +77,16 @@ private:
     void do_call_function(uint32_t op, std::vector<DataElement>& sofar, std::vector<DataElement> args) const;
     // Implementations for parsing in parser.cpp
     void parse_rule(Parser& parser);
+    void parse_const(Parser& parser);
+    Parameter parse_param(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map);
+    std::vector<Parameter> parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, TokenKind end, TokenKind sep);
     Expression parse_expression(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, uint8_t pri);
     std::vector<Expression> parse_expression_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, TokenKind end, TokenKind sep);
     // data
     std::vector<std::vector<Rule>> program;
     std::vector<std::string> function_names; // debugging only
     std::unordered_map<std::string, std::size_t> function_map; // only for lookups for call
+    std::unordered_map<std::string, std::vector<DataElement>> constants; // only used at the parsing stage
 };
 
 bool compare_equal(const DataElement& x, const DataElement& y);

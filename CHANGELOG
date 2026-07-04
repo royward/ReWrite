@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.3] - 2026-07-04
+
+### Added
+- # and ## to report runtime errors
+- const support
+- added library functions print, println, println_debug, pop_count, load_text_file, save_text_file
+
+### Changed
+- Renumbered phases in README. Current phase is now 0
+- count_trailing_zeros is a proper function rather than operator
+
+### Fixed
+- Various error message improvements
+
 ## [0.0.2] - 2026-07-02
 
 ### Added

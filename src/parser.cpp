@@ -24,6 +24,16 @@
 #include <ranges>
 #include <charconv>
 
+const std::unordered_map<std::string, TokenKind> library_map = {
+    {"count_trailing_zeros", CountTrailingZeros},
+    {"pop_count", PopCount},
+    {"print", Print},
+    {"println", PrintLn},
+    {"println_debug", PrintLnDebug},
+    {"load_text_file", LoadTextFile},
+    {"save_text_file", SaveTextFile},
+    {"save_binary_file", SaveBinaryFile},
+};
 
 void parse_error(const Token& token, std::vector<std::string_view> expected) {
     std::string message;
@@ -63,7 +73,7 @@ int64_t token_to_int(Token& token) {
     return value;
 }
 
-std::vector<Parameter> parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, TokenKind end, TokenKind sep);
+//std::vector<Parameter> parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, TokenKind end, TokenKind sep);
 
 std::vector<Parameter> string_to_paramlist(std::string_view s) {
     std::vector<Parameter> chars;
@@ -83,7 +93,33 @@ std::vector<Expression> string_to_exprlist(std::string_view s) {
     return chars;
 }
 
-Parameter parse_param(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map) {
+void Program::parse_const(Parser& parser) {
+    parser.advance();
+    Token identifier=parser.current();
+    if(identifier.kind!=Identifier) {
+        parse_error(identifier,{"identifier"});
+    }
+    std::string name=identifier.text;
+    parser.advance();
+    Token eq=parser.current();
+    if(eq.kind!=Equal) {
+        parse_error(eq,{"="});
+    }
+    parser.advance();
+    std::unordered_map<std::string, std::size_t> empty_param_id_map;
+    std::vector<Expression> expr=parse_expression_list(parser, empty_param_id_map, Semicolon, Comma);
+    if(constants.find(name)!=constants.end()) {
+        throw std::runtime_error(std::format("const already declared {}",name));
+    }
+    const std::vector<DataElement> empty_bindings;
+    std::vector<DataElement> values;
+    for(const Expression& e : expr) {
+        do_call_single(e, empty_bindings, values);
+    }
+    constants[name] = std::move(values);
+}
+
+Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map) {
     Token t=parser.current();
     parser.advance();
     switch(t.kind) {
@@ -100,10 +136,19 @@ Parameter parse_param(Parser& parser, std::unordered_map<std::string, std::size_
             } break;
         }
         case Identifier : {
-            std::string s=static_cast<std::string>(t.text);
-            param_id_map.try_emplace(s,param_id_map.size());
-            uint32_t id=static_cast<uint32_t>(param_id_map[s]);
-            return Parameter{Id{id}};
+            auto find_constant=constants.find(t.text);
+            if(find_constant != constants.end()) {
+                std::vector<DataElement>& const_val=find_constant->second;
+                if(const_val.size()!=1) {
+                    throw std::runtime_error(std::format("const expression is expected to be of size 1, found {}",const_val.size()));
+                }
+                return Parameter{Const{const_val[0]}};
+            } else {
+                std::string s=static_cast<std::string>(t.text);
+                param_id_map.try_emplace(s,param_id_map.size());
+                uint32_t id=static_cast<uint32_t>(param_id_map[s]);
+                return Parameter{Id{id}};
+            }
         }
         case Wildcard : {
             return Parameter{ParamWildcard{}};
@@ -142,7 +187,7 @@ Parameter parse_param(Parser& parser, std::unordered_map<std::string, std::size_
     return Parameter{Const{DataElement{DataUnbound{}}}};
 }
 
-std::vector<Parameter> parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, TokenKind end, TokenKind sep) {
+std::vector<Parameter> Program::parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, TokenKind end, TokenKind sep) {
     std::size_t splat_count=0;
     std::vector<Parameter> param_list;
     if(parser.current().kind==end) {
@@ -158,6 +203,12 @@ std::vector<Parameter> parse_param_list(Parser& parser, std::unordered_map<std::
             } else if(t.kind==Chars) {
                 std::vector<Parameter> chars=string_to_paramlist(t.text);
                 param_list.insert(param_list.end(),std::make_move_iterator(chars.begin()),std::make_move_iterator(chars.end()));
+                parser.advance();
+            } else if(t.kind==Identifier && constants.find(t.text)!=constants.end()) {
+                std::vector<DataElement>& const_val=constants[t.text];
+                for(auto& v : const_val) {
+                    param_list.push_back(Parameter{Const{v}});
+                }
                 parser.advance();
             } else {
                 Parameter p2=parse_param(parser,param_id_map);
@@ -183,7 +234,6 @@ std::tuple<uint8_t, TokenKind> prefix_binding_power(TokenKind op) {
     switch(op) {
         case Minus: return {110, Minus};      // unary minus, binds tighter than any infix op
         case Not:   return {110, Not};        // unary logical/bitwise not
-        case CountTrailingZeros:   return {190, CountTrailingZeros};
         default:    return {0, Eof};
     }
 }
@@ -244,18 +294,30 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
             case True : return Expression{Const{DataElement{DataBool{true}}}};
             case False : return Expression{Const{DataElement{DataBool{false}}}};
             case Identifier : {
-                if(parser.current().kind==LParen) {
+                auto find_constant=constants.find(t.text);
+                if(find_constant != constants.end()) {
+                    std::vector<DataElement>& const_val=find_constant->second;
+                    if(const_val.size()!=1) {
+                        throw std::runtime_error(std::format("const expression is expected to be of size 1, found {}",const_val.size()));
+                    }
+                    expr=Expression{Const{const_val[0]}};
+                } else if(parser.current().kind==LParen) {
                     parser.advance();
-                    std::string s=static_cast<std::string>(t.text);
-                    function_map.try_emplace(s,function_map.size()); // allow insert, because might be forward call
-                    uint32_t id=static_cast<uint32_t>(function_map[s]);
+                    auto built_in=library_map.find(t.text);
                     std::vector<Expression> expr_list=parse_expression_list(parser, param_id_map, RParen, Comma);
-                    expr=Expression{Call{id,std::move(expr_list)}};
+                    if(built_in!=library_map.end()) {
+                        expr=Expression{CallLibrary{built_in->second,std::move(expr_list)}};
+                    } else {
+                        std::string s=static_cast<std::string>(t.text);
+                        function_map.try_emplace(s,function_map.size()); // allow insert, because might be forward call
+                        uint32_t id=static_cast<uint32_t>(function_map[s]);
+                        expr=Expression{Call{id,std::move(expr_list)}};
+                    }
                 } else {
                     std::string s=static_cast<std::string>(t.text);
                     auto search=param_id_map.find(s);
                     if(search==param_id_map.end()) {
-                        throw std::runtime_error(std::format("parameter not bound on left hand size: {}",s));
+                        throw std::runtime_error(std::format("parameter not bound on right hand size: {}",s));
                     }
                     uint32_t id=static_cast<uint32_t>(search->second);
                     expr=Expression{Id{id}};
@@ -299,6 +361,10 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                 }
                 parser.advance();
             } break;
+            case Hash:
+            case HashHash: {
+                return Expression{Never{}};
+            }
             default : parse_error(t,{"expression"});
         }
     }
@@ -330,6 +396,12 @@ std::vector<Expression> Program::parse_expression_list(Parser& parser, std::unor
             if(t.kind==end) {
                 parser.advance();
                 return expr_list; // deal with trailing comma case
+            } else if(t.kind==Identifier && constants.find(t.text)!=constants.end()) {
+                std::vector<DataElement>& const_val=constants[t.text];
+                for(auto& v : const_val) {
+                    expr_list.push_back(Expression{Const{v}});
+                }
+                parser.advance();
             } else if(t.kind==Chars) {
                 std::vector<Expression> chars=string_to_exprlist(t.text);
                 expr_list.insert(expr_list.end(),std::make_move_iterator(chars.begin()),std::make_move_iterator(chars.end()));
@@ -363,7 +435,7 @@ void Program::parse_rule(Parser& parser) {
                 rule.guard=std::nullopt;
             }
             if(parser.current().kind!=Arrow) {
-                parse_error(parser.current(),{"->"});
+                parse_error(parser.current(),{"->","::"});
             }
             parser.advance();
             rule.right=parse_expression_list(parser,param_id_map,Semicolon,Comma);

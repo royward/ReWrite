@@ -6,6 +6,8 @@ Note: ReWrite2 is a working name while I look for a better one.
 
 ## Overview
 
+ReWrite2 is a language designed to make complex decision logic easier. It has pattern matching that is used instead of `if ... then ... else` chains or `case` type statements, and an idiom that makes list construction and deconstruction easy and readable. A ReWrite2 program often has "one thought per line".
+
 A ReWrite2 program is a list of functions, where each function is a set of rules, and the execution path is that a function call will try each of the rules, then fire the first one that matches (without Prolog style backtracking). For a simple example:
 
 ```
@@ -19,7 +21,6 @@ ReWrite2:
 * is currently interpreted, with the goal of later being compiled.
 * will be strongly typed - it is currently dynamically typed, but this will change in the compiled version.
 * is mostly functional (does allow side effect for things like logging).
-* uses patterns instead of if/then/else and case.
 * uses tail recursion instead of loops.
 * uses no garbage collector - everything is copied, modified in place or disposed of, so that there is exactly one reference to anything. This will be replaced by reference counting in the compiled version. Both of these techniques avoid garbage collection pauses and make memory management predictable.
 * is intended to have the Rust/Haskell property that where possible things fail at parse or compile time rather than run time.
@@ -71,9 +72,9 @@ cmake --build build/debug
 
 I welcome bug reports if there is some issue where it won't build on another platform with a recent enough C++ compiler.
 
-Note that the phase 1 interpreter is not optimised for performance - it is merely a vehicle to bootstrap to phase 2 and beyond, where performance issues will be addressed.
+Note that the phase 0 interpreter is not optimised for performance - it is merely a vehicle to bootstrap to phase 1 and beyond, where performance issues will be addressed.
 
-Note that once ReWrite2 builds itself in phase 2 and beyond, compiling the VM will not require C++-23 - probably C++17 at most.
+Note that once ReWrite2 builds itself in phase 1 and beyond, compiling the VM will not require C++-23 - probably C++17 at most.
 
 ## Usage
 
@@ -93,7 +94,7 @@ Results:
 3628800
 ```
 
-It is also possible to just use the classes directly (just look at `main.cpp` for the code for this). A note of caution with doing this - the current version is the throwaway prototype, and the API to phase 2 will be quite different.
+It is also possible to just use the classes directly (just look at `main.cpp` for the code for this). A note of caution with doing this - the current version is the throwaway prototype, and the API to phase 1 will be quite different.
 
 ## Language description
 
@@ -283,6 +284,64 @@ roman_to_int({a,b,..rest})::roman_to_int_convert_case(a)<roman_to_int_convert_ca
 roman_to_int({a,..rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
 
 ```
+#### Constants
+
+Sometimes it is useful to have a constant value, rather than having to use a number or other expression directly. For this, there is a special syntax for setting constants: `const <id> = <expressions>`. This can be particularly helpful for pattern matching as shown in this example, where the symbol `TokPlus` is much clearer than `2`.
+
+```
+const TokNumber = 1;
+const TokPlus = 2;
+const TokMinus = 3;
+const TokEof = 0;
+
+eval(TokNumber, a, _) -> a; // just return the first one
+eval(TokPlus, a, b) -> a+b;
+eval(TokMinus, a, b) -> a-b;
+eval(TokEof, _, _) -> TokEof;
+```
+
+Note:
+* it is an error to try and declare a constant more than once
+* constants only take effect after they are declared, and can have expressions depending on other constants
+* it is legal for a const to have more than one expression - in this example, `name` expands to the 5 characters:
+
+```
+const name='World';
+
+hello() -> {'Hello ', name ,'!'};
+```
+
+Calling `hello()` returns "Hello World!".
+
+#### Errors
+
+There are situations where it is useful to report a runtime error, or note that a particular match should not happen. For instance, the first factorial example will go into a loop until it overflows the stack if a negative number is passed in.
+
+```
+fact(0)->1;
+fact(n)->n*fact(n-1);
+```
+
+Two expressions are provided for this purpose:
+
+* `#` is a promise that a particular rule will never be matched (meant for the compiler)
+* `##` indicates to return a run-time error.
+
+For the moment (phase 0), they both perform identically to produce runtime errors.
+
+To use either of those, put them on the right hand side of a rule. They can appear anywhere in an expression, though typically they are the sole expression on the right-hand side.
+
+For example:
+
+```
+fact(n)::n<0 -> ##;
+fact(0)->1;
+fact(n)->n*fact(n-1);
+```
+
+`fact(-2)` returns:
+
+`Error: error thrown by # or ## (in fact(-2))`
 
 #### Tail recursion
 
@@ -328,7 +387,7 @@ isprime(n,{_,..rest}) -> isprime(n,rest);
 
 `nprime_aux` is effectively a loop, trying increasing numbers one at a time against the list of primes found so far.
 
-`isprime` is a good exemplar showing how rule matching can make code clear. There is a terminating condition ("we tried them all") first rule, another rule for exiting early, another one for "this is not prime", and lastly, "we tested this number, go try the next one". I sometimes think of it as "one thought = one line".
+`isprime` is a good exemplar showing how rule matching can make code clear. There is a terminating condition ("we tried them all") first rule, another rule for exiting early, another one for "this is not prime", and lastly, "we tested this number, go try the next one".
 
 #### N-Queens
 
@@ -366,22 +425,21 @@ There is also a variant of this `nqueens_bitmask.rw` in the `tests` directory, t
 
 ReWrite2 development will occur in phases:
 
-#### Phase 1: minimal interpreter
+#### Phase 0: minimal interpreter
 
 This is mostly done - the only things left to complete this are:
 
-* char/string support
 * constants
-* additional library functions required by the phase 2 compiler
+* additional library functions required by the phase 1 compiler
 
-#### Phase 2: compiling to VM
+#### Phase 1: compiling to VM
 
 This stage does not involve adding language features, but writing a ReWrite2 program that compiles itself to a VM targetted binary. Steps are:
 
 * write ReWrite2 -> VM compiler, written in ReWrite2 itself (self-hosting)
 * write the VM (probably in C++ or C - this will be fairly low level)
 
-#### Phase 3+: strong typing and other features
+#### Phase 2+: strong typing and other features
 
 Once ReWrite2 can build and run itself, the interpreter is no longer necessary, so other features can be added:
 

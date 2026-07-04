@@ -1,0 +1,6 @@
+// Example: demonstrating use of constants
+// SPDX-License-Identifier: CC0-1.0
+
+const name='World';
+
+hello() -> {'Hello ', name ,'!'};

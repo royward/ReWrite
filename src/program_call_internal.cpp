@@ -17,6 +17,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "program.hpp"
+#include <fstream>
+#include <iterator>
+#include <print>
 
 // https://en.cppreference.com/cpp/utility/functional for all the cool types stuff
 
@@ -39,6 +42,106 @@ DataElement compare_op(const char* op_name, const DataElement& a, const DataElem
     }
 }
 
+void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::vector<DataElement>& sofar) {
+    switch(op) {
+        case CountTrailingZeros: {
+            if(args.size()!=1) {
+                throw std::runtime_error(std::format("wrong argument number for count_trailing_zeros: {}",args.size()));
+            }
+            if(args[0].value.index()==TYPE_I64) {
+                sofar.push_back(DataElement{DataInt{std::countr_zero(static_cast<uint64_t>(std::get<DataInt>(args[0].value).value))}});
+            } else {
+                throw std::runtime_error(std::format("wrong type count for trailing_zeros: {}",args[0].value.index()));
+            }
+        } break;
+        case PopCount: {
+            if(args.size()!=1) {
+                throw std::runtime_error(std::format("wrong argument number for pop_count: {}",args.size()));
+            }
+            if(args[0].value.index()==TYPE_I64) {
+                sofar.push_back(DataElement{DataInt{std::popcount(static_cast<uint64_t>(std::get<DataInt>(args[0].value).value))}});
+            } else {
+                throw std::runtime_error(std::format("wrong type for pop_count: {}",args[0].value.index()));
+            }
+        } break;
+        case Print: {
+            if(args.size()!=1) {
+                throw std::runtime_error(std::format("wrong argument number for print: {}",args.size()));
+            }
+            const DataList& content_list = std::get<DataList>(args[0].value);
+            for(const DataElement& e : content_list.value) {
+                putchar(std::get<DataChar>(e.value).value);
+            }
+        } break;
+        case PrintLn: {
+            if(args.size()!=1) {
+                throw std::runtime_error(std::format("wrong argument number for print: {}",args.size()));
+            }
+            const DataList& content_list = std::get<DataList>(args[0].value);
+            for(const DataElement& e : content_list.value) {
+                putchar(std::get<DataChar>(e.value).value);
+            }
+            putchar('\n');
+        } break;
+        case PrintLnDebug: {
+            // prints all args and returns them unchanged - can be inserted anywhere for debugging
+            for(std::size_t i=0;i<args.size();i++) {
+                if(i!=0)putchar(',');
+                std::print("{}",args[i].to_string());
+                sofar.push_back(args[i]);
+            }
+            putchar('\n');
+        } break;
+        case LoadTextFile: {
+            if(args.size()!=1) {
+                throw std::runtime_error(std::format("wrong argument number for load_text_file: {}",args.size()));
+            }
+            // get filename from char list
+            const DataList& filename_list = std::get<DataList>(args[0].value);
+            std::string filename;
+            for(const DataElement& e : filename_list.value) {
+                filename += std::get<DataChar>(e.value).value;
+            }
+            std::ifstream file(filename, std::ios::in | std::ios::binary);
+            if(!file.is_open()) {
+                throw std::runtime_error(std::format("load_text_file: could not open file: {}", filename));
+            }
+            std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            std::vector<DataElement> chars;
+            chars.reserve(content.size());
+            for(char c : content) {
+                chars.push_back(DataElement{DataChar{c}});
+            }
+            sofar.push_back(DataElement{DataList{std::move(chars)}});
+        } break;
+        case SaveTextFile: {
+            if(args.size()!=2) {
+                throw std::runtime_error(std::format("wrong argument number for save_text_file: {}",args.size()));
+            }
+            // get filename
+            const DataList& filename_list = std::get<DataList>(args[0].value);
+            std::string filename;
+            for(const DataElement& e : filename_list.value) {
+                filename += std::get<DataChar>(e.value).value;
+            }
+            // get content
+            const DataList& content_list = std::get<DataList>(args[1].value);
+            std::ofstream file(filename, std::ios::out | std::ios::binary);
+            if(!file.is_open()) {
+                throw std::runtime_error(std::format("save_text_file: could not open file: {}", filename));
+            }
+            for(const DataElement& e : content_list.value) {
+                file << std::get<DataChar>(e.value).value;
+            }
+        } break;
+        case SaveBinaryFile: {
+        } break;
+        default: {
+            throw std::runtime_error(std::format("unknown library function: {}",static_cast<int>(op)));
+        }
+    }
+}
+
 DataElement do_call_internal(TokenKind op, const std::vector<DataElement>& args) {
     switch(args.size()) {
         case 1: {
@@ -52,15 +155,7 @@ DataElement do_call_internal(TokenKind op, const std::vector<DataElement>& args)
                         throw std::runtime_error(std::format("wrong type unary minus: {}",argtype));
                     }
                 }
-                case CountTrailingZeros: {
-                    if(argtype==TYPE_I64) {
-                        int64_t x=std::get<DataInt>(arg.value).value;
-                        return DataElement{DataInt{std::countr_zero(static_cast<uint64_t>(x))}};
-                    } else {
-                        throw std::runtime_error(std::format("wrong type count trailing zeros: {}",argtype));
-                    }
-                }
-                case Not: {
+                 case Not: {
                     if(argtype==TYPE_BOOL) {
                         return DataElement{DataBool{!std::get<DataBool>(arg.value).value}};
                     } else {

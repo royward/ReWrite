@@ -25,6 +25,7 @@ enum TokenKind {
     Colon,
     ColonColon,
     Comma,
+    ConstToken,
     Divide,
     Dot,
     Equal,
@@ -33,6 +34,8 @@ enum TokenKind {
     Greater,
     GreaterEqual,
     GreedySplat,
+    Hash,
+    HashHash,
     Identifier,
     LBrace,
     LBracket,
@@ -58,10 +61,17 @@ enum TokenKind {
     UnsignedInteger,
     Wildcard,
     Xor,
-    // some functions
-    CountTrailingZeros,
     // String stuff
     String,
     Chars,
     Eof,
+    // some functions - these are never used as tokens, but are placeholders for do_call_internal
+    CountTrailingZeros,
+    PopCount,
+    Print,
+    PrintLn,
+    PrintLnDebug,
+    LoadTextFile,
+    SaveTextFile,
+    SaveBinaryFile,
 };

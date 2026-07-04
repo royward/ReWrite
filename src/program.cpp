@@ -12,6 +12,7 @@
 #include <string>
 
 DataElement do_call_internal(TokenKind op, const std::vector<DataElement>& args);
+void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::vector<DataElement>& sofar);
 
 Program::Program(std::string_view source) {
     Parser parser;
@@ -20,7 +21,11 @@ Program::Program(std::string_view source) {
     //     std::println("{}",t.to_string());
     // }
     while(!parser.eof()) {
-        parse_rule(parser);
+        if(parser.current().kind==ConstToken) {
+            parse_const(parser);
+        } else {
+            parse_rule(parser);
+        }
     }
     function_names=indices_to_names(function_map);
 }
@@ -136,7 +141,7 @@ bool do_match_vec(const std::vector<Parameter>& parameters, const std::vector<Da
 }
 
 void Program::do_call_single(const Expression& expression, const std::vector<DataElement>& bindings, std::vector<DataElement>& sofar) const {
-    std::visit([this,&expression,&bindings,&sofar](const auto& alt) {
+    std::visit([this,&bindings,&sofar](const auto& alt) {
         using T = std::decay_t<decltype(alt)>;
         if constexpr (std::is_same_v<T, Id>) {
             sofar.push_back(bindings[alt.value]);
@@ -169,8 +174,14 @@ void Program::do_call_single(const Expression& expression, const std::vector<Dat
                 do_call_single(e,bindings,args);
             }
             sofar.push_back(do_call_internal(alt.func_id,args));
+        } else if constexpr (std::is_same_v<T, CallLibrary>) {
+            std::vector<DataElement> args;
+            for(const Expression& e:alt.args) {
+                do_call_single(e,bindings,args);
+            }
+            do_call_library(alt.func_id,args,sofar);
         } else if constexpr (std::is_same_v<T, Never>) {
-            throw std::runtime_error("evaluated Never expression");
+            throw std::runtime_error("error thrown by # or ##");
         }
     }, expression.value);
 }
@@ -191,46 +202,74 @@ start:
         }
         throw std::runtime_error("function not found: <unknown>");
     }
-    const std::vector<Rule>& rules=program[op];
-    // find the first match
-    for(const Rule& rule: rules) {
-        std::vector<DataElement> bindings(rule.names.size(),DataElement{DataUnbound{}});
-        if(do_match_vec(rule.left,args,bindings)) {
-            bool guard_ok=true;
-            if (rule.guard.has_value()) {
-                std::vector<DataElement> guard_sofar;
-                do_call_single(*rule.guard,bindings,guard_sofar);
-                if(guard_sofar.size()!=1 || !std::holds_alternative<DataBool>(guard_sofar[0].value)) {
-                    throw std::runtime_error("Guard must return a single value bool");
-                }
-                guard_ok=get<DataBool>(guard_sofar[0].value).value;
-            }
-            if(guard_ok) {
-                // found matching rule, now evaluate right side, being careful to handle tail recursion
-                std::size_t process_with_tail=0;
-                if(rule.right.size()>0 && std::holds_alternative<Call>(rule.right[rule.right.size()-1].value)) {
-                    process_with_tail=1;
-                }
-                for (const Expression& expr : rule.right | std::views::take(rule.right.size() - process_with_tail)) {
-                    do_call_single(expr,bindings,sofar);
-                }
-                if(process_with_tail==0) {
-                    return;
-                } else {
-                    // Tail recursion here
-                    const Call& call=std::get<Call>(rule.right[rule.right.size()-1].value);
-                    op=call.func_id;
-                    std::vector<DataElement> new_args;
-                    for(const Expression& e:call.args) {
-                        do_call_single(e,bindings,new_args);
+    try {
+        const std::vector<Rule>& rules=program[op];
+        // find the first match
+        for(const Rule& rule: rules) {
+            std::vector<DataElement> bindings(rule.names.size(),DataElement{DataUnbound{}});
+            if(do_match_vec(rule.left,args,bindings)) {
+                bool guard_ok=true;
+                if (rule.guard.has_value()) {
+                    std::vector<DataElement> guard_sofar;
+                    do_call_single(*rule.guard,bindings,guard_sofar);
+                    if(guard_sofar.size()!=1 || !std::holds_alternative<DataBool>(guard_sofar[0].value)) {
+                        throw std::runtime_error("Guard must return a single value bool");
                     }
-                    args = std::move(new_args);
-                    goto start; // tail recursion - call the next function without creating a stack frame
+                    guard_ok=get<DataBool>(guard_sofar[0].value).value;
+                }
+                if(guard_ok) {
+                    // found matching rule, now evaluate right side, being careful to handle tail recursion
+                    std::size_t process_with_tail=0;
+                    if(rule.right.size()>0 && std::holds_alternative<Call>(rule.right[rule.right.size()-1].value)) {
+                        process_with_tail=1;
+                    }
+                    for (const Expression& expr : rule.right | std::views::take(rule.right.size() - process_with_tail)) {
+                        do_call_single(expr,bindings,sofar);
+                    }
+                    if(process_with_tail==0) {
+                        return;
+                    } else {
+                        // Tail recursion here
+                        const Call& call=std::get<Call>(rule.right[rule.right.size()-1].value);
+                        op=call.func_id;
+                        std::vector<DataElement> new_args;
+                        for(const Expression& e:call.args) {
+                            do_call_single(e,bindings,new_args);
+                        }
+                        args = std::move(new_args);
+                        goto start; // tail recursion - call the next function without creating a stack frame
+                    }
                 }
             }
         }
+    } catch(const std::runtime_error& e) {
+        std::string argprint;
+        for(std::size_t i=0;i<args.size();i++) {
+            if(i!=0) {
+                argprint+=',';
+            }
+            argprint+=args[i].to_string();
+        }
+        std::string name;
+        for (const auto& [key, val] : function_map) {
+            if (val == op) {
+                name=key;
+                break;
+            }
+        }
+
+        throw std::runtime_error(std::format("{} (in {}({}))",
+            e.what(), name, argprint));
     }
-    std::string error=std::format("rule not matched: {}(",function_names[op]);
+    std::string name;
+    for (const auto& [key, val] : function_map) {
+        if (val == op) {
+            name=key;
+            break;
+        }
+    }
+
+    std::string error=std::format("rule not matched: {}(",name);
     for(std::size_t i=0;i<args.size();i++) {
         if(i!=0) {
             error+=",";

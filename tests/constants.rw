@@ -1,0 +1,12 @@
+// Example: demonstrating use of constants
+// SPDX-License-Identifier: CC0-1.0
+
+const TokNumber = 1;
+const TokPlus = 2;
+const TokMinus = 3;
+const TokEof = 0;
+
+eval(TokNumber, a, _) -> a; // just return the first one
+eval(TokPlus, a, b) -> a+b;
+eval(TokMinus, a, b) -> a-b;
+eval(TokEof, _, _) -> TokEof;

@@ -69,8 +69,8 @@ std::vector<Token> lex(std::string_view program) {
                     token_kind=True;
                 } else if(sub=="false") {
                     token_kind=False;
-                } else if(sub=="count_trailing_zeros") {
-                    token_kind=CountTrailingZeros;
+                } else if(sub=="const") {
+                    token_kind=ConstToken;
                 } else {
                     token_kind=Identifier;
                 }
@@ -194,6 +194,15 @@ std::vector<Token> lex(std::string_view program) {
                         token_kind=OrOr;
                     } else {
                         token_kind=Or;
+                    }
+                    break;
+                }
+                case '#': {
+                    if(p<len && program[p]=='#') {
+                        p++;
+                        token_kind=HashHash;
+                    } else {
+                        token_kind=Hash;
                     }
                     break;
                 }
