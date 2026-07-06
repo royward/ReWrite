@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.4] - 2026-07-06
+
+### Added
+- Match clauses
+- Multiple guards
+- Match clauses and guards on the right hand side
+
+### Changed
+- Renamed `#` and `##` to `#never` and `#error`
+
+### Fixed
+- Various error message improvements
+
 ## [0.0.3] - 2026-07-04
 
 ### Added

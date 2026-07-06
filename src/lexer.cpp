@@ -71,6 +71,10 @@ std::vector<Token> lex(std::string_view program) {
                     token_kind=False;
                 } else if(sub=="const") {
                     token_kind=ConstToken;
+                } else if(sub=="match") {
+                    token_kind=Match;
+                } else if(sub=="in") {
+                    token_kind=In;
                 } else {
                     token_kind=Identifier;
                 }
@@ -198,14 +202,18 @@ std::vector<Token> lex(std::string_view program) {
                     break;
                 }
                 case '#': {
-                    if(p<len && program[p]=='#') {
+                    while(p<len && std::isalpha(program[p])) {
                         p++;
-                        token_kind=HashHash;
-                    } else {
-                        token_kind=Hash;
                     }
-                    break;
-                }
+                    std::string_view sub=program.substr(start_p, p-start_p);
+                    if(sub=="#never") {
+                        token_kind=HashNever;
+                    } else if(sub=="#error") {
+                        token_kind=HashError;
+                    } else {
+                        throw std::runtime_error(std::format("Unexpected # term:{}, should be #error or #never",sub));
+                    }
+                } break;
                 case '\'': {
                     token_kind=Chars;
                     use_transformed_string=true;

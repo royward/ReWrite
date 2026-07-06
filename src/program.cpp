@@ -145,6 +145,12 @@ bool do_match_vec(const std::vector<Parameter>& parameters, const std::vector<Da
     return vi==vlen; // didn't have extra parameters
 }
 
+void Program::do_call_multi(const std::vector<Expression>& expressions, const std::vector<DataElement>& bindings, std::vector<DataElement>& sofar) const {
+    for(const auto& e : expressions) {
+        do_call_single(e,bindings,sofar);
+    }
+}
+
 void Program::do_call_single(const Expression& expression, const std::vector<DataElement>& bindings, std::vector<DataElement>& sofar) const {
     std::visit([this,&bindings,&sofar](const auto& alt) {
         using T = std::decay_t<decltype(alt)>;
@@ -163,30 +169,22 @@ void Program::do_call_single(const Expression& expression, const std::vector<Dat
             sofar.push_back(alt.value);
         } else if constexpr (std::is_same_v<T, ExprList>) {
             std::vector<DataElement> list_internal;
-            for(const Expression& e:alt.items) {
-                do_call_single(e,bindings,list_internal);
-            }
+            do_call_multi(alt.items,bindings,list_internal);
             sofar.push_back(DataElement{DataList{std::move(list_internal)}});
         } else if constexpr (std::is_same_v<T, Call>) {
             std::vector<DataElement> args;
-            for(const Expression& e:alt.args) {
-                do_call_single(e,bindings,args);
-            }
+            do_call_multi(alt.args,bindings,args);
             do_call_function(alt.func_id,sofar,args);
         } else if constexpr (std::is_same_v<T, CallInternal>) {
             std::vector<DataElement> args;
-            for(const Expression& e:alt.args) {
-                do_call_single(e,bindings,args);
-            }
+            do_call_multi(alt.args,bindings,args);
             sofar.push_back(do_call_internal(alt.func_id,args));
         } else if constexpr (std::is_same_v<T, CallLibrary>) {
             std::vector<DataElement> args;
-            for(const Expression& e:alt.args) {
-                do_call_single(e,bindings,args);
-            }
+            do_call_multi(alt.args,bindings,args);
             do_call_library(alt.func_id,args,sofar);
         } else if constexpr (std::is_same_v<T, Never>) {
-            throw std::runtime_error("error thrown by # or ##");
+            throw std::runtime_error("error thrown by #error or #never");
         }
     }, expression.value);
 }
@@ -212,35 +210,41 @@ start:
         // find the first match
         for(const Rule& rule: rules) {
             std::vector<DataElement> bindings(rule.names.size(),DataElement{DataUnbound{}});
-            if(do_match_vec(rule.left,args,bindings)) {
+            if(do_match_vec(rule.main.match,args,bindings)) {
                 bool guard_ok=true;
-                if (rule.guard.has_value()) {
+                for(const RuleMatch& grule : rule.pre_arrow) {
                     std::vector<DataElement> guard_sofar;
-                    do_call_single(*rule.guard,bindings,guard_sofar);
-                    if(guard_sofar.size()!=1 || !std::holds_alternative<DataBool>(guard_sofar[0].value)) {
-                        throw std::runtime_error("Guard must return a single value bool");
+                    do_call_multi(grule.expr,bindings,guard_sofar);
+                    if(!do_match_vec(grule.match,guard_sofar,bindings)) {
+                        guard_ok=false;
+                        break;
                     }
-                    guard_ok=get<DataBool>(guard_sofar[0].value).value;
                 }
                 if(guard_ok) {
+                    for(const RuleMatch& grule : rule.post_arrow) {
+                        std::vector<DataElement> guard_sofar;
+                        do_call_multi(grule.expr,bindings,guard_sofar);
+                        if(!do_match_vec(grule.match,guard_sofar,bindings)) {
+                            throw std::runtime_error("failure in post arrow match");
+                        }
+                    }
+
                     // found matching rule, now evaluate right side, being careful to handle tail recursion
                     std::size_t process_with_tail=0;
-                    if(rule.right.size()>0 && std::holds_alternative<Call>(rule.right[rule.right.size()-1].value)) {
+                    if(rule.main.expr.size()>0 && std::holds_alternative<Call>(rule.main.expr[rule.main.expr.size()-1].value)) {
                         process_with_tail=1;
                     }
-                    for (const Expression& expr : rule.right | std::views::take(rule.right.size() - process_with_tail)) {
+                    for (const Expression& expr : rule.main.expr | std::views::take(rule.main.expr.size() - process_with_tail)) {
                         do_call_single(expr,bindings,sofar);
                     }
                     if(process_with_tail==0) {
                         return;
                     } else {
                         // Tail recursion here
-                        const Call& call=std::get<Call>(rule.right[rule.right.size()-1].value);
+                        const Call& call=std::get<Call>(rule.main.expr[rule.main.expr.size()-1].value);
                         op=call.func_id;
                         std::vector<DataElement> new_args;
-                        for(const Expression& e:call.args) {
-                            do_call_single(e,bindings,new_args);
-                        }
+                        do_call_multi(call.args,bindings,new_args);
                         args = std::move(new_args);
                         goto start; // tail recursion - call the next function without creating a stack frame
                     }
@@ -288,12 +292,10 @@ std::vector<DataElement> Program::run_string(std::string& call) {
     Parser parser;
     parser.tokens=lex(call);
     std::unordered_map<std::string, std::size_t> param_id_map;
-    std::vector<Expression> expressions=parse_expression_list(parser, param_id_map, Eof, Comma);
+    std::vector<Expression> expressions=parse_expression_list(parser, param_id_map, ThreeTokenKind{Eof,Eof,Eof}, Comma);
     const std::vector<DataElement> empty_bindings;
     std::vector<DataElement> result;
-    for(Expression& e : expressions) {
-        do_call_single(e, empty_bindings, result);
-    }
+        do_call_multi(expressions, empty_bindings, result);
     return result;
 }
 

@@ -1,0 +1,9 @@
+// Example: demonstrate matching with a validate example
+// SPDX-License-Identifier: CC0-1.0
+
+// only validate non-negative integers, multiply by 2
+validate(x) :: x>=0 -> true, x*2;
+validate(_) -> false, 0;
+
+process(x) match true,data=validate(x) -> data;
+process(_) -> #error;

@@ -4,6 +4,28 @@ A rule-based language for expressing recursive computation through pattern match
 
 Note: ReWrite2 is a working name while I look for a better one.
 
+- [Overview](#overview)
+- [License](#license)
+- [History and Motivation](#history-and-motivation)
+- [Use Cases](#use-cases)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Language Description](#language-description)
+  - [General Structure](#general-structure)
+  - [Guards](#guards)
+  - [Pattern Matching](#pattern-matching)
+  - [Multiple Return Values](#multiple-return-values)
+  - [Lists and Splat](#lists-and-splat)
+  - [Chars and Strings](#chars-and-strings)
+  - [Match Clauses](#match-clauses)
+  - [Constants](#constants)
+  - [Errors](#errors)
+  - [Tail Recursion](#tail-recursion)
+- [More Complex Examples](#more-complex-examples)
+  - [First n Prime Numbers](#first-n-prime-numbers)
+  - [N-Queens](#n-queens)
+- [Road Map](#road-map)
+
 ## Overview
 
 ReWrite2 is a language designed to make complex decision logic easier. It has pattern matching that is used instead of `if ... then ... else` chains or `case` type statements, and an idiom that makes list construction and deconstruction easy and readable. A ReWrite2 program often has "one thought per line".
@@ -105,10 +127,12 @@ This section has examples which can all be found in the `tests` directory.
 The structure of a ReWrite2 program is simple - it is a list of functions, where each function is a list of rules of the form:
 
 ```
-<function_name>(<match parameters>)[::<optional guard expression>] -> <expressions>;
+<function_name>(<pattern>)[::<guard expression>] -> <expressions>;
 ```
 
-and the language just fires the first rule that successfully matches (it is a runtime error if none of them fire - later versions might make this a compile time error).
+`[ ]` means that the part enclosed is optional. See [Match Clauses](#match-clauses) for a more complete syntax.
+
+The language just fires the first rule that successfully matches (it is a runtime error if none of them fire - later versions might make this a compile time error).
 
 So for instance, in the example from earlier:
 
@@ -134,6 +158,8 @@ fact(_) -> 1;
 The first rule will fire if `n` is matched (which will match to any single argument), but the rule will fire only if the guard condition is met: `n>0`, giving the same result as the first version (except it won't crash the stack like the first version would).
 
 The `_` is a special symbol that means "match with anything". Unlike a named parameter, it doesn't bind to anything, so you can use multiple `_` in the same rule without conflict.
+
+See [Match Clauses](#match-clauses) for a generalization of guards.
 
 #### Pattern matching
 
@@ -282,8 +308,76 @@ roman_to_int("") -> 0;
 roman_to_int({a,b,..rest})::roman_to_int_convert_case(a)<roman_to_int_convert_case(b) ->
     roman_to_int_convert_case(b)-roman_to_int_convert_case(a)+roman_to_int(rest);
 roman_to_int({a,..rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
+```
+
+#### Match Clauses
+
+In the section [Guards](#guards) above, a method was introduced of checking a condition before a rule will fire. This section introduces something called a match clause that generalizes this, and allows pattern matching and variable binding on the results of expressions. This may also be used to the right of the arrow.
+
+The form of a match clause is:
 
 ```
+match <pattern> = <expressions>
+```
+
+The form `::<expr>` introduced as guards is simply syntactic sugar for `match true = <expressions>`, so the more complete form of a rule is:
+
+```
+MatchClause =
+    match <pattern> = <expressions>
+  | ::<expressions>
+
+Rule = 
+    <name>(<pattern>) MatchClause* -> [MatchClause+ in] <expressions>
+```
+
+(`*` means 0 or more, `+` means 1 or more, `[ ]` means optional if you are not used to reading grammars).
+
+Let's see how this works. These examples are somewhat contrived, because match clauses tend to be more useful in larger programs.
+
+Say I have a validation function that also does some processing on a result, and I only want to fire the rule if the validation function succeeds:
+
+```
+// only validate non-negative integers, multiply by 2
+validate(x) :: x>=0 -> true, x*2;
+validate(_) -> false, 0;
+
+process(x) match true,data=validate(x) -> data;
+process(_) -> #error;
+```
+The `match true,data=validate(x)` will evaluate `validate(x)` which returns two values, will match the first one with `true` (failing to fire if it doesn't match), and binding `data` to the second value, so:
+
+`process(2)` returns `4`
+`process(-3)` fires a `#error`.
+
+Here is an example of using it on the right hand side. Imagine that we have an expensive function that we want to use twice:
+
+```
+expensive(n) -> n+n+n; // Imagine this is expensive
+
+// Use match after the arrow to bind it to result, then use result twice
+use_twice(n) -> match result=expensive(n) in result*result;
+```
+
+In this case, result will be bound with the results of `expensive(x)`, and can now be used repeatedly in expressions.
+
+Note that in both of these cases, in fact all cases, match clauses could be avoided by using one line helper functions:
+
+```
+process(x) -> process_helper(validate(x));
+
+process_helper(true,data) -> data;
+process_helper(_,_) -> #error;
+```
+
+```
+use_twice(n) -> use_twice_helper(expensive(n));
+
+use_twice_helper(n) -> n*n;
+```
+
+but this is more verbose, and tends to break the flow of the program, particularly in larger functions.
+
 #### Constants
 
 Sometimes it is useful to have a constant value, rather than having to use a number or other expression directly. For this, there is a special syntax for setting constants: `const <id> = <expressions>`. This can be particularly helpful for pattern matching as shown in this example, where the symbol `TokPlus` is much clearer than `2`.
@@ -315,7 +409,7 @@ Calling `hello()` returns "Hello World!".
 
 #### Errors
 
-There are situations where it is useful to report a runtime error, or note that a particular match should not happen. For instance, the first factorial example will go into a loop until it overflows the stack if a negative number is passed in.
+There are situations where it is useful to report a runtime error, or note that a particular match should not happen. For instance, the first factorial example (repeated from [General Structure](#general-structure)) will go into a loop until it overflows the stack if a negative number is passed in.
 
 ```
 fact(0)->1;
@@ -324,8 +418,8 @@ fact(n)->n*fact(n-1);
 
 Two expressions are provided for this purpose:
 
-* `#` is a promise that a particular rule will never be matched (meant for the compiler)
-* `##` indicates to return a run-time error.
+* `#never` is a promise that a particular rule will never be matched (meant for the compiler)
+* `#error` indicates to return a run-time error.
 
 For the moment (phase 0), they both perform identically to produce runtime errors.
 
@@ -334,14 +428,14 @@ To use either of those, put them on the right hand side of a rule. They can appe
 For example:
 
 ```
-fact(n)::n<0 -> ##;
+fact(n)::n<0 -> #error;
 fact(0)->1;
 fact(n)->n*fact(n-1);
 ```
 
 `fact(-2)` returns:
 
-`Error: error thrown by # or ## (in fact(-2))`
+`Error: error thrown by #error or #never (in fact(-2))`
 
 #### Tail recursion
 

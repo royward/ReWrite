@@ -1,0 +1,8 @@
+// Example: demonstrate use of an expensive result twice without computing it twice
+// SPDX-License-Identifier: CC0-1.0
+
+// Imagine this is some function that is expensive to compute
+expensive(n) -> n+n+n;
+
+// Use match after the arrow to bind it to result, then use result twice
+use_twice(n) -> match result=expensive(n) in result*result;

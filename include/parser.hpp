@@ -19,6 +19,7 @@
 #pragma once
 
 #include <vector>
+#include "token.hpp"
 
 struct Parser {
     std::vector<Token> tokens;

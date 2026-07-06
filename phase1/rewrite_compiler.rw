@@ -85,7 +85,7 @@ lexer_aux_absorb_comment(acc,row,{_,..rest}) -> lexer_aux_absorb_comment(acc,row
 lexer_aux_check_double(acc,row,col,0,c1,c2,rest) -> lexer_aux_check_single(acc,row,col,lexer_one_symbol(c1),c1,{c2,..rest});
 lexer_aux_check_double(acc,row,col,token,c1,c2,rest) -> lexer_aux({..acc,{row,col,token,{c1,c2}}},row,col+2,rest);
 
-lexer_aux_check_single(acc,row,col,0,c,rest) -> #;
+lexer_aux_check_single(acc,row,col,0,c,rest) -> #error;
 lexer_aux_check_single(acc,row,col,token,c,rest) -> lexer_aux({..acc,{row,col,token,{c}}},row,col+1,rest);
 
 lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{endtok,..rest}) -> lexer_aux({..acc,{row,col,tok_kind,sofar}},row,col+1,rest);
@@ -154,7 +154,6 @@ const ParamSplatWild=6;
 const ExprConst=1;
 const ExprId=2;
 const ExprList=4;
-const ExprSplat=5;
 const ExprCall=7;
 const ExprCallInternal=8;
 const ExprCallLibrary=9;
@@ -195,11 +194,14 @@ parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,True,_},..rest}) -> p
 parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,Hash,_},..rest}) -> parse_expressions1(fnnames,bindings,sofar,{ExprNever,{}},pri,end_tok,rest);
 parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,HashHash,_},..rest}) -> parse_expressions1(fnnames,bindings,sofar,{ExprNever,{}},pri,end_tok,rest);
 parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,Identifier,id},{_,_,LParen,_},..rest}) -> parse_expressions_fun_call1(bindings,sofar,pri,end_tok,id,parse_expressions(fnnames,bindings,{},0,RParen,rest));
+parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,Identifier,id},{_,_,LBrace,_},..rest}) -> parse_expressions_list_call(bindings,sofar,pri,end_tok,id,parse_expressions(fnnames,bindings,{},0,RBrace,rest));
 parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,Identifier,id},..rest}) -> parse_expressions1(fnnames,bindings,sofar,{ExprId,{get_symbol_table(0,bindings,id)}},pri,end_tok,rest);
 parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,tok,_},..rest})::prefix_binding_power(tok)>0 ->
     parse_expressions_prefix(bindings,sofar,pri,tok,end_tok,parse_expressions(fnnames,bindings,{},prefix_binding_power(tok),end_tok,rest));
 
 parse_expressions_prefix(bindings,sofar,pri,tok,end_tok,fnnames,{new},rest) -> parse_expressions1(fnnames,bindings,sofar,{tok,new},pri,end_tok,rest);
+
+parse_expressions_list_call(bindings,sofar,pri,end_tok,id,fnnames,arguments,{{_,_,RBrace,_},..rest}) -> parse_expressions1(fnnames,bindings,sofar,{ExprList,arguments},pri,end_tok,rest);
 
 parse_expressions_fun_call1(bindings,sofar,pri,end_tok,id,fnnames,arguments,{{_,_,RParen,_},..rest}) -> parse_expressions_fun_call2(bindings,sofar,pri,end_tok,get_add_symbol_table(0,{},fnnames,id),arguments,rest);
 
@@ -217,6 +219,7 @@ parse_expressions_rem_comma(fnnames,bindings,sofar,end_tok,{{r,c,end_tok,v},..re
 
 prefix_binding_power(Minus) -> 110;
 prefix_binding_power(Not) -> 110;
+prefix_binding_power(Splat) -> 180;
 prefix_binding_power(_) -> -1;
 
 infix_binding_power(OrOr) -> 10,11;
@@ -245,11 +248,15 @@ parse_params(bindings,params,endtok,{{_,_,True,_},..rest}) -> parse_params1(bind
 parse_params(bindings,params,endtok,{{_,_,Integer,val},..rest}) -> parse_params1(bindings,{..params,{ParamConst,{TypeInt,string_to_int_pos(val,0)}}},endtok,rest);
 parse_params(bindings,params,endtok,{{_,_,Minus,val},{_,_,Integer,val},..rest}) -> parse_params1(bindings,{..params,{ParamConst,{TypeInt,-string_to_int_pos(val,0)}}},endtok,rest);
 parse_params(bindings,params,endtok,{{_,_,Wildcard,_},..rest}) -> parse_params1(bindings,{..params,{ParamWild,{}}},endtok,rest);
-parse_params(bindings,params,endtok,{{_,_,Identifier,name},..rest}) -> parse_params_id(get_add_symbol_table(0,{},bindings,name),params,endtok,rest);
-// TODO lists parse_params(bindings,params,endtok,{{_,_,LBrace,_},..rest}) -> ;
+parse_params(bindings,params,endtok,{{_,_,Splat,_},{_,_,Wildcard,_},..rest}) -> parse_params1(bindings,{..params,{ParamSplatWild,{}}},endtok,rest);
+parse_params(bindings,params,endtok,{{_,_,Identifier,name},..rest}) -> parse_params_id(ParamId,get_add_symbol_table(0,{},bindings,name),params,endtok,rest);
+parse_params(bindings,params,endtok,{{_,_,Splat,_},{_,_,Identifier,name},..rest}) -> parse_params_id(ParamSplat,get_add_symbol_table(0,{},bindings,name),params,endtok,rest);
+parse_params(bindings,params,endtok,{{_,_,LBrace,_},..rest}) -> parse_params_list(params,endtok,parse_params(bindings,params,RBrace,rest));
 // TODO string, char
 
-parse_params_id(bindings,id,params,endtok,rest) -> parse_params1(bindings,{..params,{ParamId,{id}}},endtok,rest);
+parse_params_id(tp,bindings,id,params,endtok,rest) -> parse_params1(bindings,{..params,{tp,{id}}},endtok,rest);
+
+parse_params_list(params,end_tok,bindings,list_params,rest) -> parse_params1(bindings,{..params,{ParamList,list_params}},end_tok,rest);
 
 parse_params1(bindings,params,endtok,{{_,_,Comma,_},..rest}) -> parse_params(bindings,params,endtok,rest);
 parse_params1(bindings,params,endtok,{{_,_,endtok,_},..rest}) -> bindings,params,rest; // deal with no trailing comma

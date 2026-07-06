@@ -30,6 +30,11 @@
 
 struct Parser;
 struct Parameter;
+struct Expression;
+struct ThreeTokenKind {
+    TokenKind a,b,c;
+    inline bool check_token(TokenKind t) {return t==a || t==b || t==c;};
+};
 
 struct Id { uint32_t value; };
 struct Const { DataElement value; };
@@ -45,8 +50,6 @@ struct Parameter {
     ParameterVariant value;
 };
 
-struct Expression; // forward declaration
-
 struct ExprSplat { std::unique_ptr<Expression> inner; };
 struct ExprList { std::vector<Expression> items; };
 struct Call { uint32_t func_id; std::vector<Expression> args; };
@@ -60,10 +63,15 @@ struct Expression {
     ExpressionVariant value;
 };
 
+struct RuleMatch {
+    std::vector<Parameter> match;
+    std::vector<Expression> expr;
+};
+
 struct Rule {
-    std::vector<Parameter> left;
-    std::vector<Expression> right;
-    std::optional<Expression> guard;
+    RuleMatch main;
+    std::vector<RuleMatch> pre_arrow;
+    std::vector<RuleMatch> post_arrow;
     std::vector<std::string> names; // debugging only, and getting size for bind vector
 };
 
@@ -74,6 +82,7 @@ public:
     std::vector<DataElement> run_string(std::string& call);
 private:
     void do_call_single(const Expression& expression, const std::vector<DataElement>& bindings, std::vector<DataElement>& sofar) const;
+    void do_call_multi(const std::vector<Expression>& expressions, const std::vector<DataElement>& bindings, std::vector<DataElement>& sofar) const;
     void do_call_function(uint32_t op, std::vector<DataElement>& sofar, std::vector<DataElement> args) const;
     // Implementations for parsing in parser.cpp
     void parse_rule(Parser& parser);
@@ -81,7 +90,7 @@ private:
     Parameter parse_param(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map);
     std::vector<Parameter> parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, TokenKind end, TokenKind sep);
     Expression parse_expression(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, uint8_t pri);
-    std::vector<Expression> parse_expression_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, TokenKind end, TokenKind sep);
+    std::vector<Expression> parse_expression_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, ThreeTokenKind end, TokenKind sep);
     // data
     std::vector<std::vector<Rule>> program;
     std::vector<std::string> function_names; // debugging only
