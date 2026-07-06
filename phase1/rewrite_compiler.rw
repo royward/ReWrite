@@ -15,8 +15,8 @@ const False=12;
 const Greater=13;
 const GreaterEqual=14;
 const GreedySplat=15;
-const Hash=16;
-const HashHash=17;
+const HashError=16;
+const HashNever=17;
 const Identifier=18;
 const LBrace=19;
 const LBracket=20;
@@ -44,6 +44,8 @@ const Wildcard=41;
 const Xor=42;
 const String=43;
 const Chars=44;
+const Match=45;
+const In=46;
 
 is_start_token(c) -> c=='_' || (c>='a' && c<='z') || (c>='A' && c<='Z');
 
@@ -56,51 +58,50 @@ is_whitespace(c) -> c==' ' || c=='\t' || c=='\r';
 lexer(s) -> lexer_aux({},0,0,s);
 
 lexer_aux(acc,_,_,{}) -> acc;
-lexer_aux(acc,row,col,{c,..rest})::is_start_token(c) -> lex_get_token(acc,row,col,col+1,{c},rest);
-lexer_aux(acc,row,col,{c,..rest})::is_digit(c) -> lex_get_digit(acc,row,col,col+1,{c},rest);
+lexer_aux(acc,row,col,{c,..rest})::is_start_token(c) -> match sz,val,newrest = lex_get_token(1,{c},rest) in lexer_aux({..acc,{row,col,lex_check_spec_identifier(val),val}},row,col+sz,newrest);
+lexer_aux(acc,row,col,{c,..rest})::is_digit(c) -> match sz,val,newrest = lex_get_digit(1,{c},rest) in lexer_aux({..acc,{row,col,Integer,val}},row,col+sz,newrest);
 lexer_aux(acc,row,col,{c,..rest})::is_whitespace(c) -> lexer_aux(acc,row,col+1,rest);
-lexer_aux(acc,row,col,{'//',..rest}) -> lexer_aux_absorb_comment(acc,row,rest);
+lexer_aux(acc,row,col,{'//',..rest}) -> match newrest = lexer_aux_absorb_comment(rest) in lexer_aux(acc,row+1,0,newrest);
 lexer_aux(acc,row,col,{'\n',..rest}) -> lexer_aux(acc,row+1,0,rest);
-lexer_aux(acc,row,col,{'"',..rest}) -> lexer_string(acc,row,col,col+1,{},'"',String,rest);
-lexer_aux(acc,row,col,{'\'',..rest}) -> lexer_string(acc,row,col,col+1,{},'\'',Chars,rest);
-lexer_aux(acc,row,col,{c1,c2,..rest}) -> lexer_aux_check_double(acc,row,col,lexer_two_symbol(c1,c2),c1,c2,rest);
-lexer_aux(acc,row,col,{c}) -> lexer_aux_check_single(acc,row,col,lexer_one_symbol(c),c,{}); // deal with single char token at end
+lexer_aux(acc,row,col,{'"',..rest}) -> match newrow,newcol,val,newrest = lexer_string(row,col+1,{},'"',rest) in lexer_aux({..acc,{row,col,String,val}},newrow,newcol,newrest);
+lexer_aux(acc,row,col,{'\'',..rest}) -> match newrow,newcol,val,newrest = lexer_string(row,col+1,{},'\'',rest) in lexer_aux({..acc,{row,col,Chars,val}},newrow,newcol,newrest);
+lexer_aux(acc,row,col,{'#',c,..rest}) -> match sz,val,newrest = lex_get_token(1,{},rest) in lexer_aux({..acc,{row,col,{'#',..lex_do_hash(val)}}},row,col+sz,newrest);
+lexer_aux(acc,row,col,{c1,c2,..rest}) match sym=lexer_two_symbol(c1,c2) :: sym!=0 -> lexer_aux({..acc,{row,col,sym,{c1,c2}}},row,col+2,rest);
+lexer_aux(acc,row,col,{c,..rest}) match sym=lexer_one_symbol(c) :: sym!=0 -> lexer_aux({..acc,{row,col,sym,{c}}},row,col+1,rest);
 
-lex_get_token(acc,row,start_col,col,sofar,{c,..rest})::is_rest_token(c) -> lex_get_token(acc,row,start_col,col+1,{..sofar,c},rest);
-lex_get_token(acc,row,start_col,col,sofar,rest) -> lexer_aux({..acc,{row,start_col,lex_check_spec_identifier(sofar)}},row,col,rest);
+lex_get_token(col,sofar,{c,..rest})::is_rest_token(c) -> lex_get_token(col+1,{..sofar,c},rest);
+lex_get_token(..x) -> ..x;
 
-lex_check_spec_identifier("true") -> True,"true";
-lex_check_spec_identifier("false") -> False,"false";
-lex_check_spec_identifier("const") -> ConstToken,"const";
-lex_check_spec_identifier("_") -> Wildcard,"_";
-lex_check_spec_identifier(x) -> Identifier,x;
+lex_check_spec_identifier("true") -> True;
+lex_check_spec_identifier("false") -> False;
+lex_check_spec_identifier("const") -> ConstToken;
+lex_check_spec_identifier("match") -> Match;
+lex_check_spec_identifier("in") -> In;
+lex_check_spec_identifier("_") -> Wildcard;
+lex_check_spec_identifier(x) -> Identifier;
 
-lex_get_digit(acc,row,start_col,col,sofar,{c,..rest})::is_digit(c) -> lex_get_digit(acc,row,start_col,col+1,{..sofar,c},rest);
-lex_get_digit(acc,row,start_col,col,sofar,rest) -> lexer_aux({..acc,{row,start_col,Integer,sofar}},row,col,rest);
+lex_do_hash("error") -> HashError;
+lex_do_hash("never") -> HashNever;
 
-lexer_aux_absorb_comment(acc,row,{}) -> lexer_aux(acc,row+1,0,{});
-lexer_aux_absorb_comment(acc,row,{'\n',..rest}) -> lexer_aux(acc,row+1,0,rest);
-lexer_aux_absorb_comment(acc,row,{_,..rest}) -> lexer_aux_absorb_comment(acc,row,rest);
+lex_get_digit(col,sofar,{c,..rest})::is_digit(c) -> lex_get_digit(col+1,{..sofar,c},rest);
+lex_get_digit(..x) -> ..x;
 
-lexer_aux_check_double(acc,row,col,0,c1,c2,rest) -> lexer_aux_check_single(acc,row,col,lexer_one_symbol(c1),c1,{c2,..rest});
-lexer_aux_check_double(acc,row,col,token,c1,c2,rest) -> lexer_aux({..acc,{row,col,token,{c1,c2}}},row,col+2,rest);
+lexer_aux_absorb_comment({}) -> {};
+lexer_aux_absorb_comment({'\n',..rest}) -> rest;
+lexer_aux_absorb_comment({_,..rest}) -> lexer_aux_absorb_comment(rest);
 
-lexer_aux_check_single(acc,row,col,0,c,rest) -> #error;
-lexer_aux_check_single(acc,row,col,token,c,rest) -> lexer_aux({..acc,{row,col,token,{c}}},row,col+1,rest);
-
-lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{endtok,..rest}) -> lexer_aux({..acc,{row,col,tok_kind,sofar}},row,col+1,rest);
-lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{'\\t',..rest}) -> lexer_string(acc,row,start_col,col+2,{..sofar,'\t'},endtok,tok_kind,rest);
-lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{'\\r',..rest}) -> lexer_string(acc,row,start_col,col+2,{..sofar,'\r'},endtok,tok_kind,rest);
-lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{'\\n',..rest}) -> lexer_string(acc,row,start_col,col+2,{..sofar,'\n'},endtok,tok_kind,rest);
-lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{'\\',c,..rest}) -> lexer_string(acc,row,start_col,col+2,{..sofar,c},endtok,tok_kind,rest);
-lexer_string(acc,row,start_col,col,sofar,endtok,tok_kind,{c,..rest}) -> lexer_string(acc,row,start_col,col+1,{..sofar,c},endtok,tok_kind,rest);
+lexer_string(row,col,sofar,endtok,{endtok,..rest}) -> row,col+1,sofar,rest;
+lexer_string(row,col,sofar,endtok,{'\\t',..rest}) -> lexer_string(row,col+2,{..sofar,'\t'},endtok,rest);
+lexer_string(row,col,sofar,endtok,{'\\r',..rest}) -> lexer_string(row,col+2,{..sofar,'\r'},endtok,rest);
+lexer_string(row,col,sofar,endtok,{'\\n',..rest}) -> lexer_string(row,col+2,{..sofar,'\n'},endtok,rest);
+lexer_string(row,col,sofar,endtok,{'\\',c,..rest}) -> lexer_string(row,col+2,{..sofar,c},endtok,rest);
+lexer_string(row,col,sofar,endtok,{c,..rest}) -> lexer_string(row,col+1,{..sofar,c},endtok,rest);
 
 lexer_two_symbol('&&') -> AndAnd;
 lexer_two_symbol('->') -> Arrow;
 lexer_two_symbol('::') -> ColonColon;
 lexer_two_symbol('==') -> EqualEqual;
 lexer_two_symbol('>=') -> GreaterEqual;
-lexer_two_symbol('##') -> HashHash;
 lexer_two_symbol('<=') -> LessEqual;
 lexer_two_symbol('!=') -> NotEqual;
 lexer_two_symbol('||') -> OrOr;
@@ -116,7 +117,6 @@ lexer_one_symbol('/') -> Divide;
 lexer_one_symbol('.') -> Dot;
 lexer_one_symbol('=') -> Equal;
 lexer_one_symbol('>') -> Greater;
-lexer_one_symbol('#') -> Hash;
 lexer_one_symbol('{') -> LBrace;
 lexer_one_symbol('[') -> LBracket;
 lexer_one_symbol('(') -> LParen;
@@ -179,43 +179,43 @@ parse_aux(rules,fnnames,consts,{}) -> {rules,fnnames,consts};
 parse_aux(rules,fnnames,consts,{{_,_,Identifier,name},{_,_,LParen,_},..rest}) -> parse_function(rules,get_add_symbol_table(0,{},fnnames,name),consts,parse_params({},{},RParen,rest));
 // TODO consts parse_aux(rules,fnnames,consts,{{_,_,ConstToken,name}{_,_,Identifier,name},{_,_,Equals,_},..rest}) -> parse_aux(rules,fn_names,parse_constant(const,rest));
 
-parse_function(rules,fnnames,fn_id,consts,bindings,params,{{_,_,Arrow,_},..rest}) -> parse_function2(rules,fn_id,consts,bindings,params,{},parse_expressions(fnnames,bindings,{},0,Semicolon,rest));
-parse_function(rules,fnnames,fn_id,consts,bindings,params,{{_,_,ColonColon,_},..rest}) -> parse_function_guard(rules,fn_id,consts,bindings,params,parse_expressions(fnnames,bindings,{},0,Arrow,rest));
+parse_function(rules,fnnames,fn_id,consts,bindings,params,{{_,_,Arrow,_},..rest}) -> parse_function2(rules,fn_id,consts,bindings,params,{},parse_exprs(fnnames,bindings,{},0,Semicolon,rest));
+parse_function(rules,fnnames,fn_id,consts,bindings,params,{{_,_,ColonColon,_},..rest}) -> parse_function_guard(rules,fn_id,consts,bindings,params,parse_exprs(fnnames,bindings,{},0,Arrow,rest));
 
 parse_function2(rules,fn_id,consts,bindings,params,guard,fnnames,rhs,{{_,_,Semicolon,_},..rest}) -> parse_aux(add_rule({},rules,fn_id,{bindings,params,guard,rhs}),fnnames,consts,rest);
 
-parse_function_guard(rules,fn_id,consts,bindings,params,fnnames,guard,{{_,_,Arrow,_},..rest}) -> parse_function2(rules,fn_id,consts,bindings,params,guard,parse_expressions(fnnames,bindings,{},0,Semicolon,rest));
+parse_function_guard(rules,fn_id,consts,bindings,params,fnnames,guard,{{_,_,Arrow,_},..rest}) -> parse_function2(rules,fn_id,consts,bindings,params,guard,parse_exprs(fnnames,bindings,{},0,Semicolon,rest));
 
-parse_expressions(fnnames,bindings,sofar,_,end_tok,{{r,c,end_tok,v},..rest}) -> fnnames,sofar,{{r,c,end_tok,v},..rest};
-parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,Minus,_},{_,_,Integer,val},..rest}) -> parse_expressions1(fnnames,bindings,sofar,{ExprConst,{TypeInt,-string_to_int_pos(val,0)}},pri,end_tok,rest);
-parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,Integer,val},..rest}) -> parse_expressions1(fnnames,bindings,sofar,{ExprConst,{TypeInt,string_to_int_pos(val,0)}},pri,end_tok,rest);
-parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,False,_},..rest}) -> parse_expressions1(fnnames,bindings,sofar,{ExprConst,{TypeBool,0}},pri,end_tok,rest);
-parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,True,_},..rest}) -> parse_expressions1(fnnames,bindings,sofar,{ExprConst,{TypeBool,1}},pri,end_tok,rest);
-parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,Hash,_},..rest}) -> parse_expressions1(fnnames,bindings,sofar,{ExprNever,{}},pri,end_tok,rest);
-parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,HashHash,_},..rest}) -> parse_expressions1(fnnames,bindings,sofar,{ExprNever,{}},pri,end_tok,rest);
-parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,Identifier,id},{_,_,LParen,_},..rest}) -> parse_expressions_fun_call1(bindings,sofar,pri,end_tok,id,parse_expressions(fnnames,bindings,{},0,RParen,rest));
-parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,Identifier,id},{_,_,LBrace,_},..rest}) -> parse_expressions_list_call(bindings,sofar,pri,end_tok,id,parse_expressions(fnnames,bindings,{},0,RBrace,rest));
-parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,Identifier,id},..rest}) -> parse_expressions1(fnnames,bindings,sofar,{ExprId,{get_symbol_table(0,bindings,id)}},pri,end_tok,rest);
-parse_expressions(fnnames,bindings,sofar,pri,end_tok,{{_,_,tok,_},..rest})::prefix_binding_power(tok)>0 ->
-    parse_expressions_prefix(bindings,sofar,pri,tok,end_tok,parse_expressions(fnnames,bindings,{},prefix_binding_power(tok),end_tok,rest));
+parse_exprs(fnnames,bindings,sofar,_,end_tok,{{r,c,end_tok,v},..rest}) -> fnnames,sofar,{{r,c,end_tok,v},..rest};
+parse_exprs(fnnames,bindings,sofar,pri,end_tok,{{_,_,Minus,_},{_,_,Integer,val},..rest}) -> parse_exprs1(fnnames,bindings,sofar,{ExprConst,{TypeInt,-string_to_int_pos(val,0)}},pri,end_tok,rest);
+parse_exprs(fnnames,bindings,sofar,pri,end_tok,{{_,_,Integer,val},..rest}) -> parse_exprs1(fnnames,bindings,sofar,{ExprConst,{TypeInt,string_to_int_pos(val,0)}},pri,end_tok,rest);
+parse_exprs(fnnames,bindings,sofar,pri,end_tok,{{_,_,False,_},..rest}) -> parse_exprs1(fnnames,bindings,sofar,{ExprConst,{TypeBool,0}},pri,end_tok,rest);
+parse_exprs(fnnames,bindings,sofar,pri,end_tok,{{_,_,True,_},..rest}) -> parse_exprs1(fnnames,bindings,sofar,{ExprConst,{TypeBool,1}},pri,end_tok,rest);
+parse_exprs(fnnames,bindings,sofar,pri,end_tok,{{_,_,Hash,_},..rest}) -> parse_exprs1(fnnames,bindings,sofar,{ExprNever,{}},pri,end_tok,rest);
+parse_exprs(fnnames,bindings,sofar,pri,end_tok,{{_,_,HashHash,_},..rest}) -> parse_exprs1(fnnames,bindings,sofar,{ExprNever,{}},pri,end_tok,rest);
+parse_exprs(fnnames,bindings,sofar,pri,end_tok,{{_,_,Identifier,id},{_,_,LParen,_},..rest}) -> parse_exprs_fun_call1(bindings,sofar,pri,end_tok,id,parse_exprs(fnnames,bindings,{},0,RParen,rest));
+parse_exprs(fnnames,bindings,sofar,pri,end_tok,{{_,_,Identifier,id},{_,_,LBrace,_},..rest}) -> parse_exprs_list_call(bindings,sofar,pri,end_tok,id,parse_exprs(fnnames,bindings,{},0,RBrace,rest));
+parse_exprs(fnnames,bindings,sofar,pri,end_tok,{{_,_,Identifier,id},..rest}) -> parse_exprs1(fnnames,bindings,sofar,{ExprId,{get_symbol_table(0,bindings,id)}},pri,end_tok,rest);
+parse_exprs(fnnames,bindings,sofar,pri,end_tok,{{_,_,tok,_},..rest})::prefix_binding_power(tok)>0 ->
+    parse_exprs_prefix(bindings,sofar,pri,tok,end_tok,parse_exprs(fnnames,bindings,{},prefix_binding_power(tok),end_tok,rest));
 
-parse_expressions_prefix(bindings,sofar,pri,tok,end_tok,fnnames,{new},rest) -> parse_expressions1(fnnames,bindings,sofar,{tok,new},pri,end_tok,rest);
+parse_exprs_prefix(bindings,sofar,pri,tok,end_tok,fnnames,{new},rest) -> parse_exprs1(fnnames,bindings,sofar,{tok,new},pri,end_tok,rest);
 
-parse_expressions_list_call(bindings,sofar,pri,end_tok,id,fnnames,arguments,{{_,_,RBrace,_},..rest}) -> parse_expressions1(fnnames,bindings,sofar,{ExprList,arguments},pri,end_tok,rest);
+parse_exprs_list_call(bindings,sofar,pri,end_tok,id,fnnames,arguments,{{_,_,RBrace,_},..rest}) -> parse_exprs1(fnnames,bindings,sofar,{ExprList,arguments},pri,end_tok,rest);
 
-parse_expressions_fun_call1(bindings,sofar,pri,end_tok,id,fnnames,arguments,{{_,_,RParen,_},..rest}) -> parse_expressions_fun_call2(bindings,sofar,pri,end_tok,get_add_symbol_table(0,{},fnnames,id),arguments,rest);
+parse_exprs_fun_call1(bindings,sofar,pri,end_tok,id,fnnames,arguments,{{_,_,RParen,_},..rest}) -> parse_exprs_fun_call2(bindings,sofar,pri,end_tok,get_add_symbol_table(0,{},fnnames,id),arguments,rest);
 
-parse_expressions_fun_call2(bindings,sofar,pri,end_tok,fnnames,id,arguments,rest) -> parse_expressions1(fnnames,bindings,sofar,{ExprCall,id,arguments},pri,end_tok,rest);
+parse_exprs_fun_call2(bindings,sofar,pri,end_tok,fnnames,id,arguments,rest) -> parse_exprs1(fnnames,bindings,sofar,{ExprCall,id,arguments},pri,end_tok,rest);
 
-parse_expressions1(fnnames,bindings,sofar,this,pri,end_tok,{{r,c,tok,val},..rest}) -> parse_expressions1a(fnnames,bindings,sofar,this,pri,infix_binding_power(tok),end_tok,{{r,c,tok,val},..rest});
+parse_exprs1(fnnames,bindings,sofar,this,pri,end_tok,{{r,c,tok,val},..rest}) -> parse_exprs1a(fnnames,bindings,sofar,this,pri,infix_binding_power(tok),end_tok,{{r,c,tok,val},..rest});
 
-parse_expressions1a(fnnames,bindings,sofar,this,pri,infix1,_,end_tok,rest)::infix1<pri -> parse_expressions_rem_comma(fnnames,bindings,{..sofar,this},end_tok,rest);
-parse_expressions1a(fnnames,bindings,sofar,this,pri,_,infix2,end_tok,{{_,_,tok,_},..rest}) -> parse_expressions1b(bindings,sofar,this,tok,pri,end_tok,parse_expressions(fnnames,bindings,{},infix2,end_tok,rest));
+parse_exprs1a(fnnames,bindings,sofar,this,pri,infix1,_,end_tok,rest)::infix1<pri -> parse_exprs_rem_comma(fnnames,bindings,{..sofar,this},end_tok,rest);
+parse_exprs1a(fnnames,bindings,sofar,this,pri,_,infix2,end_tok,{{_,_,tok,_},..rest}) -> parse_exprs1b(bindings,sofar,this,tok,pri,end_tok,parse_exprs(fnnames,bindings,{},infix2,end_tok,rest));
 
-parse_expressions1b(bindings,sofar,this,tok,pri,end_tok,fnnames,{new},rest) -> parse_expressions1(fnnames,bindings,sofar,{ExprCallInternal,{tok,this,new}},pri,end_tok,rest);
+parse_exprs1b(bindings,sofar,this,tok,pri,end_tok,fnnames,{new},rest) -> parse_exprs1(fnnames,bindings,sofar,{ExprCallInternal,{tok,this,new}},pri,end_tok,rest);
 
-parse_expressions_rem_comma(fnnames,bindings,sofar,end_tok,{{_,_,Comma,_},..rest}) -> parse_expressions(fnnames,bindings,sofar,0,end_tok,rest);
-parse_expressions_rem_comma(fnnames,bindings,sofar,end_tok,{{r,c,end_tok,v},..rest}) -> fnnames,sofar,{{r,c,end_tok,v},..rest};
+parse_exprs_rem_comma(fnnames,bindings,sofar,end_tok,{{_,_,Comma,_},..rest}) -> parse_exprs(fnnames,bindings,sofar,0,end_tok,rest);
+parse_exprs_rem_comma(fnnames,bindings,sofar,end_tok,{{r,c,end_tok,v},..rest}) -> fnnames,sofar,{{r,c,end_tok,v},..rest};
 
 prefix_binding_power(Minus) -> 110;
 prefix_binding_power(Not) -> 110;
