@@ -33,7 +33,8 @@ std::string display_single_char(char ch, char term) {
 
 namespace detail {
     inline std::string to_string_visit(const DataUnbound&) {
-        throw std::runtime_error("Unbond variables cannot be displayed");
+        return "<unbound>";
+        //throw std::runtime_error("Unbond variables cannot be displayed");
     }
     inline std::string to_string_visit(const DataBool& b) {
         return b.value ? "true" : "false";

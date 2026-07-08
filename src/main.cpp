@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
     CLI11_PARSE(app, argc, argv);
     try {
         std::string s=load_file(filename);
-        std::println("{}",s);
+        //std::println("{}",s);
         Program prog(s);
         std::vector<DataElement> results=prog.run_string(callexpr);
         std::println("Results:");

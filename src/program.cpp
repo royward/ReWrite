@@ -69,15 +69,16 @@ bool compare_equal(const DataElement& x, const DataElement& y) {
     }
 }
 
-bool do_match_vec(const std::vector<Parameter>& parameters, const std::vector<DataElement>& values, std::vector<DataElement>& bindings);
+bool do_match_vec(const std::vector<Parameter>& parameters, const std::vector<DataElement>& values, std::vector<DataElement>& bindings, uint32_t bind_level);
 
-bool do_match_single(const Parameter& parameter, const DataElement& x, std::vector<DataElement>& bindings) {
-    return std::visit([&bindings, &x](const auto& alt) {
+bool do_match_single(const Parameter& parameter, const DataElement& x, std::vector<DataElement>& bindings, uint32_t bind_level) {
+    return std::visit([&bindings, &bind_level, &x](const auto& alt) {
         using T = std::decay_t<decltype(alt)>;
         if constexpr (std::is_same_v<T, Id>) {
             DataElement& v=bindings[alt.value];
-            if(v.value.index()==TYPE_UNBOUND) {
+            if(v.last_match<bind_level) {
                 v=x;
+                v.last_match=bind_level;
                 return true;
             } else {
                 return compare_equal(x,v);
@@ -96,12 +97,12 @@ bool do_match_single(const Parameter& parameter, const DataElement& x, std::vect
             if(!std::holds_alternative<DataList>(x.value)) {
                 return false;
             }
-            return do_match_vec(alt.items,std::get<DataList>(x.value).value,bindings);
+            return do_match_vec(alt.items,std::get<DataList>(x.value).value,bindings,bind_level);
         }
     }, parameter.value);
 }
 
-bool do_match_vec(const std::vector<Parameter>& parameters, const std::vector<DataElement>& values, std::vector<DataElement>& bindings) {
+bool do_match_vec(const std::vector<Parameter>& parameters, const std::vector<DataElement>& values, std::vector<DataElement>& bindings, uint32_t bind_level) {
     std::size_t plen=parameters.size();
     std::size_t vlen=values.size();
     std::size_t pi=0;
@@ -118,12 +119,12 @@ bool do_match_vec(const std::vector<Parameter>& parameters, const std::vector<Da
             vi+=vlen-plen+1;
             DataElement x=DataElement{DataList(std::move(sub_vector))};
             DataElement& v=bindings[splat.value];
-            if(v.value.index()==TYPE_UNBOUND) {
+            if(v.last_match<bind_level) {
                 v=x;
+                v.last_match=bind_level;
+                return true;
             } else {
-                if(!compare_equal(x,v)) {
-                    return false;
-                }
+                return compare_equal(x,v);
             }
         } else if (std::holds_alternative<ParamSplatWild>(parameter.value)) {
             if(plen>vlen+1) {
@@ -135,7 +136,7 @@ bool do_match_vec(const std::vector<Parameter>& parameters, const std::vector<Da
             if(vi>=vlen) {
                 return false; // ran out of parameters
             }
-            if(!do_match_single(parameter,values[vi],bindings)) {
+            if(!do_match_single(parameter,values[vi],bindings,bind_level)) {
                 return false;
             }
             vi++;
@@ -197,6 +198,7 @@ void Program::do_call_function(uint32_t op, std::vector<DataElement>& sofar, std
 // also be used to avoid the goto, but that's extra machinery, where the goto is clear.
 start:
     // first find the right rule set
+    //if(op==22)__asm__("int3");
     if(op>=program.size()) {
         for (const auto& [key, val] : function_map) {
             if (val == op) {
@@ -210,12 +212,12 @@ start:
         // find the first match
         for(const Rule& rule: rules) {
             std::vector<DataElement> bindings(rule.names.size(),DataElement{DataUnbound{}});
-            if(do_match_vec(rule.main.match,args,bindings)) {
+            if(do_match_vec(rule.main.match,args,bindings,rule.main.match_count)) {
                 bool guard_ok=true;
                 for(const RuleMatch& grule : rule.pre_arrow) {
                     std::vector<DataElement> guard_sofar;
                     do_call_multi(grule.expr,bindings,guard_sofar);
-                    if(!do_match_vec(grule.match,guard_sofar,bindings)) {
+                    if(!do_match_vec(grule.match,guard_sofar,bindings,grule.match_count)) {
                         guard_ok=false;
                         break;
                     }
@@ -224,7 +226,7 @@ start:
                     for(const RuleMatch& grule : rule.post_arrow) {
                         std::vector<DataElement> guard_sofar;
                         do_call_multi(grule.expr,bindings,guard_sofar);
-                        if(!do_match_vec(grule.match,guard_sofar,bindings)) {
+                        if(!do_match_vec(grule.match,guard_sofar,bindings,grule.match_count)) {
                             throw std::runtime_error("failure in post arrow match");
                         }
                     }

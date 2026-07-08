@@ -73,8 +73,8 @@ std::vector<Token> lex(std::string_view program) {
                     token_kind=ConstToken;
                 } else if(sub=="match") {
                     token_kind=Match;
-                } else if(sub=="in") {
-                    token_kind=In;
+                } else if(sub=="then") {
+                    token_kind=Then;
                 } else {
                     token_kind=Identifier;
                 }

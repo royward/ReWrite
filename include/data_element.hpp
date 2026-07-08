@@ -41,5 +41,6 @@ using DataVariant = std::variant <DataUnbound, DataBool, DataInt, DataList, Data
 
 struct DataElement {
     DataVariant value;
+    uint32_t last_match=0;
     std::string to_string() const;
 };

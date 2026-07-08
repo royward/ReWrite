@@ -71,6 +71,8 @@ std::string token_kind_to_string(TokenKind& t) {
         case RBrace : return "}";
         case Semicolon : return ";";
         case Comma : return ",";
+        case Match : return "match";
+        case Then : return "then";
         default: return "unknown";
     }
 }
@@ -439,9 +441,12 @@ std::vector<Expression> Program::parse_expression_list(Parser& parser, std::unor
 void Program::parse_rule(Parser& parser) {
     if(parser.current().kind==Identifier) {
         std::string function=static_cast<std::string>(parser.current().text);
+        //if(function=="parse_aux")__asm__("int3");
         parser.advance();
         if(parser.current().kind==LParen) {
+            uint32_t match_counter=1;
             Rule rule;
+            rule.main.match_count=match_counter;
             parser.advance();
             std::unordered_map<std::string, std::size_t> param_id_map;
             rule.main.match=parse_param_list(parser,param_id_map,RParen,Comma);
@@ -451,13 +456,15 @@ void Program::parse_rule(Parser& parser) {
                     std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,ThreeTokenKind{Arrow,Match,ColonColon},Comma);
                     rule.pre_arrow.push_back(RuleMatch{
                         {Parameter{Const{DataElement{DataBool{true}}}}},
-                        std::move(expr_vec)
+                        std::move(expr_vec),
+                        match_counter
                     });
                 } else { // must be match
                     parser.advance();
+                    match_counter++;
                     std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,Equal,Comma);
                     std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,ThreeTokenKind{Arrow,Match,ColonColon},Comma);
-                    rule.pre_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec)});
+                    rule.pre_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter});
                 }
             }
             if(parser.current().kind!=Arrow) {
@@ -468,21 +475,23 @@ void Program::parse_rule(Parser& parser) {
                 while(true) {
                     if(parser.current().kind==ColonColon) {
                         parser.advance();
-                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,ThreeTokenKind{In,Match,ColonColon},Comma);
-                        rule.pre_arrow.push_back(RuleMatch{
+                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,ThreeTokenKind{Then,Match,ColonColon},Comma);
+                        rule.post_arrow.push_back(RuleMatch{
                             {Parameter{Const{DataElement{DataBool{true}}}}},
-                            std::move(expr_vec)
+                            std::move(expr_vec),
+                            match_counter
                         });
                     } else if(parser.current().kind==Match) { // must be match
                         parser.advance();
+                        match_counter++;
                         std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,Equal,Comma);
-                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,ThreeTokenKind{In,Match,ColonColon},Comma);
-                        rule.pre_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec)});
-                    } else if(parser.current().kind==In) {
+                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,ThreeTokenKind{Then,Match,ColonColon},Comma);
+                        rule.post_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter});
+                    } else if(parser.current().kind==Then) {
                         parser.advance();
                         break;
                     } else {
-                        parse_error(parser.current(),{"in","::","match"});
+                        parse_error(parser.current(),{"then","::","match"});
                     }
                 }
             }

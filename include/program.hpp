@@ -66,6 +66,7 @@ struct Expression {
 struct RuleMatch {
     std::vector<Parameter> match;
     std::vector<Expression> expr;
+    uint32_t match_count;
 };
 
 struct Rule {

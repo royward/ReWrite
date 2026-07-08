@@ -328,7 +328,7 @@ MatchClause =
   | ::<expressions>
 
 Rule = 
-    <name>(<pattern>) MatchClause* -> [MatchClause+ in] <expressions>
+    <name>(<pattern>) MatchClause* -> [MatchClause+ then] <expressions>
 ```
 
 (`*` means 0 or more, `+` means 1 or more, `[ ]` means optional if you are not used to reading grammars).
@@ -356,7 +356,7 @@ Here is an example of using it on the right hand side. Imagine that we have an e
 expensive(n) -> n+n+n; // Imagine this is expensive
 
 // Use match after the arrow to bind it to result, then use result twice
-use_twice(n) -> match result=expensive(n) in result*result;
+use_twice(n) -> match result=expensive(n) then result*result;
 ```
 
 In this case, result will be bound with the results of `expensive(x)`, and can now be used repeatedly in expressions.
