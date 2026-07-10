@@ -210,7 +210,7 @@ start:
     try {
         const std::vector<Rule>& rules=program[op];
         // find the first match
-        for(const Rule& rule: rules) {
+        for(const auto& [i, rule]: std::views::enumerate(rules)) {
             std::vector<DataElement> bindings(rule.names.size(),DataElement{DataUnbound{}});
             if(do_match_vec(rule.main.match,args,bindings,rule.main.match_count)) {
                 bool guard_ok=true;
@@ -227,7 +227,7 @@ start:
                         std::vector<DataElement> guard_sofar;
                         do_call_multi(grule.expr,bindings,guard_sofar);
                         if(!do_match_vec(grule.match,guard_sofar,bindings,grule.match_count)) {
-                            throw std::runtime_error("failure in post arrow match");
+                            throw std::runtime_error(std::format("failure in post arrow match({})",i));
                         }
                     }
 
@@ -294,7 +294,7 @@ std::vector<DataElement> Program::run_string(std::string& call) {
     Parser parser;
     parser.tokens=lex(call);
     std::unordered_map<std::string, std::size_t> param_id_map;
-    std::vector<Expression> expressions=parse_expression_list(parser, param_id_map, ThreeTokenKind{Eof,Eof,Eof}, Comma);
+    std::vector<Expression> expressions=parse_expression_list(parser, param_id_map, FourTokenKind{Eof,Eof,Eof,Eof}, Comma);
     const std::vector<DataElement> empty_bindings;
     std::vector<DataElement> result;
         do_call_multi(expressions, empty_bindings, result);

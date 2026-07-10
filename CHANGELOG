@@ -2,11 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.5] - 2026-07-??
+## [0.0.5] - 2026-07-11
 
 ### Changed
+- ReWrite2 -> ReWrite (decided to reuse the original name)
 - `in` to `then`
-- match parameters now get rebound
+- `match <pattern>=<exprs>` changed to `match <exprs> => <pattern>`
+- Provided `update` that does matching with variable rebinding
+
+### Fixed
+- deal with negative numbers correctly on left hand side
 
 ## [0.0.4] - 2026-07-06
 

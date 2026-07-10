@@ -61,6 +61,11 @@ void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::ve
             check_type<DataInt>("count_trailing_zeros",args[0]);
             sofar.push_back(DataElement{DataInt{std::countr_zero(static_cast<uint64_t>(std::get<DataInt>(args[0].value).value))}});
         } break;
+        case CountLeadingZeros: {
+            check_arg_count("count_leading_zeros",args,1);
+            check_type<DataInt>("count_leading_zeros",args[0]);
+            sofar.push_back(DataElement{DataInt{std::countl_zero(static_cast<uint64_t>(std::get<DataInt>(args[0].value).value))}});
+        } break;
         case PopCount: {
             check_arg_count("pop_count",args,1);
             check_type<DataInt>("pop_count",args[0]);

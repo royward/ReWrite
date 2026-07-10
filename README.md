@@ -1,8 +1,6 @@
-# ReWrite2
+# ReWrite
 
-A rule-based language for expressing recursive computation through pattern matching. Initial version an interpreter in Modern C++, but the plan is to bootstrap it - write a ReWrite2 compiler in itself that generates instructions suitable for a Virtual Machine, and maybe eventually x86-64 and ARM machine code.
-
-Note: ReWrite2 is a working name while I look for a better one.
+A rule-based language for expressing recursive computation through pattern matching. Initial version an interpreter in Modern C++, but the plan is to bootstrap it - write a ReWrite compiler in itself that generates instructions suitable for a Virtual Machine, and maybe eventually x86-64 and ARM machine code.
 
 - [Overview](#overview)
 - [License](#license)
@@ -17,7 +15,7 @@ Note: ReWrite2 is a working name while I look for a better one.
   - [Multiple Return Values](#multiple-return-values)
   - [Lists and Splat](#lists-and-splat)
   - [Chars and Strings](#chars-and-strings)
-  - [Match Clauses](#match-clauses)
+  - [Match/Update Clauses](#match-update-clauses)
   - [Constants](#constants)
   - [Errors](#errors)
   - [Tail Recursion](#tail-recursion)
@@ -28,9 +26,19 @@ Note: ReWrite2 is a working name while I look for a better one.
 
 ## Overview
 
-ReWrite2 is a language designed to make complex decision logic easier. It has pattern matching that is used instead of `if ... then ... else` chains or `case` type statements, and an idiom that makes list construction and deconstruction easy and readable. A ReWrite2 program often has "one thought per line".
+ReWrite is a language designed to make complex decision logic easier. It has:
 
-A ReWrite2 program is a list of functions, where each function is a set of rules, and the execution path is that a function call will try each of the rules, then fire the first one that matches (without Prolog style backtracking). For a simple example:
+* pattern matching instead of `if ... then ... else` chains or `case` statements,
+
+* variables that are bound through pattern matching rather than assigned
+
+* multiple return values, making functions that return complex results clean and readable
+
+* easy list construction and deconstruction using a splat operator.
+
+As a result, ReWrite programs often have "one thought per line".
+
+A ReWrite program is a list of functions, where each function is a set of rules, and the execution path is that a function call will try each of the rules, then fire the first one that matches (without Prolog style backtracking). For a simple example:
 
 ```
 fact(0) -> 1;
@@ -39,7 +47,7 @@ fact(n) -> n*fact(n-1);
 
 Each call will check first if the argument is 0, in which case it will terminate returning 1, or it will calculate `fact(n)` recursively in terms of `fact(n-1)`.
 
-ReWrite2:
+ReWrite:
 * is currently interpreted, with the goal of later being compiled.
 * will be strongly typed - it is currently dynamically typed, but this will change in the compiled version.
 * is mostly functional (does allow side effect for things like logging).
@@ -49,7 +57,7 @@ ReWrite2:
 
 ## License
 
-ReWrite2 is licensed under the [Apache License 2.0](LICENSE).
+ReWrite is licensed under the [Apache License 2.0](LICENSE).
 
 Example programs (in the `tests/` directory) are released under [CC0 1.0 Universal (Public Domain)](https://creativecommons.org/publicdomain/zero/1.0/) — you are free to use them without restriction.
 
@@ -65,7 +73,7 @@ As a secondary motivation, I was interested to see how well Modern C++ could be 
 
 ## Use cases
 
-ReWrite2 can be used for general programming, but is particularly good at dealing with complex-case logic. For instance, this makes it well suited to lexers, parsers and compilers. I also think it is going to have value in complex game logic (I haven't tested this yet), and converting a data structure into readable text (for example, planet descriptions).
+ReWrite can be used for general programming, but is particularly good at dealing with complex-case logic. For instance, this makes it well suited to lexers, parsers and compilers. I also think it is going to have value in complex game logic (I haven't tested this yet), and converting a data structure into readable text (for example, planet descriptions).
 
 The example programs demonstrate recursive algorithms including prime generation and the n-queens problem, giving a sense of the language's expressive range beyond compiler construction.
 
@@ -74,11 +82,11 @@ It is designed to be embedded in other languages (currently C++, later will also
 
 ## Installation
 
-ReWrite2 requires a C++23 compatible compiler (GCC 14+ or Clang 18+) and CMake 3.20+. It uses no platform-specific code and should work on any platform supporting these tools, but has only been tested on Linux.
+ReWrite requires a C++23 compatible compiler (GCC 14+ or Clang 18+) and CMake 3.20+. It uses no platform-specific code and should work on any platform supporting these tools, but has only been tested on Linux.
 
 ```bash
-git clone https://github.com/royward/rewrite2.git
-cd rewrite2
+git clone https://github.com/royward/rewrite.git
+cd rewrite
 cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
 cmake --build build/release
 ```
@@ -96,17 +104,17 @@ I welcome bug reports if there is some issue where it won't build on another pla
 
 Note that the phase 0 interpreter is not optimised for performance - it is merely a vehicle to bootstrap to phase 1 and beyond, where performance issues will be addressed.
 
-Note that once ReWrite2 builds itself in phase 1 and beyond, compiling the VM will not require C++-23 - probably C++17 at most.
+Note that once ReWrite builds itself in phase 1 and beyond, compiling the VM will not require C++-23 - probably C++17 at most.
 
 ## Usage
 
-ReWrite2 currently has a command line utility:
+ReWrite currently has a command line utility:
 
 ```
 <path>/rewrite_cpp <program_file> <expression>
 ```
 
-where `<expression>` is any valid ReWrite2 expression, which may call functions defined in `<program_file>`.
+where `<expression>` is any valid ReWrite expression, which may call functions defined in `<program_file>`.
 
 So for instance (from the `build/release` directory):
 
@@ -124,13 +132,13 @@ This section has examples which can all be found in the `tests` directory.
 
 #### General Structure
 
-The structure of a ReWrite2 program is simple - it is a list of functions, where each function is a list of rules of the form:
+The structure of a ReWrite program is simple - it is a list of functions, where each function is a list of rules of the form:
 
 ```
 <function_name>(<pattern>)[::<guard expression>] -> <expressions>;
 ```
 
-`[ ]` means that the part enclosed is optional. See [Match Clauses](#match-clauses) for a more complete syntax.
+`[ ]` means that the part enclosed is optional. See [Match/Update Clauses](#match-update-clauses) for a more complete syntax.
 
 The language just fires the first rule that successfully matches (it is a runtime error if none of them fire - later versions might make this a compile time error).
 
@@ -159,11 +167,11 @@ The first rule will fire if `n` is matched (which will match to any single argum
 
 The `_` is a special symbol that means "match with anything". Unlike a named parameter, it doesn't bind to anything, so you can use multiple `_` in the same rule without conflict.
 
-See [Match Clauses](#match-clauses) for a generalization of guards.
+See [Match/Update Clauses](#match-update-clauses) for a generalization of guards.
 
 #### Pattern matching
 
-So far, all the examples have treated function parameters like they would appear in most other languages. ReWrite2 does full matching, which is richer than this - the same identifer can appear as part of a match multiple times, but then it must be bound to the same value. For instance:
+So far, all the examples have treated function parameters like they would appear in most other languages. ReWrite does full matching, which is richer than this - the same identifier can appear as part of a match multiple times, but then it must be bound to the same value. For instance:
 
 ```
 equal(x,x) -> true;
@@ -174,7 +182,7 @@ Will test for equality for the two parameters - if they are equal, the first rul
 
 #### Multiple return values
 
-One unusual feature of ReWrite2 is that functions can return multiple values, and these will be taken as separate values when inserted into a list or another function call.
+One unusual feature of ReWrite is that functions can return multiple values, and these will be taken as separate values when inserted into a list or another function call.
 
 For instance, in the following, `min_max` returns two values, the min and the max:
 
@@ -199,11 +207,11 @@ One motivation for this (using features not yet in the language) was `polar_to_r
 polar_to_rectangular(r, theta) -> r*cos(theta), r*sin(theta);
 ```
 
-It naturally returns multiple values, and while many other languages allow the result to be returned as a pair (or more generally, a tuple), it then needs to be unpacked, usually by assigning it to something and getting out indexed values. ReWrite2 makes this much more natural - if the parameter order matches up (if it doesn't, ReWrite2 would easily support a one line shim to fix this).
+It naturally returns multiple values, and while many other languages allow the result to be returned as a pair (or more generally, a tuple), it then needs to be unpacked, usually by assigning it to something and getting out indexed values. ReWrite makes this much more natural - if the parameter order matches up (if it doesn't, ReWrite would easily support a one line shim to fix this).
 
 #### Lists and splat
 
-ReWrite2 has support for constructing lists, using `{ }`, so `{1,2,3}` is the list containing the three elements, 1,2,3. Lists can also be used as part of pattern matching:
+ReWrite has support for constructing lists, using `{ }`, so `{1,2,3}` is the list containing the three elements, 1,2,3. Lists can also be used as part of pattern matching:
 
 ```
 // not in test directory as more powerful example below
@@ -265,7 +273,7 @@ listn(n) -> {..listn(n-1),n-1};
 
 #### Chars and Strings
 
-ReWrite2 has support for string and char. A char is a single character in single quotes `'a'`. As syntactic sugar, multiple characters can be put in single quotes and represents a list of chars, so `'ab'` = `'a','b'` - two char values.
+ReWrite has support for string and char. A char is a single character in single quotes `'a'`. As syntactic sugar, multiple characters can be put in single quotes and represents a list of chars, so `'ab'` = `'a','b'` - two char values.
 
 A string is a sequence of characters in double quotes: "abc", represented as a list of chars, so `"abc"` = `{'abc'}` = `{'a','b','c'}`, and `.."abc"` = `'abc'`.
 
@@ -310,21 +318,23 @@ roman_to_int({a,b,..rest})::roman_to_int_convert_case(a)<roman_to_int_convert_ca
 roman_to_int({a,..rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
 ```
 
-#### Match Clauses
+#### Match/Update Clauses
 
-In the section [Guards](#guards) above, a method was introduced of checking a condition before a rule will fire. This section introduces something called a match clause that generalizes this, and allows pattern matching and variable binding on the results of expressions. This may also be used to the right of the arrow.
+This section is a little more advanced - ReWrite can be used without the functionality described here, but will be less readable.
+
+In the section [Guards](#guards) above, a method was introduced of checking a condition before a rule will fire. This section introduces something called a match/update clause that generalizes this, and allows pattern matching and variable binding on the results of expressions. This may also be used to the right of the arrow.
 
 The form of a match clause is:
 
 ```
-match <pattern> = <expressions>
+match|update <expressions> => <pattern>
 ```
 
-The form `::<expr>` introduced as guards is simply syntactic sugar for `match true = <expressions>`, so the more complete form of a rule is:
+The form `::<expr>` introduced as guards is simply syntactic sugar for `match <expressions> => true`, so the more complete form of a rule is:
 
 ```
 MatchClause =
-    match <pattern> = <expressions>
+    match|update <expressions> => <pattern>
   | ::<expressions>
 
 Rule = 
@@ -342,10 +352,11 @@ Say I have a validation function that also does some processing on a result, and
 validate(x) :: x>=0 -> true, x*2;
 validate(_) -> false, 0;
 
-process(x) match true,data=validate(x) -> data;
+process(x) match validate(x) => true,data -> data;
 process(_) -> #error;
 ```
-The `match true,data=validate(x)` will evaluate `validate(x)` which returns two values, will match the first one with `true` (failing to fire if it doesn't match), and binding `data` to the second value, so:
+
+The `match validate(x) => true,data` will evaluate `validate(x)` which returns two values, will match the first one with `true` (failing to fire if it doesn't match), and binding `data` to the second value, so:
 
 `process(2)` returns `4`
 `process(-3)` fires a `#error`.
@@ -356,12 +367,43 @@ Here is an example of using it on the right hand side. Imagine that we have an e
 expensive(n) -> n+n+n; // Imagine this is expensive
 
 // Use match after the arrow to bind it to result, then use result twice
-use_twice(n) -> match result=expensive(n) then result*result;
+use_twice(n) -> match expensive(n) => result then result*result;
 ```
 
 In this case, result will be bound with the results of `expensive(x)`, and can now be used repeatedly in expressions.
 
-Note that in both of these cases, in fact all cases, match clauses could be avoided by using one line helper functions:
+Another case where match is useful is tying multiple calls together and having data threaded through it:
+
+```
+min_max(a,b) :: a<b -> a,b;
+min_max(a,b) -> b,a;
+
+clamp(x,lo,hi) ->
+    match min_max(lo,hi) => lo2,hi2
+    match min_max(x,lo2) => _,x2
+    match min_max(x2,hi2) => x3,_ then
+    x3;
+```
+
+In this case, having to have the `lo2`, `hi2`, `x2`, `x3` add extra complexity to deal with the values changing (`match min_max(lo,hi) => lo,hi` would require the `lo` on the left to be the same as the `lo` on the right).
+
+For this reason, a variation of match called `update` is provided. `update` is the same as match, except that values on the right are re-bound (can change values), so the above example becomes:
+
+```
+clamp(x,lo,hi) ->
+    update min_max(lo,hi) => lo,hi
+    update min_max(x,lo) => _,x
+    update min_max(x,hi) => x,_ then
+    x;
+```
+
+With the `update min_max(lo,hi) => lo,hi`, the `lo` and `hi` get rebound and don't need to match the previous versions.
+
+Note that when update rebinds a variable, it must be the same type as the original binding, which will be enforced by the type checker in later versions.
+
+When the pattern introduces only new variable names, `match` and `update` are equivalent.
+
+Note that in all cases, each match and update clause could be avoided by using a one line helper function:
 
 ```
 process(x) -> process_helper(validate(x));
@@ -376,7 +418,7 @@ use_twice(n) -> use_twice_helper(expensive(n));
 use_twice_helper(n) -> n*n;
 ```
 
-but this is more verbose, and tends to break the flow of the program, particularly in larger functions.
+but this is more verbose, and tends to break the flow of the program, particularly in larger functions. The clamp example uses multiple `update` clauses, so would need even more helper functions.
 
 #### Constants
 
@@ -439,7 +481,7 @@ fact(n)->n*fact(n-1);
 
 #### Tail recursion
 
-ReWrite2 uses a lot of recursion. One thing to be aware of is that each recursive call typically uses another frame on the stack, so deep recursions can cause a stack overflow. This is mitigated by tail recursion - a jump (tail call) is used on the last operation performed by a function, so in:
+ReWrite uses a lot of recursion. One thing to be aware of is that each recursive call typically uses another frame on the stack, so deep recursions can cause a stack overflow. This is mitigated by tail recursion - a jump (tail call) is used on the last operation performed by a function, so in:
 
 ```
 f(x) -> g(x),t(h(x))
@@ -517,7 +559,7 @@ There is also a variant of this `nqueens_bitmask.rw` in the `tests` directory, t
 
 ## Road map
 
-ReWrite2 development will occur in phases:
+ReWrite development will occur in phases:
 
 #### Phase 0: minimal interpreter
 
@@ -525,16 +567,16 @@ This is nearly done - the only things left to complete this are any additional l
 
 #### Phase 1: compiling to VM
 
-This stage does not involve adding language features, but writing a ReWrite2 program that compiles itself to a VM targetted binary. Steps are:
+This stage does not involve adding language features, but writing a ReWrite program that compiles itself to a VM targetted binary. Steps are:
 
-* write ReWrite2 -> VM compiler, written in ReWrite2 itself (self-hosting)
-* write the VM (probably in C++ or C - this will be fairly low level)
+* write ReWrite -> VM compiler, written in ReWrite itself (self-hosting)
+* write the VM (probably in C - this will be fairly low level)
 
 This is in progress.
 
 #### Phase 2+: strong typing and other features
 
-Once ReWrite2 can build and run itself, the interpreter is no longer necessary, so other features can be added:
+Once ReWrite can build and run itself, the interpreter is no longer necessary, so other features can be added:
 
 * Interface from C, C++ and Rust
 * Strong static typing (types checked at compile time)

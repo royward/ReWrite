@@ -73,6 +73,8 @@ std::vector<Token> lex(std::string_view program) {
                     token_kind=ConstToken;
                 } else if(sub=="match") {
                     token_kind=Match;
+                } else if(sub=="update") {
+                    token_kind=Update;
                 } else if(sub=="then") {
                     token_kind=Then;
                 } else if(sub=="type") {
@@ -166,6 +168,9 @@ std::vector<Token> lex(std::string_view program) {
                     if(p<len && program[p]=='=') {
                         p++;
                         token_kind=EqualEqual;
+                    } else if(p<len && program[p]=='>') {
+                        p++;
+                        token_kind=DoubleArrow;
                     } else {
                         token_kind=Equal;
                     }

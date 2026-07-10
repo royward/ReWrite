@@ -28,6 +28,7 @@ enum TokenKind {
     ConstToken,
     Divide,
     Dot,
+    DoubleArrow,
     Equal,
     EqualEqual,
     False,
@@ -62,6 +63,7 @@ enum TokenKind {
     True,
     UnsignedInteger,
     Wildcard,
+    Update,
     Xor,
     // String stuff
     String,
@@ -69,6 +71,7 @@ enum TokenKind {
     Eof,
     // some functions - these are never used as tokens, but are placeholders for do_call_internal
     CountTrailingZeros,
+    CountLeadingZeros,
     PopCount,
     CharToInt,
     IntToChar,
