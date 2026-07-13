@@ -93,6 +93,11 @@ void execution_unload(ExecutionState* exe) {
 #define OP_ERROR 0x02
 #define OP_RET 0x03
 #define OP_MOVE 0x10
+#define OP_PLUS 0x18
+#define OP_MINUS 0x19
+#define OP_TIMES 0x20
+#define OP_DIVIDE 0x21
+#define OP_MODULUS 0x22
 #define OP_CMP_NE 0xF0
 #define OP_CMP_EQ 0xF8
 

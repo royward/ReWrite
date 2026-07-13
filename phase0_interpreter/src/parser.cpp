@@ -309,6 +309,9 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
         std::vector<Expression> expr_list;
         expr_list.push_back(std::move(expr2));
         expr=Expression{CallInternal{prefix_id,std::move(expr_list)}};
+    } else if(t.kind==Chars && string_to_exprlist(t.text).size()==1) {
+        std::vector<Expression> chars=string_to_exprlist(t.text);
+        expr=std::move(chars[0]);
     } else {
         switch(t.kind) {
             case UnsignedInteger : expr=Expression{Const{DataElement{DataInt{token_to_int(t)}}}}; break;
@@ -417,13 +420,13 @@ std::vector<Expression> Program::parse_expression_list(Parser& parser, std::unor
             Token t=parser.current();
             if(end.check_token(t.kind)) {
                 return expr_list; // deal with trailing comma case
-            } else if(t.kind==Identifier && constants.find(t.text)!=constants.end()) {
+            } else if(t.kind==Identifier && constants.find(t.text)!=constants.end() && constants[t.text].size()>1) {
                 std::vector<DataElement>& const_val=constants[t.text];
                 for(auto& v : const_val) {
                     expr_list.push_back(Expression{Const{v}});
                 }
                 parser.advance();
-            } else if(t.kind==Chars) {
+            } else if(t.kind==Chars && string_to_exprlist(t.text).size()>1) {
                 std::vector<Expression> chars=string_to_exprlist(t.text);
                 expr_list.insert(expr_list.end(),std::make_move_iterator(chars.begin()),std::make_move_iterator(chars.end()));
                 parser.advance();

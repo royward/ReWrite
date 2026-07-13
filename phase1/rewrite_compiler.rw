@@ -287,6 +287,7 @@ parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,LBrace,_},..rest}) ->
 parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,LParen,_},..rest}) ->
     update parse_exprs(consts,fnnames,bindings,{},0,rest) => fnnames,{expr},{{_,_,RParen,_},..rest} then
     parse_exprs1(consts,fnnames,bindings,sofar,expr,pri,rest);
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Char,{c}},..rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeChar,char_to_int(c)}},pri,rest);
 parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Char,str},..rest}) -> parse_exprs1nothis(consts,fnnames,bindings,{..sofar,..string_to_expr_param_list({},str)},pri,rest);
 parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,String,str},..rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{ExprList,string_to_expr_param_list({},str)},pri,rest);
 parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Identifier,id},..rest}) match lookup_symbol_table(consts,id) => ok,val :: ok ->
@@ -458,11 +459,11 @@ get_scalar_type_size(TypeI64) -> OpSize8;
 
 generate_param_code(label_id,fn_id,rule_id,sofar,bindings,{},{}) -> label_id+1,bindings,sofar;
 generate_param_code(label_id,fn_id,rule_id,sofar,bindings,{{{{src_flag,src}},tp},..type_left},{{Const,{tp,val}},..rest}) ->
-    generate_param_code(label_id,fn_id,rule_id,{..sofar,{fn_id,rule_id,get_scalar_type_size(tp)+OpCompareNotEqualBranch,0,BindLabel,label_id+1,src_flag,src,BindImm,val}},bindings,type_left,rest);
+    generate_param_code(label_id,fn_id,rule_id,{..sofar,{fn_id,rule_id,OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindLabel,label_id+1,src_flag,src,BindImm,val}},bindings,type_left,rest);
 
 generate_expr_code(fn_id,rule_id,code,bindings,{},{}) -> code;
 generate_expr_code(fn_id,rule_id,sofar,bindings,{{{{src_flag,src}},tp},..type_left},{{Const,{tp,val}},..rest}) ->
-    generate_expr_code(fn_id,rule_id,{..sofar,{fn_id,rule_id,get_scalar_type_size(tp)+OpMove,0,src_flag,src,BindImm,val}},bindings,type_left,rest);
+    generate_expr_code(fn_id,rule_id,{..sofar,{fn_id,rule_id,get_scalar_type_size(tp),0,src_flag,src,BindImm,val}},bindings,type_left,rest);
 
 convert_to_binary(sofar,{}) -> sofar;
 convert_to_binary(sofar,{instr,..rest}) -> convert_to_binary({..sofar,..emit_instruction(instr)},rest);
