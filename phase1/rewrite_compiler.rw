@@ -463,7 +463,7 @@ generate_param_code(label_id,fn_id,rule_id,sofar,bindings,{{{{src_flag,src}},tp}
 
 generate_expr_code(fn_id,rule_id,code,bindings,{},{}) -> code;
 generate_expr_code(fn_id,rule_id,sofar,bindings,{{{{src_flag,src}},tp},..type_left},{{Const,{tp,val}},..rest}) ->
-    generate_expr_code(fn_id,rule_id,{..sofar,{fn_id,rule_id,get_scalar_type_size(tp),0,src_flag,src,BindImm,val}},bindings,type_left,rest);
+    generate_expr_code(fn_id,rule_id,{..sofar,{fn_id,rule_id,OpMove+get_scalar_type_size(tp),0,src_flag,src,BindImm,val}},bindings,type_left,rest);
 
 convert_to_binary(sofar,{}) -> sofar;
 convert_to_binary(sofar,{instr,..rest}) -> convert_to_binary({..sofar,..emit_instruction(instr)},rest);
