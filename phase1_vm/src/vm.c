@@ -98,8 +98,22 @@ void execution_unload(ExecutionState* exe) {
 #define OP_TIMES 0x20
 #define OP_DIVIDE 0x21
 #define OP_MODULUS 0x22
-#define OP_CMP_NE 0xF0
-#define OP_CMP_EQ 0xF8
+#define OP_CMP_NE_BRANCH 0xF0
+#define OP_CMP_EQ_BRANCH 0xF8
+
+#define TYPE_LIST 1
+#define TYPE_BOOL 2
+#define TYPE_CHAR 3
+#define TYPE_I8 4
+#define TYPE_U8 5
+#define TYPE_I16 6
+#define TYPE_U16 7
+#define TYPE_I32 8
+#define TYPE_U32 9
+#define TYPE_I64 10
+#define TYPE_U64 11
+#define TYPE_I128 12
+#define TYPE_U128 13
 
 #define BIND_IMM 0
 #define BIND_REG 1
@@ -130,6 +144,35 @@ void display_operand(FILE* out, uint8_t flag, int64_t val) {
     }
 }
 
+const char* display_type(uint8_t tp) {
+    switch(tp) {
+        case TYPE_BOOL: return "bool"; break;
+        case TYPE_CHAR: return "char"; break;
+        case TYPE_I8: return "i8"; break;
+        case TYPE_U8: return "u8"; break;
+        case TYPE_I16: return "i16"; break;
+        case TYPE_U16: return "u16"; break;
+        case TYPE_I32: return "i32"; break;
+        case TYPE_U32: return "u32"; break;
+        case TYPE_I64: return "i64"; break;
+        case TYPE_U64: return "u64"; break;
+        case TYPE_I128: return "i128"; break;
+        case TYPE_U128: return "u128"; break;
+        default: return "unknown";
+    }
+}
+
+const char* display_binop(uint8_t op) {
+    switch(op) {
+        case OP_PLUS: return "*"; break;
+        case OP_MINUS: return "-"; break;
+        case OP_TIMES: return "*"; break;
+        case OP_DIVIDE: return "/"; break;
+        case OP_MODULUS: return "%"; break;
+        default: return "(unknown)";
+    }
+}
+
 void program_disassemble(Program* program, FILE* out) {
     fprintf(out,"  line func:rule op\n");
     for(uint32_t i=0;i<program->count;i++) {
@@ -148,29 +191,37 @@ void program_disassemble(Program* program, FILE* out) {
             } break;
             case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
                 uint32_t sz=1<<(op&7);
-                fprintf(out,"move%d ",sz);
+                fprintf(out,"move.%d ",sz);
                 display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out," <- ");
                 display_operand(out,operation->flags_src1,operation->src1);
             } break;
-            case OP_CMP_NE: case OP_CMP_NE+1: case OP_CMP_NE+2: case OP_CMP_NE+3: case OP_CMP_NE+4: {
+            case OP_CMP_NE_BRANCH: case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
                 uint32_t sz=1<<(op&7);
-                fprintf(out,"test%d ",sz);
+                fprintf(out,"test.%d ",sz);
                 display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," != ");
                 display_operand(out,operation->flags_src2,operation->src2);
                 fprintf(out," goto ");
                 program_display_label(program,out,operation);
             } break;
-            case OP_CMP_EQ: case OP_CMP_EQ+1: case OP_CMP_EQ+2: case OP_CMP_EQ+3: case OP_CMP_EQ+4: {
+            case OP_CMP_EQ_BRANCH: case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
                 uint32_t sz=1<<(op&7);
-                fprintf(out,"test%d ",sz);
+                fprintf(out,"test.%d ",sz);
                 display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," == ");
                 display_operand(out,operation->flags_src2,operation->src2);
                 fprintf(out," goto ");
                 program_display_label(program,out,operation);
             } break;
+            case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: {
+                fprintf(out,"let.%s ",display_type(operation->type));
+                display_operand(out,operation->flags_dst,operation->dst);
+                fprintf(out," = ");
+                display_operand(out,operation->flags_src1,operation->src1);
+                fprintf(out," %s ",display_binop(op));
+                display_operand(out,operation->flags_src2,operation->src2);
+            }
             default: fprintf(out,"unknown");
         }
         fprintf(out,"\n");
@@ -257,7 +308,7 @@ int program_execute(Program* program, ExecutionState* exe, uint32_t in_pc) {
                 uint64_t val = operand_load(exe, sz, operation->flags_src1, operation->src1);
                 operand_store(exe, operation, val, sz);
             } break;
-            case OP_CMP_NE: case OP_CMP_NE+1: case OP_CMP_NE+2: case OP_CMP_NE+3: case OP_CMP_NE+4: {
+            case OP_CMP_NE_BRANCH: case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
                 uint32_t sz = 1 << (op & 7);
                 uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1);
                 uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2);
@@ -265,7 +316,7 @@ int program_execute(Program* program, ExecutionState* exe, uint32_t in_pc) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
-            case OP_CMP_EQ: case OP_CMP_EQ+1: case OP_CMP_EQ+2: case OP_CMP_EQ+3: case OP_CMP_EQ+4: {
+            case OP_CMP_EQ_BRANCH: case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
                 uint32_t sz = 1 << (op & 7);
                 uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1);
                 uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2);

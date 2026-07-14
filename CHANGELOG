@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.6] - 2026-07-??
+
+### Fixed
+- an issue with single char literals or consts not being pulled into infix parser (#1)
+
 ## [0.0.5] - 2026-07-11
 
 ### Changed

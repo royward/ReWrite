@@ -40,7 +40,8 @@ int main(int argc, char** argv) {
     program_disassemble(&p,stdout);
     ExecutionState exe;
     execution_init(&exe,&p);
-    exe.registers[0]=1;
+    exe.registers[0]=3;
+    exe.registers[1]=3;
     int ret_code=program_execute(&p,&exe,0);
     if(!ret_code) {
         printf("Success %" PRId64 "\n",exe.registers[0]);
