@@ -245,7 +245,14 @@ parse_types(sofar,endtok,{{_,_,LBrace,_},..rest}) -> match parse_types({},RBrace
 parse_types1(sofar,endtok,{{_,_,Comma,_},..rest}) -> parse_types(sofar,endtok,rest);
 parse_types1(sofar,endtok,{{_,_,endtok,_},..rest}) -> sofar,rest; // deal with no trailing comma
 
+base_type("i8") -> true,TypeI8;
+base_type("u8") -> true,TypeU8;
+base_type("i16") -> true,TypeI16;
+base_type("u16") -> true,TypeU16;
+base_type("i32") -> true,TypeI32;
+base_type("u32") -> true,TypeU32;
 base_type("i64") -> true,TypeI64;
+base_type("u64") -> true,TypeU64;
 base_type("bool") -> true,TypeBool;
 base_type("char") -> true,TypeChar;
 base_type("string") -> true,{true,Char};
@@ -301,7 +308,7 @@ parse_exprs(consts,fnnames,bindings,sofar,_,rest) -> fnnames,sofar,rest;
 parse_exprs1(consts,fnnames,bindings,sofar,this,0,{{_,_,Comma,_},..rest}) -> parse_exprs(consts,fnnames,bindings,{..sofar,this},0,rest);
 parse_exprs1(consts,fnnames,bindings,sofar,this,pri,{{r,c,tok,val},..rest}) match infix_binding_power(tok) => p1,p2 :: p1>=pri ->
     update parse_exprs(consts,fnnames,bindings,{},p2,rest) => fnnames,second,rest then
-    parse_exprs1(consts,fnnames,bindings,sofar,{tok,this,second},pri,rest);
+    parse_exprs1(consts,fnnames,bindings,sofar,{ExprCallInternal,{tok,this,..second}},pri,rest);
 parse_exprs1(consts,fnnames,bindings,sofar,this,_,rest) -> fnnames,{..sofar,this},rest;
 
 parse_exprs1nothis(consts,fnnames,bindings,sofar,0,{{_,_,Comma,_},..rest}) -> parse_exprs(consts,fnnames,bindings,sofar,0,rest);
@@ -416,15 +423,16 @@ annotate_type_list_stack(stack,sofar,{t,..rest}) -> annotate_type_list_stack(sta
 
 get_type_size_pri(TypeBool) -> {0,1};
 get_type_size_pri(TypeChar) -> {0,1};
+get_type_size_pri(TypeI8) -> {0,1};
+get_type_size_pri(TypeU8) -> {0,1};
+get_type_size_pri(TypeI16) -> {0,2};
+get_type_size_pri(TypeU16) -> {0,2};
+get_type_size_pri(TypeI32) -> {0,4};
+get_type_size_pri(TypeU32) -> {0,4};
 get_type_size_pri(TypeI64) -> {0,8};
+get_type_size_pri(TypeU64) -> {0,8};
 get_type_size_pri({true,_}) -> {1,4,2,4};
 get_type_size_pri({false,_}) -> {1,4,2,4};
-
-const OpSize1=0;
-const OpSize2=1;
-const OpSize4=2;
-const OpSize8=3;
-const OpSize16=4;
 
 const OpLabel=1;
 const OpError=2;
@@ -453,9 +461,7 @@ compile_rule(label_id,fn_id,rule_id,sofar,bindings,params,pre_arrow_clauses,post
     update generate_expr_code(fn_id,rule_id,code,bindings,type_right,exprs) => code then
     label_id,{..code,{fn_id,rule_id,OpRet,0}};
 
-get_scalar_type_size(TypeBool) -> OpSize1;
-get_scalar_type_size(TypeChar) -> OpSize1;
-get_scalar_type_size(TypeI64) -> OpSize8;
+get_scalar_type_size(tp) match get_type_size_pri(tp) => {_,sz} -> 63-count_leading_zeros(sz);
 
 generate_param_code(label_id,fn_id,rule_id,sofar,bindings,{},{}) -> label_id+1,bindings,sofar;
 generate_param_code(label_id,fn_id,rule_id,sofar,bindings,{{{{src_flag,src}},tp},..type_left},{{Const,{tp,val}},..rest}) ->
@@ -470,11 +476,31 @@ generate_bind_variable(label_id,fn_id,rule_id,0,src_flag,src,tp,sofar_bindings,{
     label_id,{{fn_id,rule_id,OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindLabel,label_id+1,src_flag,src,src_flag2,src2}},{..sofar_bindings,{{src_flag2,src2},name},..bindings};
 
 generate_expr_code(fn_id,rule_id,code,bindings,{},{}) -> code;
-generate_expr_code(fn_id,rule_id,sofar,bindings,{{{{dst_flag,dst}},tp},..type_left},{{Const,{tp,val}},..rest}) ->
-    generate_expr_code(fn_id,rule_id,{..sofar,{fn_id,rule_id,OpMove+get_scalar_type_size(tp),0,dst_flag,dst,BindImm,val}},bindings,type_left,rest);
-generate_expr_code(fn_id,rule_id,sofar,bindings,{{{{dst_flag,dst}},tp},..type_left},{{ExprId,{id}},..rest}) ->
-    match get_nth(id,bindings) => {bind_level,tp,{src_flag,src},_} then
-    generate_expr_code(fn_id,rule_id,{..sofar,{fn_id,rule_id,OpMove+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src}},bindings,type_left,rest);
+// TODO deal with lists splats and calls first
+generate_expr_code(fn_id,rule_id,sofar,bindings,{{{{dst_flag,dst}},tp},..type_left},{expr,..rest}) ->
+    match generate_expr_code_aux(fn_id,rule_id,bindings,expr) => newcode,tp,src_flag,src then
+    generate_expr_code(fn_id,rule_id,{..sofar,..newcode,{fn_id,rule_id,OpMove+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src}},bindings,type_left,rest);
+
+//generate_expr_code_aux(0,0,{{1,10,{1,0},"n"}},{{1,{10,1}}})
+generate_expr_code_aux(fn_id,rule_id,bindings,{Const,{tp,val}}) -> {},tp,BindImm,val;
+generate_expr_code_aux(fn_id,rule_id,bindings,{ExprId,{id}}) -> match get_nth(id,bindings) => {_,tp,{src_flag,src},_} then {},tp,src_flag,src;
+generate_expr_code_aux(fn_id,rule_id,bindings,{ExprCallInternal,{op,..args}}) ->
+    match generate_expr_code_aux_map(fn_id,rule_id,bindings,{},args) => args_code then
+    generate_expr_code_infix(fn_id,rule_id,bindings,op,args_code);
+
+binop(Plus) -> true,24;
+binop(Minus) -> true,25;
+binop(Times) -> true,26;
+binop(Divide) -> true,27;
+binop(Modulus) -> true,28;
+binop(_) -> false,0;
+
+//generate_expr_code_infix(0,0,{{1,10,{1,0},"n"}},30,{{{},10,1,0},{{},10,0,1}})
+generate_expr_code_infix(fn_id,rule_id,bindings,op,{{code1,tp,src_flag1,src1},{code2,tp,src_flag2,src2}}) match binop(op) => true,machine_op ->
+    {..code1,..code2,{fn_id,rule_id,machine_op,tp,BindReg,6,src_flag1,src1,src_flag2,src2}},tp,BindReg,6;
+
+generate_expr_code_aux_map(fn_id,rule_id,bindings,sofar,{}) -> sofar;
+generate_expr_code_aux_map(fn_id,rule_id,bindings,sofar,{expr,..rest}) -> generate_expr_code_aux_map(fn_id,rule_id,bindings,{..sofar,{generate_expr_code_aux(fn_id,rule_id,bindings,expr)}},rest);
 
 convert_to_binary(sofar,{}) -> sofar;
 convert_to_binary(sofar,{instr,..rest}) -> convert_to_binary({..sofar,..emit_instruction(instr)},rest);

@@ -2,5 +2,6 @@
 // This won't expand the stack
 // SPDX-License-Identifier: CC0-1.0
 
+:- equal(i64,i64) -> bool;
 equal(x,x) -> true;
 equal(_,_) -> false;

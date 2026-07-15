@@ -162,9 +162,27 @@ const char* display_type(uint8_t tp) {
     }
 }
 
+uint32_t type_to_size(uint8_t tp) {
+    switch(tp) {
+        case TYPE_BOOL: return 1; break;
+        case TYPE_CHAR: return 1; break;
+        case TYPE_I8: return 1; break;
+        case TYPE_U8: return 1; break;
+        case TYPE_I16: return 2; break;
+        case TYPE_U16: return 2; break;
+        case TYPE_I32: return 4; break;
+        case TYPE_U32: return 4; break;
+        case TYPE_I64: return 8; break;
+        case TYPE_U64: return 8; break;
+        case TYPE_I128: return 16; break;
+        case TYPE_U128: return 16; break;
+        default: return 0;
+    }
+}
+
 const char* display_binop(uint8_t op) {
     switch(op) {
-        case OP_PLUS: return "*"; break;
+        case OP_PLUS: return "+"; break;
         case OP_MINUS: return "-"; break;
         case OP_TIMES: return "*"; break;
         case OP_DIVIDE: return "/"; break;
@@ -191,9 +209,9 @@ void program_disassemble(Program* program, FILE* out) {
             } break;
             case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
                 uint32_t sz=1<<(op&7);
-                fprintf(out,"move.%d ",sz);
+                fprintf(out,"let.%d ",sz);
                 display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out," <- ");
+                fprintf(out," = ");
                 display_operand(out,operation->flags_src1,operation->src1);
             } break;
             case OP_CMP_NE_BRANCH: case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
@@ -221,7 +239,7 @@ void program_disassemble(Program* program, FILE* out) {
                 display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," %s ",display_binop(op));
                 display_operand(out,operation->flags_src2,operation->src2);
-            }
+            } break;
             default: fprintf(out,"unknown");
         }
         fprintf(out,"\n");
@@ -323,6 +341,58 @@ int program_execute(Program* program, ExecutionState* exe, uint32_t in_pc) {
                 if(src1 == src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
+            } break;
+            case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: {
+                uint32_t sz = type_to_size(operation->type);
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1);
+                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2);
+                uint64_t dst;
+                switch(op) {
+                    case OP_PLUS: dst = src1+src2; break;
+                    case OP_MINUS: dst = src1-src2; break;
+                    case OP_TIMES: dst = src1*src2; break;
+                    case OP_DIVIDE: {
+                        if(src2 == 0) {
+                            fprintf(stderr, "fatal: division by zero in division\n");
+                            exit(EXIT_FAILURE);
+                        }
+                        switch(operation->type) {
+                            case TYPE_I8: dst=((int8_t)(src1))/(int8_t)src2; break;
+                            case TYPE_U8: dst=((uint8_t)(src1))/(uint8_t)src2; break;
+                            case TYPE_I16: dst=((int16_t)(src1))/(int16_t)src2; break;
+                            case TYPE_U16: dst=((uint16_t)(src1))/(uint16_t)src2; break;
+                            case TYPE_I32: dst=((int32_t)(src1))/(int32_t)src2; break;
+                            case TYPE_U32: dst=((uint32_t)(src1))/(uint32_t)src2; break;
+                            case TYPE_I64: dst=((int64_t)(src1))/(int64_t)src2; break;
+                            case TYPE_U64: dst=((uint64_t)(src1))/(uint64_t)src2; break;
+                            default: {
+                                fprintf(stderr,"unknown type in division\n");
+                                exit(EXIT_FAILURE);
+                            }
+                        }
+                    } break;
+                    case OP_MODULUS: {
+                        if(src2 == 0) {
+                            fprintf(stderr, "fatal: division by zero in modulus\n");
+                            exit(EXIT_FAILURE);
+                        }
+                        switch(operation->type) {
+                            case TYPE_I8: dst=((int8_t)(src1))%(int8_t)src2; break;
+                            case TYPE_U8: dst=((uint8_t)(src1))%(uint8_t)src2; break;
+                            case TYPE_I16: dst=((int16_t)(src1))%(int16_t)src2; break;
+                            case TYPE_U16: dst=((uint16_t)(src1))%(uint16_t)src2; break;
+                            case TYPE_I32: dst=((int32_t)(src1))%(int32_t)src2; break;
+                            case TYPE_U32: dst=((uint32_t)(src1))%(uint32_t)src2; break;
+                            case TYPE_I64: dst=((int64_t)(src1))%(int64_t)src2; break;
+                            case TYPE_U64: dst=((uint64_t)(src1))%(uint64_t)src2; break;
+                            default: {
+                                fprintf(stderr,"unknown type in modulus\n");
+                                exit(EXIT_FAILURE);
+                            }
+                        }
+                    } break;
+                }
+                operand_store(exe, operation, dst, sz);
             } break;
             default: {
                 fprintf(stderr,"Illegal Instruction\n");
