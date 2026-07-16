@@ -457,7 +457,6 @@ create_compiler_bindings(sofar,{}) -> sofar;
 create_compiler_bindings(sofar,{n,..rest}) -> create_compiler_bindings({..sofar,{0,0,{},n}},rest);
 
 // ctx = {label_id,fn_id,rule_id}
-
 ctx_fnr({label_id,fn_id,rule_id}) -> fn_id,rule_id;
 ctx_lbl({label_id,fn_id,rule_id}) -> label_id;
 ctx_lbl_inc({label_id,fn_id,rule_id}) -> {label_id+1,fn_id,rule_id};
