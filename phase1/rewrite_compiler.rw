@@ -437,6 +437,8 @@ get_type_size_pri({false,_}) -> {1,4,2,4};
 const OpLabel=1;
 const OpError=2;
 const OpRet=3;
+const OpCall=4;
+const OpAddStack=5;
 const OpCompareNotEqualBranch=240;
 const OpCompareEqualBranch=248;
 const OpMove=16;
@@ -444,31 +446,34 @@ const OpMove=16;
 compile_aux(label_id,_,_,sofar,{}) -> convert_to_binary({},sofar);
 compile_aux(label_id,n,table,sofar,{rules,..rest}) ->
     match get_nth(n,table) => {_,maxreg1,bitmask1,type_left,maxreg2,bitmask2,type_right}
-    update compile_function(label_id,n,0,{},rules,max(maxreg1,maxreg2),maxreg2,bitmask_or({},bitmask1,bitmask2),type_left,type_right) => label_id,code then
+    update compile_function(label_id,n,table,0,{},rules,max(maxreg1,maxreg2),maxreg2,bitmask_or({},bitmask1,bitmask2),type_left,type_right) => label_id,code then
     compile_aux(label_id,n+1,table,{..sofar,..code},rest);
 
-compile_function(label_id,fn_id,rule_id,sofar,{},_,_,_,_,_) -> label_id+1,{..sofar,{fn_id,rule_id,OpLabel,0,BindLabel,label_id},{fn_id,rule_id,OpError,0}};
-compile_function(label_id,fn_id,rule_id,sofar,{rule,..rest},maxregs,max_regs_rhs,bitmask,type_left,type_right) ->
+compile_function(label_id,fn_id,table,rule_id,sofar,{},_,_,_,_,_) -> label_id+1,{..sofar,{fn_id,rule_id,OpLabel,0,BindLabel,label_id},{fn_id,rule_id,OpError,0}};
+compile_function(label_id,fn_id,table,rule_id,sofar,{rule,..rest},maxregs,max_regs_rhs,bitmask,type_left,type_right) ->
     match rule => {bindings,params,pre_arrow_clauses,post_arrow_clauses,exprs}
-    update compile_rule({label_id,fn_id,rule_id,create_compiler_bindings({},bindings),maxregs,max_regs_rhs,bitmask,{}},{},params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) => label_id,code then
-    compile_function(label_id,fn_id,rule_id+1,{..sofar,..code},rest,maxregs,max_regs_rhs,bitmask,type_left,type_right);
+    update compile_rule({label_id,fn_id,rule_id,create_compiler_bindings({},bindings),maxregs,max_regs_rhs,bitmask,{},table},{},params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) => label_id,code then
+    compile_function(label_id,fn_id,table,rule_id+1,{..sofar,..code},rest,maxregs,max_regs_rhs,bitmask,type_left,type_right);
 
 create_compiler_bindings(sofar,{}) -> sofar;
 create_compiler_bindings(sofar,{n,..rest}) -> create_compiler_bindings({..sofar,{0,0,{},n}},rest);
 
-ctx_fnr({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs}) -> fn_id,rule_id;
-ctx_lbl({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs}) -> label_id;
-ctx_lbl_inc({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs}) -> {label_id+1,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs};
-ctx_bindings({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs}) -> bindings;
-ctx_newbindings({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs},newbindings) -> {label_id,fn_id,rule_id,newbindings,maxregs,maxreg_rhs,bitmask,bind_rhs};
-ctx_get_maxreg_rhs({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs}) -> maxreg_rhs;
-ctx_newreg({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs}) -> {label_id,fn_id,rule_id,bindings,maxregs+1,maxreg_rhs,bitmask,bind_rhs},maxregs;
-ctx_bind_rhs({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs},newrhs) -> {label_id,fn_id,rule_id,bindings,maxregs+1,maxreg_rhs,bitmask,{..bind_rhs,newrhs}};
-ctx_get_bind_rhs({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs}) -> bind_rhs;
+ctx_fnr({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table}) -> fn_id,rule_id;
+ctx_lbl({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table}) -> label_id;
+ctx_lbl_inc({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table}) -> {label_id+1,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table};
+ctx_bindings({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table}) -> bindings;
+ctx_newbindings({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table},newbindings) -> {label_id,fn_id,rule_id,newbindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table};
+ctx_get_maxreg({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table}) -> maxregs;
+ctx_get_maxreg_rhs({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table}) -> maxreg_rhs;
+ctx_get_bitmask({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table}) -> bitmask;
+ctx_newreg({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table}) -> {label_id,fn_id,rule_id,bindings,maxregs+1,maxreg_rhs,bitmask,bind_rhs,table},maxregs;
+ctx_bind_rhs({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table},newrhs) -> {label_id,fn_id,rule_id,bindings,maxregs+1,maxreg_rhs,bitmask,{..bind_rhs,newrhs},table};
+ctx_get_bind_rhs({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table}) -> bind_rhs;
+ctx_get_fn_sig({label_id,fn_id,rule_id,bindings,maxregs,maxreg_rhs,bitmask,bind_rhs,table},n) -> get_nth(n,table);
 
 compile_rule(ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) ->
     update generate_param_code(ctx,{{ctx_fnr(ctx),OpLabel,0,BindLabel,ctx_lbl(ctx)}},type_left,params) => ctx,code
-    update generate_expr_code(ctx,code,type_right,exprs) => ctx,code then
+    update generate_expr_code(true,ctx,code,type_right,exprs) => ctx,code then
     ctx_lbl(ctx),{..code,..compile_rhs_final_binding(ctx,{},ctx_get_bind_rhs(ctx)),{ctx_fnr(ctx),OpRet,0}};
 
 compile_rhs_final_binding(_,sofar,{}) -> sofar;
@@ -488,20 +493,46 @@ generate_bind_variable(ctx,0,src_flag,src,tp,sofar_bindings,{{0,_,_,name},..bind
 generate_bind_variable(ctx,0,src_flag,src,tp,_,{{_,tp,{src_flag2,src2},name},.._}) ->
     ctx,{{ctx_fnr(ctx),OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindLabel,ctx_lbl(ctx)+1,src_flag,src,src_flag2,src2}};
 
-generate_expr_code(ctx,code,{},{}) -> ctx,code;
+generate_expr_code(_,ctx,code,{},{}) -> ctx,code;
 // TODO deal with lists splats and calls first
-generate_expr_code(ctx,sofar,{{{{BindReg,dst}},tp},..type_left},{expr,..rest}) :: dst<=ctx_get_maxreg_rhs(ctx) ->
+generate_expr_code(true,ctx,sofar,{{{{BindReg,dst}},tp},..type_left},{expr,..rest}) :: dst<=ctx_get_maxreg_rhs(ctx) ->
     match generate_expr_code_aux(ctx,expr) => newcode,tp,src_flag,src
     update ctx_newreg(ctx) => ctx,newvar
     update ctx_bind_rhs(ctx,{tp,newvar,dst}) => ctx then
-    generate_expr_code(ctx,{..sofar,..newcode,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,BindReg,newvar,src_flag,src}},type_left,rest);
-generate_expr_code(ctx,sofar,{{{{dst_flag,dst}},tp},..type_left},{expr,..rest}) ->
+    generate_expr_code(true,ctx,{..sofar,..newcode,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,BindReg,newvar,src_flag,src}},type_left,rest);
+generate_expr_code(redirect,ctx,sofar,{{{{dst_flag,dst}},tp},..type_left},{expr,..rest}) ->
     match generate_expr_code_aux(ctx,expr) => newcode,tp,src_flag,src then
-    generate_expr_code(ctx,{..sofar,..newcode,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src}},type_left,rest);
+    generate_expr_code(redirect,ctx,{..sofar,..newcode,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src}},type_left,rest);
 
 generate_expr_code_aux(ctx,{Const,{tp,val}}) -> {},tp,BindImm,val;
 generate_expr_code_aux(ctx,{ExprId,{id}}) -> match get_nth(id,ctx_bindings(ctx)) => {_,tp,{src_flag,src},_} then {},tp,src_flag,src;
 generate_expr_code_aux(ctx,{ExprCallInternal,{op,..args}}) -> match generate_expr_code_aux_map(ctx,{},args) => args_code then generate_expr_code_infix(ctx,op,args_code);
+generate_expr_code_aux(ctx,{ExprCall,fn_id,args}) ->
+    match ctx_get_fn_sig(ctx,fn_id) => {_,regleft,maskleft,params_left,regright,maskright,{{{{ret_flags,ret}},tp}}}
+    update get_reg_save_list(0,ctx_get_maxreg(ctx),{},ctx_get_bitmask(ctx)) => reg_save_list,bitmask
+    match (bitmask_size(bitmask)+4+15)&65520 => spinc
+    update generate_expr_code(false,ctx,{},params_left,args) => ctx,args_code
+    //match generate_expr_code_aux_map(ctx,{},args) => args_code
+    update ctx_newreg(ctx) => ctx,newreg
+    match save_registers(0,ctx,{},reg_save_list) => save_code
+    match load_registers(0,ctx,{},reg_save_list) => load_code then
+    {   ..save_code,
+        ..args_code,
+        {ctx_fnr(ctx),OpCall,0,BindLabel,0,0,spinc},
+        {ctx_fnr(ctx),OpAddStack,0,0,0,0,-spinc},
+        {ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,BindReg,newreg,ret_flags,ret},
+        ..load_code},
+    tp,ret_flags,newreg;
+
+get_reg_save_list(n,n,sofar,stack) -> sofar,stack;
+get_reg_save_list(m,n,sofar,stack) ->
+    update get_aligned_bitmask(0,{},stack,8) => stack,offset then get_reg_save_list(m+1,n,{..sofar,{offset,3}},stack);
+
+save_registers(n,ctx,sofar,{}) -> sofar;
+save_registers(n,ctx,sofar,{{offset,sz},..rest}) -> save_registers(n+1,ctx,{..sofar,{ctx_fnr(ctx),OpMove+sz,0,BindStack,offset,BindReg,n}},rest);
+
+load_registers(n,ctx,sofar,{}) -> sofar;
+load_registers(n,ctx,sofar,{{offset,sz},..rest}) -> load_registers(n+1,ctx,{..sofar,{ctx_fnr(ctx),OpMove+sz,0,BindReg,n,BindStack,offset}},rest);
 
 binop(Plus) -> true,24;
 binop(Minus) -> true,25;
@@ -511,7 +542,8 @@ binop(Modulus) -> true,28;
 binop(_) -> false,0;
 
 generate_expr_code_infix(ctx,op,{{code1,tp,src_flag1,src1},{code2,tp,src_flag2,src2}}) match binop(op) => true,machine_op ->
-    {..code1,..code2,{ctx_fnr(ctx),machine_op,tp,BindReg,6,src_flag1,src1,src_flag2,src2}},tp,BindReg,6;
+    update ctx_newreg(ctx) => ctx,newreg then
+    {..code1,..code2,{ctx_fnr(ctx),machine_op,tp,BindReg,newreg,src_flag1,src1,src_flag2,src2}},tp,BindReg,newreg;
 
 generate_expr_code_aux_map(ctx,sofar,{}) -> sofar;
 generate_expr_code_aux_map(ctx,sofar,{expr,..rest}) -> generate_expr_code_aux_map(ctx,{..sofar,{generate_expr_code_aux(ctx,expr)}},rest);

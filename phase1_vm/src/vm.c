@@ -93,13 +93,13 @@ void execution_unload(ExecutionState* exe) {
 #define OP_ERROR 0x02
 #define OP_RET 0x03
 #define OP_CALL 0x04
-#define OP_INC_SP 0x05
+#define OP_ADD_STACK 0x05
 #define OP_MOVE 0x10
 #define OP_PLUS 0x18
 #define OP_MINUS 0x19
-#define OP_TIMES 0x20
-#define OP_DIVIDE 0x21
-#define OP_MODULUS 0x22
+#define OP_TIMES 0x1A
+#define OP_DIVIDE 0x1B
+#define OP_MODULUS 0x1C
 #define OP_CMP_NE_BRANCH 0xF0
 #define OP_CMP_EQ_BRANCH 0xF8
 
@@ -210,8 +210,15 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out,"ret");
             } break;
             case OP_CALL: {
-                fprintf(out,"call (sp+=%d) ");
+                fprintf(out,"call (sp+=%d) ",(int32_t)operation->src1);
                 program_display_label(program,out,operation);
+            } break;
+            case OP_ADD_STACK: {
+                if((int32_t)operation->src1>=0) {
+                    fprintf(out,"sp+=%d ",(int32_t)operation->src1);
+                } else {
+                    fprintf(out,"sp-=%d ",-(int32_t)operation->src1);
+                }
             } break;
             case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
                 uint32_t sz=1<<(op&7);
@@ -252,7 +259,7 @@ void program_disassemble(Program* program, FILE* out) {
     }
 }
 
-void operand_store(ExecutionState* exe, Operation* operation, uint64_t value, uint32_t sz) {
+void operand_store(ExecutionState* exe, Operation* operation, uint64_t value, uint32_t sz, uint32_t sp) {
     switch(operation->flags_dst) {
         case BIND_IMM: {
             fprintf(stderr,"Fatal error trying to store to an immediate\n");
@@ -263,7 +270,7 @@ void operand_store(ExecutionState* exe, Operation* operation, uint64_t value, ui
             exe->registers[operation->dst]=value;
         } break;
         case BIND_STACK: {
-            uint8_t* addr=&exe->stack[operation->dst];
+            uint8_t* addr=&exe->stack[sp+operation->dst];
             switch(sz) { // alignment is guaranteed by the compiler
                 case 1:*((uint8_t*)addr)=(uint8_t)value; break;
                 case 2:*((uint16_t*)addr)=(uint16_t)value; break;
@@ -279,7 +286,7 @@ void operand_store(ExecutionState* exe, Operation* operation, uint64_t value, ui
     }
 }
 
-uint64_t operand_load(ExecutionState* exe, uint32_t sz, uint32_t flags_src, uint64_t src) {
+uint64_t operand_load(ExecutionState* exe, uint32_t sz, uint32_t flags_src, uint64_t src, uint32_t sp) {
     uint64_t mask=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
     switch(flags_src) {
         case BIND_IMM: {
@@ -289,7 +296,7 @@ uint64_t operand_load(ExecutionState* exe, uint32_t sz, uint32_t flags_src, uint
             return exe->registers[src]&mask;
         } break;
         case BIND_STACK: {
-            uint8_t* addr=&exe->stack[src];
+            uint8_t* addr=&exe->stack[sp+src];
             uint64_t value;
             switch(sz) { // alignment is guaranteed by the compiler
                 case 1:value=*((uint8_t*)addr); break;
@@ -324,34 +331,42 @@ int program_execute(Program* program, ExecutionState* exe, uint32_t in_pc) {
                 if(sp==0) {
                     return EXIT_SUCCESS;
                 } else {
-                    // TODO
+                    pc=*(uint32_t*)(&exe->stack[sp-4]);
                 }
             } break;
-            case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
+            case OP_CALL: {
+                sp+=(int32_t)operation->src1;
+                *(uint32_t*)(&exe->stack[sp-4])=pc;
+                pc = operation->dst-1;
+            } break;
+            case OP_ADD_STACK: {
+                 sp+=(int32_t)operation->src1;
+            } break;
+              case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
                 uint32_t sz = 1 << (op & 7);
-                uint64_t val = operand_load(exe, sz, operation->flags_src1, operation->src1);
-                operand_store(exe, operation, val, sz);
+                uint64_t val = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                operand_store(exe, operation, val, sz, sp);
             } break;
             case OP_CMP_NE_BRANCH: case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
                 uint32_t sz = 1 << (op & 7);
-                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1);
-                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2);
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 if(src1 != src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_CMP_EQ_BRANCH: case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
                 uint32_t sz = 1 << (op & 7);
-                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1);
-                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2);
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 if(src1 == src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: {
                 uint32_t sz = type_to_size(operation->type);
-                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1);
-                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2);
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 uint64_t dst;
                 switch(op) {
                     case OP_PLUS: dst = src1+src2; break;
@@ -398,7 +413,7 @@ int program_execute(Program* program, ExecutionState* exe, uint32_t in_pc) {
                         }
                     } break;
                 }
-                operand_store(exe, operation, dst, sz);
+                operand_store(exe, operation, dst, sz, sp);
             } break;
             default: {
                 fprintf(stderr,"Illegal Instruction\n");
