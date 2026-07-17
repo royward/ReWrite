@@ -132,6 +132,32 @@ void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::ve
             }
             sofar.push_back(DataElement{DataList{std::move(chars)}});
         } break;
+        case LoadTextFileLines: {
+            check_arg_count("load_text_file",args,1);
+            // get filename from char list
+            check_type<DataList>("load_text_file",args[0]);
+            const DataList& filename_list = std::get<DataList>(args[0].value);
+            std::string filename;
+            for(const DataElement& e : filename_list.value) {
+                check_type<DataChar>("load_text_file",e);
+                filename += std::get<DataChar>(e.value).value;
+            }
+            std::ifstream file(filename, std::ios::in | std::ios::binary);
+            if(!file.is_open()) {
+                throw std::runtime_error(std::format("load_text_file: could not open file: {}", filename));
+            }
+            std::vector<DataElement> lines;
+            std::string line;
+            while (std::getline(file, line)) {
+                std::vector<DataElement> chars;
+                chars.reserve(line.size());
+                for(char c : line) {
+                    chars.push_back(DataElement{DataChar{c}});
+                }
+                lines.push_back(DataElement{DataList{std::move(chars)}});
+            }
+            sofar.push_back(DataElement{DataList{std::move(lines)}});
+        } break;
         case SaveTextFile: {
             check_arg_count("save_text_file",args,2);
              // get filename
@@ -198,6 +224,13 @@ DataElement do_call_internal(TokenKind op, const std::vector<DataElement>& args)
                         throw std::runtime_error(std::format("wrong type not: {}",argtype));
                     }
                 }
+                 case Tilda: {
+                    if(argtype==TYPE_I64) {
+                        return DataElement{DataInt{~std::get<DataInt>(arg.value).value}};
+                    } else {
+                        throw std::runtime_error(std::format("wrong type not: {}",argtype));
+                    }
+                }
                 default: throw std::runtime_error(std::format("unknown unary op: {}",(int)op));
             }
         } break;
@@ -233,7 +266,7 @@ DataElement do_call_internal(TokenKind op, const std::vector<DataElement>& args)
                         throw std::runtime_error(std::format("wrong types minus: {},{}",argtype0,argtype1));
                     }
                 }
-                case Times: return binary_op<DataInt, DataInt>("times", arg0, arg1, std::multiplies<>{});
+                case Star: return binary_op<DataInt, DataInt>("times", arg0, arg1, std::multiplies<>{});
                 case Greater: return compare_op<>("greater", arg0, arg1, std::greater<>{});
                 case Less: return compare_op<>("less", arg0, arg1, std::less<>{});
                 case GreaterEqual: return compare_op<>("greater_equal", arg0, arg1, std::greater_equal<>{});

@@ -1,6 +1,6 @@
 // Example: simple recursive factorial with errorcheck
 // SPDX-License-Identifier: CC0-1.0
 
-fact(n)::n<0 -> #error;
+fact(n) when n<0 -> #error;
 fact(0)->1;
 fact(n)->n*fact(n-1);

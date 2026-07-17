@@ -5,4 +5,4 @@
 expensive(n) -> n+n+n;
 
 // Use match after the arrow to bind it to result, then use result twice
-use_twice(n) -> match expensive(n) => result then result*result;
+use_twice(n) -> match expensive(n) => result -> result*result;

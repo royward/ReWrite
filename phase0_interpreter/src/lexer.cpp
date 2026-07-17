@@ -75,8 +75,8 @@ std::vector<Token> lex(std::string_view program) {
                     token_kind=Match;
                 } else if(sub=="update") {
                     token_kind=Update;
-                } else if(sub=="then") {
-                    token_kind=Then;
+                } else if(sub=="when") {
+                    token_kind=When;
                 } else if(sub=="type") {
                     while(p<len && program[p]!=';') {
                         p++;
@@ -107,8 +107,9 @@ std::vector<Token> lex(std::string_view program) {
                 case '(':token_kind=LParen; break;
                 case ')':token_kind=RParen; break;
                 case ';':token_kind=Semicolon; break;
-                case '*':token_kind=Times; break;
+                case '*':token_kind=Star; break;
                 case '+':token_kind=Plus; break;
+                case '~':token_kind=Tilda; break;
                 case '/': {
                     if(p<len && program[p]=='/') {
                         p++;
@@ -117,9 +118,9 @@ std::vector<Token> lex(std::string_view program) {
                         }
                         continue; // no token produced for comments
                     } else {
-                        token_kind=Divide; break;
+                        token_kind=Divide;;
                     }
-                }
+                } break;
                 case '%':token_kind=Modulus; break;
                 case '^':token_kind=Xor; break;
                 case '-': {
@@ -129,8 +130,7 @@ std::vector<Token> lex(std::string_view program) {
                     } else {
                         token_kind=Minus;
                     }
-                    break;
-                }
+                } break;
                 case '<': {
                     if(p<len && program[p]=='=') {
                         p++;
@@ -141,8 +141,7 @@ std::vector<Token> lex(std::string_view program) {
                     } else {
                         token_kind=Less;
                     }
-                    break;
-                }
+                } break;
                 case '>': {
                     if(p<len && program[p]=='=') {
                         p++;
@@ -153,8 +152,7 @@ std::vector<Token> lex(std::string_view program) {
                     } else {
                         token_kind=Greater;
                     }
-                    break;
-                }
+                } break;
                 case '!': {
                     if(p<len && program[p]=='=') {
                         p++;
@@ -162,8 +160,7 @@ std::vector<Token> lex(std::string_view program) {
                     } else {
                         token_kind=Not;
                     }
-                    break;
-                }
+                } break;
                 case '=': {
                     if(p<len && program[p]=='=') {
                         p++;
@@ -174,13 +171,9 @@ std::vector<Token> lex(std::string_view program) {
                     } else {
                         token_kind=Equal;
                     }
-                    break;
-                }
+                } break;
                 case ':': {
-                    if(p<len && program[p]==':') {
-                        p++;
-                        token_kind=ColonColon;
-                    } else if(p<len && program[p]=='-') {
+                    if(p<len && program[p]=='-') {
                         while(p<len && program[p]!=';') {
                             p++;
                         }
@@ -189,17 +182,10 @@ std::vector<Token> lex(std::string_view program) {
                     } else {
                         token_kind=Colon;
                     }
-                    break;
-                }
-                 case '.': {
-                    if(p<len && program[p]=='.') {
-                        p++;
-                        token_kind=Splat;
-                    } else {
-                        token_kind=Dot;
-                    }
-                    break;
-                }
+                } break;
+                case '.': {
+                    token_kind=Dot;
+                } break;
                 case '&': {
                     if(p<len && program[p]=='&') {
                         p++;
@@ -207,8 +193,7 @@ std::vector<Token> lex(std::string_view program) {
                     } else {
                         token_kind=And;
                     }
-                    break;
-                }
+                } break;
                 case '|': {
                     if(p<len && program[p]=='|') {
                         p++;
@@ -216,8 +201,7 @@ std::vector<Token> lex(std::string_view program) {
                     } else {
                         token_kind=Or;
                     }
-                    break;
-                }
+                } break;
                 case '#': {
                     while(p<len && std::isalpha(program[p])) {
                         p++;

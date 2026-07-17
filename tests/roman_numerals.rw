@@ -2,22 +2,22 @@
 // SPDX-License-Identifier: CC0-1.0
 
 // Convert integer to Roman Numeral.
-int_to_roman(i)::i>=1000 -> {'M',..int_to_roman(i-1000)};
-int_to_roman(i)::i>=900 -> {'CM',..int_to_roman(i-900)};
-int_to_roman(i)::i>=500 -> {'D',..int_to_roman(i-500)};
-int_to_roman(i)::i>=400 -> {'CD',..int_to_roman(i-400)};
-int_to_roman(i)::i>=100 -> {'C',..int_to_roman(i-100)};
-int_to_roman(i)::i>=90 -> {'XC',..int_to_roman(i-90)};
-int_to_roman(i)::i>=50 -> {'L',..int_to_roman(i-50)};
-int_to_roman(i)::i>=40 -> {'XL',..int_to_roman(i-40)};
-int_to_roman(i)::i>=10 -> {'X',..int_to_roman(i-10)};
-int_to_roman(i)::i>=9 -> {'IX',..int_to_roman(i-9)};
-int_to_roman(i)::i>=5 -> {'V',..int_to_roman(i-5)};
-int_to_roman(i)::i>=4 -> {'IV',..int_to_roman(i-4)};
-int_to_roman(i)::i>=1 -> {'I',..int_to_roman(i-1)};
+int_to_roman(i) when i>=1000 -> {'M',*int_to_roman(i-1000)};
+int_to_roman(i) when i>=900 -> {'CM',*int_to_roman(i-900)};
+int_to_roman(i) when i>=500 -> {'D',*int_to_roman(i-500)};
+int_to_roman(i) when i>=400 -> {'CD',*int_to_roman(i-400)};
+int_to_roman(i) when i>=100 -> {'C',*int_to_roman(i-100)};
+int_to_roman(i) when i>=90 -> {'XC',*int_to_roman(i-90)};
+int_to_roman(i) when i>=50 -> {'L',*int_to_roman(i-50)};
+int_to_roman(i) when i>=40 -> {'XL',*int_to_roman(i-40)};
+int_to_roman(i) when i>=10 -> {'X',*int_to_roman(i-10)};
+int_to_roman(i) when i>=9 -> {'IX',*int_to_roman(i-9)};
+int_to_roman(i) when i>=5 -> {'V',*int_to_roman(i-5)};
+int_to_roman(i) when i>=4 -> {'IV',*int_to_roman(i-4)};
+int_to_roman(i) when i>=1 -> {'I',*int_to_roman(i-1)};
 int_to_roman(_) -> "";
 
-to_uppercase(c)::c>='a' && c<='z' -> c-32;
+to_uppercase(c) when c>='a' when c<='z' -> c-32;
 to_uppercase(c) -> c;
 
 // Convert Roman Numeral to integer. Does not validate that the Roman Numeral is well formed.
@@ -32,6 +32,6 @@ roman_to_int_convert('M') -> 1000;
 roman_to_int_convert_case(x) -> roman_to_int_convert(to_uppercase(x));
 
 roman_to_int("") -> 0;
-roman_to_int({a,b,..rest})::roman_to_int_convert_case(a)<roman_to_int_convert_case(b) ->
+roman_to_int({a,b,*rest}) when roman_to_int_convert_case(a)<roman_to_int_convert_case(b) ->
     roman_to_int_convert_case(b)-roman_to_int_convert_case(a)+roman_to_int(rest);
-roman_to_int({a,..rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
+roman_to_int({a,*rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);

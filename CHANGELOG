@@ -2,7 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.6] - 2026-07-??
+## [0.0.6] - 2026-07-17
+
+### Changed
+- major syntax changes: `..` replaced by `*` for splat, `::` replaced by `when` for guards, `then` replaced by `->`
+
+### Added
+- `~` - bitwise not unary operator
+- `load_text_file_lines` returns file content as a list of lines rather than a flat char list.
 
 ### Fixed
 - an issue with single char literals or consts not being pulled into infix parser (#1)

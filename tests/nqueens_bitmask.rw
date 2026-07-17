@@ -9,12 +9,12 @@ nqueens_aux(_,0,solution) -> {};
 nqueens_aux(col_so_far,col_todo,rows_done) -> nqueens_aux2(col_so_far,col_todo-(1<<(count_trailing_zeros(col_todo))),count_trailing_zeros(col_todo), rows_done);
 
 nqueens_aux2(col_so_far,col_todo,c,rows_done) ->
-    {..nqueens_try(col_so_far,col_todo,c,rows_done),
-     ..nqueens_aux(col_so_far+(1<<c),col_todo,rows_done)};
+    {*nqueens_try(col_so_far,col_todo,c,rows_done),
+     *nqueens_aux(col_so_far+(1<<c),col_todo,rows_done)};
 
-nqueens_try(col_so_far,col_todo,c,rows_done)::attack(c,1,rows_done) -> {}; // no solutions here
-nqueens_try(col_so_far,col_todo,c,rows_done) -> nqueens_aux(0,col_so_far+col_todo,{c,..rows_done}); // got another row
+nqueens_try(col_so_far,col_todo,c,rows_done) when attack(c,1,rows_done) -> {}; // no solutions here
+nqueens_try(col_so_far,col_todo,c,rows_done) -> nqueens_aux(0,col_so_far+col_todo,{c,*rows_done}); // got another row
 
 attack(c,offset,{}) -> false;
-attack(c,offset,{x,..rest}) :: c+offset==x || c-offset==x -> true;
-attack(c,offset,{_,..rest}) -> attack(c,offset+1,rest);
+attack(c,offset,{x,*rest}) when c+offset==x || c-offset==x -> true;
+attack(c,offset,{_,*rest}) -> attack(c,offset+1,rest);

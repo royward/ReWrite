@@ -25,8 +25,32 @@
 #include <format>
 #include <print>
 
-//Program do_parse(std::string_view program_string);
-//std::vector<DataElement> run(const Program& prog, std::string& fn, std::vector<DataElement>& args);
+/*
+./rewrite_cpp ../../../tests/clamp.rw "clamp(3,4,10)"
+./rewrite_cpp ../../../tests/constants2.rw "hello()"
+./rewrite_cpp ../../../tests/constants.rw "eval(3,4,5)"
+./rewrite_cpp ../../../tests/clamp.rw "clamp(3,4,10)"
+./rewrite_cpp ../../../tests/constants2.rw "hello()"
+./rewrite_cpp ../../../tests/constants.rw "eval(3,4,5)"
+./rewrite_cpp ../../../tests/equal.rw "equal(3,4)"
+./rewrite_cpp ../../../tests/factorial.rw "fact(10)"
+./rewrite_cpp ../../../tests/factorial2.rw "fact(10)"
+./rewrite_cpp ../../../tests/factorial_errcheck.rw "fact(10)"
+./rewrite_cpp ../../../tests/listn2.rw "listn2(10)"
+./rewrite_cpp ../../../tests/listn.rw "listn(10)"
+./rewrite_cpp ../../../tests/member.rw "member(2,{1,2,3})"
+./rewrite_cpp ../../../tests/min_max.rw "sub(min_max(4,10))"
+./rewrite_cpp ../../../tests/misc_splat.rw "middle({1,2,3,4})"
+./rewrite_cpp ../../../tests/misc_splat.rw "flatten({{1,2},{3}})"
+./rewrite_cpp ../../../tests/nprime.rw "nprime(101)"
+./rewrite_cpp ../../../tests/nqueens_bitmask.rw "nqueens(8)"
+./rewrite_cpp ../../../tests/nqueens.rw "nqueens(8)"
+./rewrite_cpp ../../../tests/post_arrow_match.rw "use_twice(3)"
+./rewrite_cpp ../../../tests/reverse.rw "reverse({1,2,3,4})"
+./rewrite_cpp ../../../tests/roman_numerals.rw "int_to_roman(1995)"
+./rewrite_cpp ../../../tests/roman_numerals.rw 'roman_to_int("mcmxcv")'
+./rewrite_cpp ../../../tests/string_to_int.rw 'string_to_int("-256")'
+*/
 
 std::string load_file(const std::filesystem::path& path) {
     std::ifstream file(path, std::ios::in | std::ios::binary);

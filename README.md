@@ -135,7 +135,7 @@ This section has examples which can all be found in the `tests` directory.
 The structure of a ReWrite program is simple - it is a list of functions, where each function is a list of rules of the form:
 
 ```
-<function_name>(<pattern>)[::<guard expression>] -> <expressions>;
+<function_name>(<pattern>)[when <guard expression>] -> <expressions>;
 ```
 
 `[ ]` means that the part enclosed is optional. See [Match/Update Clauses](#matchupdate-clauses) for a more complete syntax.
@@ -160,7 +160,7 @@ Guards are useful when the condition can't be expressed purely as a pattern matc
 An alternative version of `fact` using a guard is:
 
 ```
-fact(n)::n>0 -> n*fact(n-1);
+fact(n) when n>0 -> n*fact(n-1);
 fact(_) -> 1;
 ```
 The first rule will fire if `n` is matched (which will match to any single argument), but the rule will fire only if the guard condition is met: `n>0`, giving the same result as the first version (except it won't crash the stack like the first version would).
@@ -187,7 +187,7 @@ One unusual feature of ReWrite is that functions can return multiple values, and
 For instance, in the following, `min_max` returns two values, the min and the max:
 
 ```
-min_max(a,b) :: a<b -> a,b;
+min_max(a,b) when a<b -> a,b;
 min_max(a,b) -> b,a;
 ```
 
@@ -217,21 +217,21 @@ ReWrite has support for constructing lists, using `{ }`, so `{1,2,3}` is the lis
 // not in test directory as more powerful example below
 reverse3({x,y,z}) -> {z,y,x};
 ```
-This will reverse a list of three elements. However this is not very general - we really want to reverse any sized list. To allow more powerful list processing, there is the splat `..` operator, which is effectively the inverse of the list operator. When used as part of a match, it means "take any number of elements and bind it to a list", when used as part of the expression on the right, it means "expand a list into its elements in the surrounding context", so `..{x}` = `x`, and {..list} = `list` (if `list` is a list).
+This will reverse a list of three elements. However this is not very general - we really want to reverse any sized list. To allow more powerful list processing, there is the splat `*` operator, which is effectively the inverse of the list operator. When used as part of a match, it means "take any number of elements and bind it to a list", when used as part of the expression on the right, it means "expand a list into its elements in the surrounding context", so `*{x}` = `x`, and {*list} = `list` (if `list` is a list).
 
 Here is a more generic reverse list function:
 
 ```
 reverse({}) -> {};
-reverse({a,..rest}) -> {..reverse(rest),a};
+reverse({a,*rest}) -> {*reverse(rest),a};
 ```
 
-Working through this, if `reverse({1,2,3})` is called, then `a` will bind to `1`, `rest` will bind to `{2,3}`. `reverse(rest)=reverse({2,3})` will return `{3,2}`, and the `..` will strip the brackets, so `{..{3,2},1}` = `{3,2,1}`. The first rule gives a terminating condition to the recursion.
+Working through this, if `reverse({1,2,3})` is called, then `a` will bind to `1`, `rest` will bind to `{2,3}`. `reverse(rest)=reverse({2,3})` will return `{3,2}`, and the `*` will strip the brackets, so `{*{3,2},1}` = `{3,2,1}`. The first rule gives a terminating condition to the recursion.
 
 A splat doesn't need to be at the end of a list. An example that takes all the elements of a list except the first and last:
 
 ```
-middle({_,..x,_}) -> x;
+middle({_,*x,_}) -> x;
 ```
 
 So `middle({1,2,3,4})` returns `{2,3}`.
@@ -240,7 +240,7 @@ You might be tempted to use multiple splats:
 
 ```
 // This won't work (yet)
-member(x,{.._,x,.._}) -> true;
+member(x,{*_,x,*_}) -> true;
 member(x,_) -> false;
 ```
 
@@ -250,23 +250,23 @@ The following will work:
 
 ```
 member(_,{}) -> false;
-member(x,{x,.._}) -> true;
-member(x,{_,..rest}) -> member(x,rest);
+member(x,{x,*_}) -> true;
+member(x,{_,*rest}) -> member(x,rest);
 ```
 
 As part of an expression, splat can deal with more than one argument (if they are all lists):
 
 ```
-flatten(x) -> {.. ..x};
+flatten(x) -> {**x};
 ```
 
-Calling `flatten({{1,2},{3,4}})` returns `{1,2,3,4}`. `..{{1,2},{3,4}}` gives the two results `{1,2}`,`{3,4}` and the other `..` expands each of them to `1`,`2` and `3`,`4`, which is enclosed in a list giving `{1,2,3,4}`
+Calling `flatten({{1,2},{3,4}})` returns `{1,2,3,4}`. `*{{1,2},{3,4}}` gives the two results `{1,2}`,`{3,4}` and the other `*` expands each of them to `1`,`2` and `3`,`4`, which is enclosed in a list giving `{1,2,3,4}`
 
 For another example using list and splat:
 
 ```
 listn(0) -> {};
-listn(n) -> {..listn(n-1),n-1};
+listn(n) -> {*listn(n-1),n-1};
 ```
 
 `listn(3)` returns `{0,1,2}`. I leave working through this as an exercise for the reader.
@@ -275,7 +275,7 @@ listn(n) -> {..listn(n-1),n-1};
 
 ReWrite has support for string and char. A char is a single character in single quotes `'a'`. As syntactic sugar, multiple characters can be put in single quotes and represents a list of chars, so `'ab'` = `'a','b'` - two char values.
 
-A string is a sequence of characters in double quotes: "abc", represented as a list of chars, so `"abc"` = `{'abc'}` = `{'a','b','c'}`, and `.."abc"` = `'abc'`.
+A string is a sequence of characters in double quotes: "abc", represented as a list of chars, so `"abc"` = `{'abc'}` = `{'a','b','c'}`, and `*"abc"` = `'abc'`.
 
 These can be matched as usual. Chars support all comparison operators and can have integers added or subtracted, returning a char.
 
@@ -283,22 +283,22 @@ This allows for reasonably compact string pattern matching and string generation
 
 ```
 // Convert integer to Roman Numeral.
-int_to_roman(i)::i>=1000 -> {'M',..int_to_roman(i-1000)};
-int_to_roman(i)::i>=900 -> {'CM',..int_to_roman(i-900)};
-int_to_roman(i)::i>=500 -> {'D',..int_to_roman(i-500)};
-int_to_roman(i)::i>=400 -> {'CD',..int_to_roman(i-400)};
-int_to_roman(i)::i>=100 -> {'C',..int_to_roman(i-100)};
-int_to_roman(i)::i>=90 -> {'XC',..int_to_roman(i-90)};
-int_to_roman(i)::i>=50 -> {'L',..int_to_roman(i-50)};
-int_to_roman(i)::i>=40 -> {'XL',..int_to_roman(i-40)};
-int_to_roman(i)::i>=10 -> {'X',..int_to_roman(i-10)};
-int_to_roman(i)::i>=9 -> {'IX',..int_to_roman(i-9)};
-int_to_roman(i)::i>=5 -> {'V',..int_to_roman(i-5)};
-int_to_roman(i)::i>=4 -> {'IV',..int_to_roman(i-4)};
-int_to_roman(i)::i>=1 -> {'I',..int_to_roman(i-1)};
+int_to_roman(i) when i>=1000 -> {'M',*int_to_roman(i-1000)};
+int_to_roman(i) when i>=900 -> {'CM',*int_to_roman(i-900)};
+int_to_roman(i) when i>=500 -> {'D',*int_to_roman(i-500)};
+int_to_roman(i) when i>=400 -> {'CD',*int_to_roman(i-400)};
+int_to_roman(i) when i>=100 -> {'C',*int_to_roman(i-100)};
+int_to_roman(i) when i>=90 -> {'XC',*int_to_roman(i-90)};
+int_to_roman(i) when i>=50 -> {'L',*int_to_roman(i-50)};
+int_to_roman(i) when i>=40 -> {'XL',*int_to_roman(i-40)};
+int_to_roman(i) when i>=10 -> {'X',*int_to_roman(i-10)};
+int_to_roman(i) when i>=9 -> {'IX',*int_to_roman(i-9)};
+int_to_roman(i) when i>=5 -> {'V',*int_to_roman(i-5)};
+int_to_roman(i) when i>=4 -> {'IV',*int_to_roman(i-4)};
+int_to_roman(i) when i>=1 -> {'I',*int_to_roman(i-1)};
 int_to_roman(_) -> "";
 
-to_uppercase(c)::c>='a' && c<='z' -> c-32;
+to_uppercase(c) when c>='a' && c<='z' -> c-32;
 to_uppercase(c) -> c;
 
 // Convert Roman Numeral to integer. Does not validate that the Roman Numeral is well formed.
@@ -313,9 +313,9 @@ roman_to_int_convert('M') -> 1000;
 roman_to_int_convert_case(x) -> roman_to_int_convert(to_uppercase(x));
 
 roman_to_int("") -> 0;
-roman_to_int({a,b,..rest})::roman_to_int_convert_case(a)<roman_to_int_convert_case(b) ->
+roman_to_int({a,b,*rest}) when roman_to_int_convert_case(a)<roman_to_int_convert_case(b) ->
     roman_to_int_convert_case(b)-roman_to_int_convert_case(a)+roman_to_int(rest);
-roman_to_int({a,..rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
+roman_to_int({a,*rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
 ```
 
 #### Match/Update Clauses
@@ -330,15 +330,15 @@ The form of a match clause is:
 match|update <expressions> => <pattern>
 ```
 
-The form `::<expr>` introduced as guards is simply syntactic sugar for `match <expressions> => true`, so the more complete form of a rule is:
+The form `when <expr>` introduced as guards is simply syntactic sugar for `match <expressions> => true`, so the more complete form of a rule is:
 
 ```
 MatchClause =
     match|update <expressions> => <pattern>
-  | ::<expressions>
+  | when <expressions>
 
 Rule = 
-    <name>(<pattern>) MatchClause* -> [MatchClause+ then] <expressions>
+    <name>(<pattern>) MatchClause* -> [MatchClause+ ->] <expressions>
 ```
 
 (`*` means 0 or more, `+` means 1 or more, `[ ]` means optional if you are not used to reading grammars).
@@ -349,7 +349,7 @@ Say I have a validation function that also does some processing on a result, and
 
 ```
 // only validate non-negative integers, multiply by 2
-validate(x) :: x>=0 -> true, x*2;
+validate(x) when x>=0 -> true, x*2;
 validate(_) -> false, 0;
 
 process(x) match validate(x) => true,data -> data;
@@ -367,7 +367,7 @@ Here is an example of using it on the right hand side. Imagine that we have an e
 expensive(n) -> n+n+n; // Imagine this is expensive
 
 // Use match after the arrow to bind it to result, then use result twice
-use_twice(n) -> match expensive(n) => result then result*result;
+use_twice(n) -> match expensive(n) => result -> result*result;
 ```
 
 In this case, result will be bound with the results of `expensive(x)`, and can now be used repeatedly in expressions.
@@ -375,13 +375,13 @@ In this case, result will be bound with the results of `expensive(x)`, and can n
 Another case where match is useful is tying multiple calls together and having data threaded through it:
 
 ```
-min_max(a,b) :: a<b -> a,b;
+min_max(a,b) when a<b -> a,b;
 min_max(a,b) -> b,a;
 
 clamp(x,lo,hi) ->
     match min_max(lo,hi) => lo2,hi2
     match min_max(x,lo2) => _,x2
-    match min_max(x2,hi2) => x3,_ then
+    match min_max(x2,hi2) => x3,_ ->
     x3;
 ```
 
@@ -393,7 +393,7 @@ For this reason, a variation of match called `update` is provided. `update` is t
 clamp(x,lo,hi) ->
     update min_max(lo,hi) => lo,hi
     update min_max(x,lo) => _,x
-    update min_max(x,hi) => x,_ then
+    update min_max(x,hi) => x,_ ->
     x;
 ```
 
@@ -470,7 +470,7 @@ To use either of those, put them on the right hand side of a rule. They can appe
 For example:
 
 ```
-fact(n)::n<0 -> #error;
+fact(n) when n<0 -> #error;
 fact(0)->1;
 fact(n)->n*fact(n-1);
 ```
@@ -495,7 +495,7 @@ Code can always be made tail recursive with appropriate restructuring. For insta
 listn2(n) -> listn_aux(0,n,{});
 
 listn_aux(n,n,sofar) -> sofar;
-listn_aux(n,m,sofar) -> listn_aux(n+1,m,{..sofar,n});
+listn_aux(n,m,sofar) -> listn_aux(n+1,m,{*sofar,n});
 ```
 
 This is a little more complicated than `listn`, but avoids the stack growing with the size of `n`. It basically sets up an accumulator `sofar`, so that `listn_aux` effectively becomes a loop.
@@ -512,13 +512,13 @@ The "find the nth prime number" was one of my milestone tests in ReWrite version
 nprime(n) -> nprime_aux(n,2,{});
 
 nprime_aux(0,_,sofar) -> sofar;
-nprime_aux(n,p,sofar)::isprime(p,sofar) -> nprime_aux(n-1,p+1,{..sofar,p});
+nprime_aux(n,p,sofar) when isprime(p,sofar) -> nprime_aux(n-1,p+1,{*sofar,p});
 nprime_aux(n,p,sofar) -> nprime_aux(n,p+1,sofar);
 
 isprime(_,{}) -> true;
-isprime(n,{i,.._})::i*i>n -> true;
-isprime(n,{i,.._})::n%i==0 -> false;
-isprime(n,{_,..rest}) -> isprime(n,rest);
+isprime(n,{i,*_}) when i*i>n -> true;
+isprime(n,{i,*_}) when n%i==0 -> false;
+isprime(n,{_,*rest}) -> isprime(n,rest);
 ```
 
 `nprime_aux` is effectively a loop, trying increasing numbers one at a time against the list of primes found so far.
@@ -533,26 +533,26 @@ This would not be complete without an example that is computationally more heavy
 nqueens(n) -> nqueens_aux({},listn1(n),{});
 
 listn1(0) -> {};
-listn1(n) -> {..listn1(n-1),n};
+listn1(n) -> {*listn1(n-1),n};
 
 // nqueens_aux(column_choices_sofar, column_choices_todo, rows_done)
 nqueens_aux({},{},solution) -> {solution};
 nqueens_aux(_,{},solution) -> {};
-nqueens_aux(col_so_far,{c,..col_todo},rows_done) ->
-    {..nqueens_try(col_so_far,col_todo,c,rows_done),
-     ..nqueens_aux({..col_so_far,c},col_todo,rows_done)};
+nqueens_aux(col_so_far,{c,*col_todo},rows_done) ->
+    {*nqueens_try(col_so_far,col_todo,c,rows_done),
+     *nqueens_aux({*col_so_far,c},col_todo,rows_done)};
 
-nqueens_try(col_so_far,col_todo,c,rows_done)::attack(c,1,rows_done) -> {}; // no solutions here
-nqueens_try(col_so_far,col_todo,c,rows_done) -> nqueens_aux({},{..col_so_far,..col_todo},{c,..rows_done}); // got another row
+nqueens_try(col_so_far,col_todo,c,rows_done) when attack(c,1,rows_done) -> {}; // no solutions here
+nqueens_try(col_so_far,col_todo,c,rows_done) -> nqueens_aux({},{*col_so_far,*col_todo},{c,*rows_done}); // got another row
 
 attack(c,offset,{}) -> false;
-attack(c,offset,{x,..rest}) :: c+offset==x || c-offset==x -> true;
-attack(c,offset,{_,..rest}) -> attack(c,offset+1,rest);
+attack(c,offset,{x,*rest}) when c+offset==x || c-offset==x -> true;
+attack(c,offset,{_,*rest}) -> attack(c,offset+1,rest);
 ```
 
 Things of note:
 * `nqueens` returns a list of solutions, where each solution is a list of numbers.
-* This explores all branches of the tree, using the `{..nqueens_try( ),..nqueens_aux( )}` code - `nqueens_try` tries the selected column `c` and then `nqueens_aux( )` recursively tries the remaining columns. Also the `{..x,..y}` is the pattern for joining two lists together.
+* This explores all branches of the tree, using the `{*nqueens_try( ),*nqueens_aux( )}` code - `nqueens_try` tries the selected column `c` and then `nqueens_aux( )` recursively tries the remaining columns. Also the `{*x,*y}` is the pattern for joining two lists together.
 * `col_so_far` and `col_todo` between them are the columns not filled yet.
 
 There is also a variant of this `nqueens_bitmask.rw` in the `tests` directory, that does the same thing, but using bitmasks for the `col_so_far` and `col_todo` instead of lists. In that example, `count_trailing_zeros` is an operator that will count the number of trailing zeros in the binary form of a number.

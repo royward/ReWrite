@@ -34,6 +34,7 @@ const std::unordered_map<std::string, TokenKind> library_map = {
     {"print", Print},
     {"println", PrintLn},
     {"println_debug", PrintLnDebug},
+    {"load_text_file_lines", LoadTextFileLines},
     {"load_text_file", LoadTextFile},
     {"save_text_file", SaveTextFile},
     {"save_binary_file", SaveBinaryFile},
@@ -74,7 +75,7 @@ std::string token_kind_to_string(TokenKind& t) {
         case Comma : return ",";
         case Match : return "match";
         case Update : return "update";
-        case Then : return "then";
+        case When : return "when";
         default: return "unknown";
     }
 }
@@ -172,7 +173,7 @@ Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, s
         case Wildcard : {
             return Parameter{ParamWildcard{}};
         }
-        case Splat: {
+        case Star: {
             Token t2=parser.current();
             parser.advance();
             if(t2.kind==Identifier) {
@@ -255,6 +256,7 @@ std::tuple<uint8_t, TokenKind> prefix_binding_power(TokenKind op) {
     switch(op) {
         case Minus: return {110, Minus};      // unary minus, binds tighter than any infix op
         case Not:   return {110, Not};        // unary logical/bitwise not
+        case Tilda:   return {110, Tilda};        // unary logical/bitwise not
         default:    return {0, Eof};
     }
 }
@@ -285,7 +287,7 @@ std::tuple<uint8_t, uint8_t, TokenKind> infix_binding_power(TokenKind op) {
         // arithmetic
         case Plus:         return {150, 151, Plus};
         case Minus:        return {150, 151, Minus};
-        case Times:        return {170, 171, Times};
+        case Star:         return {170, 171, Star};
         case Divide:       return {170, 171, Divide};
         case Modulus:      return {170, 171, Modulus};
 
@@ -348,7 +350,7 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                     expr=Expression{Id{id}};
                 }
             } break;
-            case Splat: {
+            case Star: {
                 Expression splat_expr=parse_expression(parser,param_id_map,200);
                 expr=Expression{ExprSplat{std::make_unique<Expression>(std::move(splat_expr))}};
                 // Token t2=parser.current();
@@ -458,10 +460,10 @@ void Program::parse_rule(Parser& parser) {
             std::unordered_map<std::string, std::size_t> param_id_map;
             rule.main.match=parse_param_list(parser,param_id_map,FourTokenKind{RParen,RParen,RParen,RParen},Comma);
             parser.advance();
-            while(parser.current().kind==ColonColon || parser.current().kind==Match || parser.current().kind==Update) {
-                if(parser.current().kind==ColonColon) {
+            while(parser.current().kind==When || parser.current().kind==Match || parser.current().kind==Update) {
+                if(parser.current().kind==When) {
                     parser.advance();
-                    std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,ColonColon},Comma);
+                    std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,When},Comma);
                     rule.pre_arrow.push_back(RuleMatch{
                         {Parameter{Const{DataElement{DataBool{true}}}}},
                         std::move(expr_vec),
@@ -474,19 +476,19 @@ void Program::parse_rule(Parser& parser) {
                     match_counter++;
                     std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
                     parser.advance();
-                    std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,ColonColon},Comma);
+                    std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,When},Comma);
                     rule.pre_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update});
                 }
             }
             if(parser.current().kind!=Arrow) {
-                parse_error(parser.current(),{"->","::","match","update"});
+                parse_error(parser.current(),{"->","when","match","update"});
             }
             parser.advance();
-            if(parser.current().kind==ColonColon || parser.current().kind==Match || parser.current().kind==Update) {
+            if(parser.current().kind==When || parser.current().kind==Match || parser.current().kind==Update) {
                 while(true) {
-                    if(parser.current().kind==ColonColon) {
+                    if(parser.current().kind==When) {
                         parser.advance();
-                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{Then,Match,Update,ColonColon},Comma);
+                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,When},Comma);
                         rule.post_arrow.push_back(RuleMatch{
                             {Parameter{Const{DataElement{DataBool{true}}}}},
                             std::move(expr_vec),
@@ -499,13 +501,13 @@ void Program::parse_rule(Parser& parser) {
                         match_counter++;
                         std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
                         parser.advance();
-                        std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,FourTokenKind{Then,Match,Update,ColonColon},Comma);
+                        std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,When},Comma);
                         rule.post_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update});
-                    } else if(parser.current().kind==Then) {
+                    } else if(parser.current().kind==Arrow) {
                         parser.advance();
                         break;
                     } else {
-                        parse_error(parser.current(),{"then","::","match","update"});
+                        parse_error(parser.current(),{"->","when","match","update"});
                     }
                 }
             }

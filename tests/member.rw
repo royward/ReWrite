@@ -2,5 +2,5 @@
 // SPDX-License-Identifier: CC0-1.0
 
 member(_,{}) -> false;
-member(x,{x,.._}) -> true;
-member(x,{_,..rest}) -> member(x,rest);
+member(x,{x,*_}) -> true;
+member(x,{_,*rest}) -> member(x,rest);

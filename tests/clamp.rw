@@ -1,11 +1,11 @@
 // Example: clamp a number inside a range
 // SPDX-License-Identifier: CC0-1.0
 
-min_max(a,b) :: a<b -> a,b;
+min_max(a,b) when a<b -> a,b;
 min_max(a,b) -> b,a;
 
 clamp(x,lo,hi) ->
     update min_max(lo,hi) => lo,hi
     update min_max(x,lo) => _,x
-    update min_max(x,hi) => x,_ then
+    update min_max(x,hi) => x,_ ->
     x;
