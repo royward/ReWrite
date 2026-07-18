@@ -33,6 +33,7 @@ const std::unordered_map<std::string, TokenKind> library_map = {
     {"int_to_char", IntToChar},
     {"print", Print},
     {"println", PrintLn},
+    {"println_any", PrintLnAny},
     {"println_debug", PrintLnDebug},
     {"load_text_file_lines", LoadTextFileLines},
     {"load_text_file", LoadTextFile},

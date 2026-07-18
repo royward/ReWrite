@@ -76,6 +76,7 @@ enum TokenKind {
     IntToChar,
     Print,
     PrintLn,
+    PrintLnAny,
     PrintLnDebug,
     LoadTextFile,
     LoadTextFileLines,

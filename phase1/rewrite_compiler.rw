@@ -6,7 +6,6 @@ const And=1;
 const AndAnd=2;
 const Arrow=3;
 const Colon=4;
-const ColonColon=5;
 const Comma=6;
 const ConstToken=7;
 const Divide=8;
@@ -53,7 +52,7 @@ const TypeFn=48;
 const Update=49;
 const DoubleArrow=50;
 
-do_compile(infile,outfile) -> save_binary_file({*outfile,'.rwobj'},compile(parse(load_text_file(infile))));
+do_compile(infile,outfile) -> save_binary_file({*outfile,'.rwo'},compile(parse(lex(load_text_file_lines(infile)))));
 
 is_start_token(c) -> c=='_' || (c>='a' && c<='z') || (c>='A' && c<='Z');
 
@@ -69,19 +68,27 @@ min(_,y) -> y;
 max(x,y) when x>y -> x;
 max(_,y) -> y;
 
-lexer(s) -> lexer_aux({},0,0,s);
+lex(s) -> lex_aux({},{},0,0,s,{});
 
-lexer_aux(acc,_,_,{}) -> acc;
-lexer_aux(acc,row,col,{c,*rest}) when is_start_token(c) -> match lex_get_token(1,{c},rest) => sz,val,newrest -> lexer_aux({*acc,{row,col,lex_check_spec_identifier(val),val}},row,col+sz,newrest);
-lexer_aux(acc,row,col,{c,*rest}) when is_digit(c) -> match lex_get_digit(1,{c},rest) => sz,val,newrest -> lexer_aux({*acc,{row,col,Integer,val}},row,col+sz,newrest);
-lexer_aux(acc,row,col,{c,*rest}) when is_whitespace(c) -> lexer_aux(acc,row,col+1,rest);
-lexer_aux(acc,row,col,{'//',*rest}) -> match lexer_aux_absorb_comment(rest) => newrest -> lexer_aux(acc,row+1,0,newrest);
-lexer_aux(acc,row,col,{'\n',*rest}) -> lexer_aux(acc,row+1,0,rest);
-lexer_aux(acc,row,col,{'"',*rest}) -> match lexer_string(row,col+1,{},'"',rest) => newrow,newcol,val,newrest -> lexer_aux({*acc,{row,col,String,val}},newrow,newcol,newrest);
-lexer_aux(acc,row,col,{'\'',*rest}) -> match lexer_string(row,col+1,{},'\'',rest) => newrow,newcol,val,newrest -> lexer_aux({*acc,{row,col,Char,val}},newrow,newcol,newrest);
-lexer_aux(acc,row,col,{'#',*rest}) -> match lex_get_token(1,{},rest) => sz,val,newrest -> lexer_aux({*acc,{row,col,lex_do_hash(val),{'#',*val}}},row,col+sz,newrest);
-lexer_aux(acc,row,col,{c1,c2,*rest}) match lexer_two_symbol(c1,c2) => sym when sym!=0 -> lexer_aux({*acc,{row,col,sym,{c1,c2}}},row,col+2,rest);
-lexer_aux(acc,row,col,{c,*rest}) match lexer_one_symbol(c) => sym when sym!=0 -> lexer_aux({*acc,{row,col,sym,{c}}},row,col+1,rest);
+lex_aux(full,{},_,_,{},{}) -> full;
+lex_aux(full,stmt,_,_,{},{}) -> {*full,stmt};
+lex_aux(full,stmt,row,col,{l,*rest},{}) -> lex_aux(full,stmt,row+1,col,rest,l);
+lex_aux(full,stmt,row,col,lines,rest_line) ->
+    update lex_aux2(stmt,row,col,rest_line) => add_full,stmt,row,col,rest_line ->
+    lex_aux({*full,*add_full},stmt,row,col,lines,rest_line);
+
+lex_aux2(acc,row,col,{}) -> {},acc,row,col,{};
+lex_aux2(acc,row,col,{';',*rest}) -> {{*acc,{row,col,Semicolon,";"}}},{},row,col+1,rest;
+lex_aux2(acc,row,col,{c,*rest}) when is_start_token(c) -> match lex_get_token(1,{c},rest) => sz,val,newrest ->
+    lex_aux2({*acc,{row,col,lex_check_spec_identifier(val),val}},row,col+sz,newrest);
+lex_aux2(acc,row,col,{c,*rest}) when is_digit(c) -> match lex_get_digit(1,{c},rest) => sz,val,newrest -> lex_aux2({*acc,{row,col,Integer,val}},row,col+sz,newrest);
+lex_aux2(acc,row,col,{c,*rest}) when is_whitespace(c) -> lex_aux2(acc,row,col+1,rest);
+lex_aux2(acc,row,col,{'//',*rest}) -> match lex_aux_absorb_comment(rest) => newrest -> lex_aux2(acc,row,0,newrest);
+lex_aux2(acc,row,col,{'"',*rest}) -> match lexer_string(row,col+1,{},'"',rest) => newrow,newcol,val,newrest -> lex_aux2({*acc,{row,col,String,val}},newrow,newcol,newrest);
+lex_aux2(acc,row,col,{'\'',*rest}) -> match lexer_string(row,col+1,{},'\'',rest) => newrow,newcol,val,newrest -> lex_aux2({*acc,{row,col,Char,val}},newrow,newcol,newrest);
+lex_aux2(acc,row,col,{'#',*rest}) -> match lex_get_token(1,{},rest) => sz,val,newrest -> lex_aux2({*acc,{row,col,lex_do_hash(val),{'#',*val}}},row,col+sz,newrest);
+lex_aux2(acc,row,col,{c1,c2,*rest}) match lexer_two_symbol(c1,c2) => sym when sym!=0 -> lex_aux2({*acc,{row,col,sym,{c1,c2}}},row,col+2,rest);
+lex_aux2(acc,row,col,{c,*rest}) match lexer_one_symbol(c) => sym when sym!=0 -> lex_aux2({*acc,{row,col,sym,{c}}},row,col+1,rest);
 
 lex_get_token(col,sofar,{c,*rest}) when is_rest_token(c) -> lex_get_token(col+1,{*sofar,c},rest);
 lex_get_token(*x) -> *x;
@@ -102,9 +109,9 @@ lex_do_hash("never") -> HashNever;
 lex_get_digit(col,sofar,{c,*rest}) when is_digit(c) -> lex_get_digit(col+1,{*sofar,c},rest);
 lex_get_digit(*x) -> *x;
 
-lexer_aux_absorb_comment({}) -> {};
-lexer_aux_absorb_comment({'\n',*rest}) -> rest;
-lexer_aux_absorb_comment({_,*rest}) -> lexer_aux_absorb_comment(rest);
+lex_aux_absorb_comment({}) -> {};
+lex_aux_absorb_comment({'\n',*rest}) -> rest;
+lex_aux_absorb_comment({_,*rest}) -> lex_aux_absorb_comment(rest);
 
 lexer_string(row,col,sofar,endtok,{endtok,*rest}) -> row,col+1,sofar,rest;
 lexer_string(row,col,sofar,endtok,{'\\t',*rest}) -> lexer_string(row,col+2,{*sofar,'\t'},endtok,rest);
@@ -192,7 +199,10 @@ const ExprNever=10;
 string_to_int_pos({},acc) -> acc;
 string_to_int_pos({c,*rest},acc) -> string_to_int_pos(rest,acc*10+(c-'0'));
 
-parse(s) -> parse_aux({},{},{},lexer(s));
+parse(s) -> parse_aux0({},{},{},s);
+
+parse_aux0(rules,fnnames,consts,{}) -> rules,fnnames,consts;
+parse_aux0(rules,fnnames,consts,{clause,*rest}) -> parse_aux0(parse_aux(rules,fnnames,consts,clause),rest);
 
 // get and add for a straight list of string
 get_add_symbol_list(n,sofar,{},val) -> {*sofar,val},n;
@@ -220,7 +230,7 @@ get_add_symbol_table(n,sofar,{{key,val},*rest},key,false) -> {*sofar,{key,val},*
 get_add_symbol_table(n,sofar,{{key,val},*rest},key,val) -> {*sofar,{key,val},*rest},n;
 get_add_symbol_table(n,sofar,{x,*rest},key,val) -> get_add_symbol_table(n+1,{*sofar,x},rest,key,val);
 
-parse_aux(rules,fnnames,consts,{}) -> {rules,fnnames,consts};
+parse_aux(rules,fnnames,consts,{}) -> rules,fnnames,consts;
 parse_aux(rules,fnnames,consts,{{_,_,Identifier,name},{_,_,LParen,_},*rest}) ->
     update get_add_symbol_table(0,{},fnnames,name,false) => fnnames,fn_id
     update parse_params(consts,{},{},rest) => bindings,params,{{_,_,RParen,_},*rest}
@@ -263,7 +273,7 @@ add_rule(sofar,{r,*rest},0,x) -> {*sofar,{*r,x},*rest};
 add_rule(sofar,{r,*rest},n,x) -> add_rule({*sofar,r},rest,n-1,x);
 
 parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,endtok,_},*rest}) -> sofar,fnnames,bindings,rest;
-parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,ColonColon,_},*rest}) ->
+parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,When,_},*rest}) ->
     update parse_exprs(consts,fnnames,bindings,{},0,rest) => fnnames2,expr,rest2 ->
     parse_function_match_clauses(consts,{*sofar,{{{Const,{TypeBool,1}}},expr}},fnnames2,bindings,endtok,rest2);
 parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,tok,_},*rest}) match match_or_update(tok) => true,upd ->
@@ -275,7 +285,7 @@ match_or_update(Match) -> true,false;
 match_or_update(Update) -> true,true;
 match_or_update(_) -> false,false;
 
-parse_match_after_arrow(_,_,fnnames,bindings,{{r,c,tok,val},*rest}) when tok!=ColonColon && tok!=Match && tok!=Update -> {},fnnames,bindings,{{r,c,tok,val},*rest}; // no clauses after arrow
+parse_match_after_arrow(_,_,fnnames,bindings,{{r,c,tok,val},*rest}) when tok!=When && tok!=Match && tok!=Update -> {},fnnames,bindings,{{r,c,tok,val},*rest}; // no clauses after arrow
 parse_match_after_arrow(consts,sofar,fnnames,bindings,rest) -> parse_function_match_clauses(consts,{},fnnames,bindings,Arrow,rest);
 
 parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Minus,_},{_,_,Integer,val},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeI64,-string_to_int_pos(val,0)}},pri,rest);
@@ -386,7 +396,7 @@ bitmask_or(sofar,{},rest2) -> {*sofar,*rest2};
 bitmask_or(sofar,rest1,{}) -> {*sofar,*rest1};
 bitmask_or(sofar,{b1,*rest1},{b2,*rest2}) -> bitmask_or({*sofar,b1|b2},rest1,rest2);
 
-compile({rules,table,_}) -> compile_aux(0,0,annotate_table({},table),{},rules);
+compile(rules,table,_) -> compile_aux(0,0,annotate_table({},table),{},rules);
 
 const MaxParamRegs=4;
 

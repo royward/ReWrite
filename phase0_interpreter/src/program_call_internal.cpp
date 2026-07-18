@@ -110,6 +110,13 @@ void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::ve
             }
             putchar('\n');
         } break;
+       case PrintLnAny: {
+            for(std::size_t i=0;i<args.size();i++) {
+                if(i!=0)putchar(',');
+                std::print("{}",args[i].to_string());
+            }
+            putchar('\n');
+        } break;
         case LoadTextFile: {
             check_arg_count("load_text_file",args,1);
             // get filename from char list
