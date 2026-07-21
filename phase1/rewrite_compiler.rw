@@ -381,6 +381,9 @@ parse_params1(consts,bindings,params,rest) -> bindings,params,rest; // deal with
 get_nth(0,{a,*_}) -> a;
 get_nth(n,{_,*rest}) -> get_nth(n-1,rest);
 
+split_nth(0,sofar,{a,*rest}) -> sofar,a,rest;
+split_nth(n,sofar,{a,*rest}) -> split_nth(n-1,{*sofar,a},rest);
+
 get_aligned_bitmask(n,sofar,{},sz) -> get_aligned_bitmask(n,sofar,{0},sz);
 get_aligned_bitmask(n,sofar,{-1,*rest},sz) -> get_aligned_bitmask(n+64,{*sofar,-1},rest,sz); // short circuit if fully allocated
 get_aligned_bitmask(n,sofar,{b,*rest},sz) -> match find_bitmask(0,b,sz,(1<<sz)-1) => true,offset,new -> {*sofar,new,*rest},n+offset;
@@ -482,14 +485,10 @@ ctx_deref_param({label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table
     {label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table};
 ctx_newbindings({label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table},newbindings) -> {label_id,fn_id,rule_id,newbindings,reg_list,bitmask,bind_rhs,table};
 ctx_get_reg_list({label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table}) -> reg_list;
-//ctx_get_max_reg_rhs({label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table}) -> max_reg_rhs;
 ctx_get_bitmask({label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table}) -> bitmask;
 ctx_newreg({label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table},sz) ->
     update new_reg(0,{},reg_list,sz) => reg_list,n ->
     {label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table},n;
-// ctx_new_reg_bind_rhs({label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table},tp,v) ->
-//     update new_reg(0,{},reg_list) => reg_list,n ->
-//     {label_id,fn_id,rule_id,bindings,reg_list,bitmask,{*bind_rhs,{tp,n,v}},table},v;
 ctx_get_bind_rhs({label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table}) -> bind_rhs;
 ctx_get_fn_sig({label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table},n) -> get_nth(n,table);
 
@@ -516,19 +515,22 @@ generate_param_code(ctx,sofar,{{{{BindReg,src}},tp},*type_left},{{Const,{tp,val}
     generate_param_code(ctx,{*sofar,{ctx_fnr(ctx),OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindLabel,ctx_lbl(ctx)+1,BindReg,src,BindImm,val}},type_left,rest);
 generate_param_code(ctx,sofar,{{{{BindReg,src}},tp},*type_left},{{ParamId,{id}},*rest}) ->
     update ctx_deref_param(ctx,src) => ctx
-    update generate_bind_variable(ctx,id,BindReg,src,tp,{},ctx_bindings(ctx)) => ctx,code ->
+    update ctx_bindings(ctx) => bindings
+    update split_nth(id,{},bindings) => prebind,bind,postbind
+    update generate_bind_variable(ctx,BindReg,src,tp,{},bind) => ctx,newbind,code
+    update ctx_newbindings(ctx,{*prebind,newbind,*postbind}) => ctx ->
     generate_param_code(ctx,{*sofar,*code},type_left,rest);
 generate_param_code(ctx,sofar,{{{{BindReg,src}},tp},*type_left},{{ParamWild,{}},*rest}) ->
     update ctx_deref_param(ctx,src) => ctx ->
     generate_param_code(ctx,sofar,type_left,rest);
 
-generate_bind_variable(ctx,0,BindReg,src,tp,sofar_bindings,{{0,_,_,name,refs},*bindings}) when get_nth(src,ctx_get_reg_list(ctx))==0 ->
-    ctx_newbindings(ctx,{*sofar_bindings,{1,tp,{BindReg,src},name,refs},*bindings}),{};
-generate_bind_variable(ctx,0,src_flag,src,tp,sofar_bindings,{{0,_,_,name,refs},*bindings}) ->
+generate_bind_variable(ctx,BindReg,src,tp,sofar_bindings,{0,_,_,name,refs}) when get_nth(src,ctx_get_reg_list(ctx))==0 ->
+    ctx,{refs+1,tp,{BindReg,src},name},{};
+generate_bind_variable(ctx,src_flag,src,tp,sofar_bindings,{0,_,_,name,refs}) ->
     update ctx_newreg(ctx,1<<get_scalar_type_size(tp)) => ctx,newreg ->
-    ctx_newbindings(ctx,{*sofar_bindings,{1,tp,{src_flag,newreg},name,refs},*bindings}),{generate_to_reg_move(ctx_fnr(ctx),tp,newreg,src_flag,src)};
-generate_bind_variable(ctx,0,src_flag,src,tp,_,{{_,tp,{src_flag2,src2},name,_},*_}) ->
-    println_any(ctx),ctx,{{ctx_fnr(ctx),OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindLabel,ctx_lbl(ctx)+1,src_flag,src,src_flag2,src2}};
+    ctx,{refs+1,tp,{src_flag,newreg},name},{generate_to_reg_move(ctx_fnr(ctx),tp,newreg,src_flag,src)};
+generate_bind_variable(ctx,src_flag,src,tp,_,{refs,tp,{src_flag2,src2},name}) ->
+    ctx,{refs-1,tp,{src_flag2,src2},name},{{ctx_fnr(ctx),OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindLabel,ctx_lbl(ctx)+1,src_flag,src,src_flag2,src2}};
 
 generate_to_reg_move(fn_id,rule_id,tp,newreg,src_flag,src) -> {fn_id,rule_id,OpMove+get_scalar_type_size(tp),0,BindReg,newreg,src_flag,src};
 
@@ -543,7 +545,7 @@ generate_expr_code(f,ctx,sofar,{{{{dst_flag,dst}},tp},*type_left},{expr,*rest}) 
 //     generate_expr_code(redirect,ctx,{*sofar,*newcode,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src}},type_left,rest);
 
 generate_expr_code_aux(ctx,{Const,{tp,val}}) -> {},tp,BindImm,val;
-generate_expr_code_aux(ctx,{ExprId,{id}}) -> match get_nth(id,ctx_bindings(ctx)) => {_,tp,{src_flag,src},_,refs} -> {},tp,src_flag,src;
+generate_expr_code_aux(ctx,{ExprId,{id}}) -> match get_nth(id,ctx_bindings(ctx)) => {refs,tp,{src_flag,src},_} -> {},tp,src_flag,src;
 generate_expr_code_aux(ctx,{ExprCallInternal,{op,*args}}) -> match generate_expr_code_aux_map(ctx,{},args) => args_code -> generate_expr_code_infix(ctx,op,args_code);
 generate_expr_code_aux(ctx,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,regleft,maskleft,params_left,regright,maskright,{{{{ret_flags,ret}},tp}}} ->
     update get_reg_save_list(0,{},ctx_get_reg_list(ctx),ctx_get_bitmask(ctx)) => reg_save_list,bitmask
