@@ -1,0 +1,5 @@
+// Example: Swap two values
+// SPDX-License-Identifier: CC0-1.0
+
+:- swap(i64,i64) -> i64,i64;
+swap(x,y) -> y,x;
