@@ -92,7 +92,7 @@ void execution_unload(ExecutionState* exe) {
 #define OP_LABEL 0x01
 #define OP_ERROR 0x02
 #define OP_RET 0x03
-#define OP_CALL 0x04
+#define OP_ERROR_NO_MORE_RULES 0x04
 #define OP_ADD_STACK 0x05
 #define OP_MOVE 0x10
 #define OP_PLUS 0x18
@@ -102,6 +102,7 @@ void execution_unload(ExecutionState* exe) {
 #define OP_MODULUS 0x1C
 #define OP_CMP_NE_BRANCH 0xF0
 #define OP_CMP_EQ_BRANCH 0xF8
+#define OP_CALL 0xFF
 
 #define TYPE_LIST 1
 #define TYPE_BOOL 2
@@ -205,6 +206,9 @@ void program_disassemble(Program* program, FILE* out) {
             } break;
             case OP_ERROR: {
                 fprintf(out,"error");
+            } break;
+            case OP_ERROR_NO_MORE_RULES: {
+                fprintf(out,"no more rules");
             } break;
             case OP_RET: {
                 fprintf(out,"ret");
@@ -324,7 +328,8 @@ int program_execute(Program* program, ExecutionState* exe, uint32_t in_pc) {
             case OP_LABEL: {
                 // NOP
             } break;
-            case OP_ERROR: {
+            case OP_ERROR:
+            case OP_ERROR_NO_MORE_RULES: {
                 return EXIT_FAILURE;
             };
             case OP_RET: {
