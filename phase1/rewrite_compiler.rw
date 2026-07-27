@@ -463,6 +463,7 @@ const OpAddStack=5;
 const OpMove=16;
 const OpCompareNotEqualBranch=240;
 const OpCompareEqualBranch=248;
+const OpGoto=254;
 const OpCall=255;
 
 compile_aux(label_id,_,_,sofar,{}) -> convert_to_binary({},sofar);
@@ -497,6 +498,8 @@ ctx_newreg({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_list,bitmask,bin
     {tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table},n;
 ctx_get_bind_rhs({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table}) -> bind_rhs;
 ctx_get_fn_sig({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table},n) -> get_nth(n,table);
+ctx_set_tail({_,isnext,label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table},tailcall) -> {tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table};
+ctx_get_tail({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table}) -> tailcall;
 ctx_set_isnext({tailcall,_,label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table}) -> {tailcall,1,label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table};
 ctx_get_isnext({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_list,bitmask,bind_rhs,table}) -> isnext;
 
@@ -507,10 +510,17 @@ new_reg(n,sofar,{},sz) -> {*sofar,sz},n;
 new_reg(n,sofar,{0,*rest},sz) -> {*sofar,sz,*rest},n;
 new_reg(n,sofar,{i,*rest},sz) -> new_reg(n+1,{*sofar,i},rest,sz);
 
+// deal with tail recursion (error if sigs don't match)
+compile_rule(isnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,{{ExprCall,fn_id,args}},type_left,type_right) match ctx_get_tail(ctx) => 0 ->
+    match ctx_get_fn_sig(ctx,fn_id) => {_,_,_,_,_,_,type_right} ->
+    compile_rule(isnext,ctx_set_tail(ctx,fn_id+1),sofar,params,pre_arrow_clauses,post_arrow_clauses,args,type_left,type_right);
 compile_rule(isnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) ->
     update generate_param_code(ctx,{},type_left,params) => ctx,code
     update generate_expr_code(true,ctx,code,type_right,exprs) => ctx,code ->
-    ctx_get_isnext(ctx)&isnext,ctx_lbl(ctx),code_or_not(isnext,{*code,{ctx_fnr(ctx),OpRet,0}});
+    ctx_get_isnext(ctx)&isnext,ctx_lbl(ctx),code_or_not(isnext,{*code,compile_end(ctx_get_tail(ctx),ctx)});
+
+compile_end(0,ctx) -> {ctx_fnr(ctx),OpRet,0};
+compile_end(n,ctx) -> {ctx_fnr(ctx),OpGoto,0,BindLabel,n-1};
 
 compile_rhs_final_binding(_,sofar,{}) -> sofar;
 compile_rhs_final_binding(ctx,sofar,{{tp,src,dst},*rest}) -> compile_rhs_final_binding(ctx,{*sofar,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,BindReg,dst,BindReg,src}},rest);

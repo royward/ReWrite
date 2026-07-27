@@ -102,6 +102,7 @@ void execution_unload(ExecutionState* exe) {
 #define OP_MODULUS 0x1C
 #define OP_CMP_NE_BRANCH 0xF0
 #define OP_CMP_EQ_BRANCH 0xF8
+#define OP_GOTO 0xFE
 #define OP_CALL 0xFF
 
 #define TYPE_LIST 1
@@ -215,6 +216,10 @@ void program_disassemble(Program* program, FILE* out) {
             } break;
             case OP_CALL: {
                 fprintf(out,"call (sp+=%d) ",(int32_t)operation->src1);
+                program_display_label(program,out,operation);
+            } break;
+            case OP_GOTO: {
+                fprintf(out,"goto ");
                 program_display_label(program,out,operation);
             } break;
             case OP_ADD_STACK: {
@@ -342,6 +347,9 @@ int program_execute(Program* program, ExecutionState* exe, uint32_t in_pc) {
             case OP_CALL: {
                 sp+=(int32_t)operation->src1;
                 *(uint32_t*)(&exe->stack[sp-4])=pc;
+                pc = operation->dst-1;
+            } break;
+            case OP_GOTO: {
                 pc = operation->dst-1;
             } break;
             case OP_ADD_STACK: {
