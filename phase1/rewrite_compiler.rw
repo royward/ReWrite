@@ -511,7 +511,8 @@ new_reg(n,sofar,{0,*rest},sz) -> {*sofar,sz,*rest},n;
 new_reg(n,sofar,{i,*rest},sz) -> new_reg(n+1,{*sofar,i},rest,sz);
 
 // deal with tail recursion (error if sigs don't match)
-compile_rule(isnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,{{ExprCall,fn_id,args}},type_left,type_right) match ctx_get_tail(ctx) => 0 ->
+compile_rule(isnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,{{ExprCall,fn_id,args}},type_left,type_right) ->
+    match ctx_get_tail(ctx) => 0
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,_,_,_,_,type_right} ->
     compile_rule(isnext,ctx_set_tail(ctx,fn_id+1),sofar,params,pre_arrow_clauses,post_arrow_clauses,args,type_left,type_right);
 compile_rule(isnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) ->
@@ -578,7 +579,7 @@ generate_expr_code(f,ctx,sofar,{{{{dst_flag,dst}},tp},*type_left},{expr,*rest}) 
 generate_expr_code_aux(ctx,{Const,{tp,val}}) -> ctx,{},true,tp,BindImm,val;
 //generate_expr_code_aux(ctx,{ExprId,{id}}) -> match get_nth(id,ctx_bindings(ctx)) => {refs,tp,{src_flag,src},_} -> {},tp,src_flag,src;
 generate_expr_code_aux(ctx,{ExprId,{id}}) -> update use_binding(ctx,id) => ctx,tp,src_flag,src -> ctx,{},true,tp,src_flag,src;
-generate_expr_code_aux(ctx,{ExprCallInternal,{op,*args}}) -> match generate_expr_code_aux_map(ctx,{},args) => ctx,args_code -> generate_expr_code_infix(ctx,op,args_code);
+generate_expr_code_aux(ctx,{ExprCallInternal,{op,*args}}) -> update generate_expr_code_aux_map(ctx,{},args) => ctx,args_code -> generate_expr_code_infix(ctx,op,args_code);
 generate_expr_code_aux(ctx,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,regleft,maskleft,params_left,regright,maskright,{{{{ret_flags,ret}},tp}}} ->
     update get_reg_save_list(0,{},ctx_get_reg_list(ctx),ctx_get_bitmask(ctx)) => reg_save_list,bitmask
     match (bitmask_size(bitmask)+4+15)&~15 => spinc

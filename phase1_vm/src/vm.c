@@ -101,6 +101,9 @@ void execution_unload(ExecutionState* exe) {
 #define OP_DIVIDE 0x1B
 #define OP_MODULUS 0x1C
 #define OP_CMP_NE_BRANCH 0xF0
+// Next two still TODO
+#define OP_CMP_LT_BRANCH 0xF6
+#define OP_CMP_LE_BRANCH 0xF7
 #define OP_CMP_EQ_BRANCH 0xF8
 #define OP_GOTO 0xFE
 #define OP_CALL 0xFF
@@ -123,19 +126,17 @@ void execution_unload(ExecutionState* exe) {
 #define BIND_REG 1
 #define BIND_STACK 2
 
-void program_display_label(Program* program, FILE* out, Operation* operation) {
-    uint32_t label=0;
-    for(uint32_t i=0;i<program->label_count;i++) {
-        if(program->labels[i]==operation->dst) {
-            label=i;
-            break;
-        }
-    }
-    fprintf(out,"%d @line %d",label,operation->dst);
-}
+#define FLAG_LIFE_START 0x10
+#define FLAG_LIFE_END 0x20
 
 void display_operand(FILE* out, uint8_t flag, int64_t val) {
-    switch(flag) {
+    uint8_t bind=flag&0xF;
+    if(flag&FLAG_LIFE_START) {
+        fprintf(out,"+");
+    } else if(flag&FLAG_LIFE_END) {
+        fprintf(out,"-");
+    }
+    switch(bind) {
         case BIND_IMM: {
             fprintf(out,"%" PRId64,val);
         } break;
@@ -146,6 +147,17 @@ void display_operand(FILE* out, uint8_t flag, int64_t val) {
             fprintf(out,"sp+%" PRId64,val);
         } break;
     }
+}
+
+void program_display_label(Program* program, FILE* out, Operation* operation) {
+    uint32_t label=0;
+    for(uint32_t i=0;i<program->label_count;i++) {
+        if(program->labels[i]==operation->dst) {
+            label=i;
+            break;
+        }
+    }
+    fprintf(out,"%d @line %d",label,operation->dst);
 }
 
 const char* display_type(uint8_t tp) {

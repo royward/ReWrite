@@ -217,7 +217,7 @@ start:
                 for(const RuleMatch& grule : rule.pre_arrow) {
                     std::vector<DataElement> guard_sofar;
                     do_call_multi(grule.expr,bindings,guard_sofar);
-                    if(!do_match_vec(grule.match,guard_sofar,bindings,grule.match_count)) {
+                    if(!do_match_vec(grule.match,guard_sofar,bindings,grule.update?grule.match_count:1)) {
                         guard_ok=false;
                         break;
                     }
@@ -226,7 +226,7 @@ start:
                     for(const RuleMatch& grule : rule.post_arrow) {
                         std::vector<DataElement> guard_sofar;
                         do_call_multi(grule.expr,bindings,guard_sofar);
-                        if(!do_match_vec(grule.match,guard_sofar,bindings,grule.match_count)) {
+                        if(!do_match_vec(grule.match,guard_sofar,bindings,grule.update?grule.match_count:1)) {
                             throw std::runtime_error(std::format("failure in post arrow match({})",i));
                         }
                     }
