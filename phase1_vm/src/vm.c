@@ -4,6 +4,7 @@
 
 #define STACK_SIZE 1000000
 #define REGISTERS_SIZE 1000
+#define ARGRET_SIZE 1000
 #define LABEL_COUNT 1000
 
 #define OP_LABEL 0x01
@@ -74,8 +75,10 @@ void program_unload(Program* program) {
 int execution_init(ExecutionState* exe, Program* p) {
     (void)p;
     exe->registers = (uint64_t*)malloc(REGISTERS_SIZE*sizeof(uint64_t));
+    exe->argret = (uint64_t*)malloc(ARGRET_SIZE*sizeof(uint64_t));
     exe->stack = (uint8_t*)malloc(STACK_SIZE*sizeof(uint8_t));
-    if(!exe->registers || !exe->stack) {
+    if(!exe->argret || !exe->registers || !exe->stack) {
+        free(exe->argret);
         free(exe->registers);
         free(exe->stack);
         fprintf(stderr, "fatal: problem allocating memory\n");
@@ -85,6 +88,7 @@ int execution_init(ExecutionState* exe, Program* p) {
 }
 
 void execution_unload(ExecutionState* exe) {
+    free(exe->argret);
     free(exe->registers);
     free(exe->stack);
 }
@@ -125,6 +129,7 @@ void execution_unload(ExecutionState* exe) {
 #define BIND_IMM 0
 #define BIND_REG 1
 #define BIND_STACK 2
+#define BIND_ARGRET 3
 
 #define FLAG_LIFE_START 0x10
 #define FLAG_LIFE_END 0x20
@@ -142,6 +147,9 @@ void display_operand(FILE* out, uint8_t flag, int64_t val) {
         } break;
         case BIND_REG: {
             fprintf(out,"r%" PRIu64,val);
+        } break;
+        case BIND_ARGRET: {
+            fprintf(out,"x%" PRIu64,val);
         } break;
         case BIND_STACK: {
             fprintf(out,"sp+%" PRId64,val);
@@ -281,12 +289,16 @@ void program_disassemble(Program* program, FILE* out) {
 }
 
 void operand_store(ExecutionState* exe, Operation* operation, uint64_t value, uint32_t sz, uint32_t sp) {
-    switch(operation->flags_dst) {
+    switch(operation->flags_dst&0xF) {
         case BIND_IMM: {
             fprintf(stderr,"Fatal error trying to store to an immediate\n");
             exit(EXIT_FAILURE);
         } break;
         case BIND_REG: {
+            value&=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
+            exe->registers[operation->dst]=value;
+        } break;
+        case BIND_ARGRET: {
             value&=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
             exe->registers[operation->dst]=value;
         } break;
@@ -309,12 +321,15 @@ void operand_store(ExecutionState* exe, Operation* operation, uint64_t value, ui
 
 uint64_t operand_load(ExecutionState* exe, uint32_t sz, uint32_t flags_src, uint64_t src, uint32_t sp) {
     uint64_t mask=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
-    switch(flags_src) {
+    switch(flags_src&0xF) {
         case BIND_IMM: {
             return src&mask;
         } break;
         case BIND_REG: {
             return exe->registers[src]&mask;
+        } break;
+        case BIND_ARGRET: {
+            return exe->argret[src]&mask;
         } break;
         case BIND_STACK: {
             uint8_t* addr=&exe->stack[sp+src];

@@ -40,10 +40,10 @@ int main(int argc, char** argv) {
     program_disassemble(&p,stdout);
     ExecutionState exe;
     execution_init(&exe,&p);
-    exe.registers[0]=10;
+    exe.argret[0]=10;
     int ret_code=program_execute(&p,&exe,0);
     if(!ret_code) {
-        printf("Success %" PRId64 "\n",exe.registers[0]);
+        printf("Success %" PRId64 "\n",exe.argret[0]);
     } else {
         printf("Failure\n");
     }

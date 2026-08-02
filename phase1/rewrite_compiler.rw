@@ -422,15 +422,19 @@ const BindImm=0;
 const BindLabel=0;
 const BindReg=1;
 const BindStack=2;
+const BindArgRet=3;
+
+const FlagLifeStart=16;
+const FlagLifeEnd=32;
 
 annotate_type_list_reg(pri,max_reg,reg_list,sofar,{}) -> annotate_type_list_reg(pri+1,max_reg,reg_list,{},sofar);
 annotate_type_list_reg(pri,max_reg,reg_list,sofar,todo) when pri==3 || max_reg==MaxParamRegs -> reg_list,annotate_type_list_stack({},{},{*sofar,*todo});
 annotate_type_list_reg(pri,max_reg,reg_list,sofar,{{{{}},t},*rest}) match get_type_size_pri(t) => {p,sz} when p<=pri ->
-    annotate_type_list_reg(pri,max_reg+1,{*reg_list,sz},{*sofar,{{{BindReg,max_reg}},t}},rest);
+    annotate_type_list_reg(pri,max_reg+1,{*reg_list,sz},{*sofar,{{{BindArgRet,max_reg}},t}},rest);
 annotate_type_list_reg(pri,max_reg,reg_list,sofar,{{{{},r},t},*rest}) match get_type_size_pri(t) => {p,sz,_,_} when p<=pri ->
-    annotate_type_list_reg(pri,max_reg+1,{*reg_list,sz},{*sofar,{{{BindReg,max_reg},r},t}},rest);
+    annotate_type_list_reg(pri,max_reg+1,{*reg_list,sz},{*sofar,{{{BindArgRet,max_reg},r},t}},rest);
 annotate_type_list_reg(pri,max_reg,reg_list,sofar,{{{r,{}},t},*rest}) match get_type_size_pri(t) => {_,_,p,sz} when p<=pri ->
-    annotate_type_list_reg(pri,max_reg+1,{*reg_list,sz},{*sofar,{{r,{BindReg,max_reg}},t}},rest);
+    annotate_type_list_reg(pri,max_reg+1,{*reg_list,sz},{*sofar,{{r,{BindArgRet,max_reg}},t}},rest);
 annotate_type_list_reg(pri,max_reg,reg_list,sofar,{t,*rest}) -> annotate_type_list_reg(pri,max_reg,reg_list,{*sofar,t},rest);
 
 annotate_type_list_stack(stack,sofar,{}) -> stack,sofar;
@@ -516,7 +520,7 @@ compile_rule(isnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,{{Expr
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,_,_,_,_,type_right} ->
     compile_rule(isnext,ctx_set_tail(ctx,fn_id+1),sofar,params,pre_arrow_clauses,post_arrow_clauses,args,type_left,type_right);
 compile_rule(isnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) ->
-    update generate_param_code(ctx,{},type_left,params) => ctx,code
+    update generate_param_code(ctx,{},{},type_left,params) => ctx,code
     update generate_expr_code(true,ctx,code,type_right,exprs) => ctx,code ->
     ctx_get_isnext(ctx)&isnext,ctx_lbl(ctx),code_or_not(isnext,{*code,compile_end(ctx_get_tail(ctx),ctx)});
 
@@ -531,32 +535,36 @@ code_or_not(_,code) -> code;
 
 get_scalar_type_size(tp) match get_type_size_pri(tp) => {_,sz} -> 63-count_leading_zeros(sz);
 
-generate_param_code(ctx,sofar,{},{}) -> ctx,sofar;
-generate_param_code(ctx,sofar,{{{{BindReg,src}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
+generate_param_code(ctx,sofar0,sofar1,{},{}) -> ctx,{*sofar0,*sofar1};
+generate_param_code(ctx,sofar0,sofar1,{{{{BindArgRet,src}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
     update ctx_deref_param(ctx,src) => ctx ->
-    generate_param_code(ctx_set_isnext(ctx),{*sofar,{ctx_fnr(ctx),OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindLabel,ctx_lbl(ctx),BindReg,src,BindImm,val}},type_left,rest);
-generate_param_code(ctx,sofar,{{{{BindReg,src}},tp},*type_left},{{ParamId,{id}},*rest}) ->
+    generate_param_code(ctx_set_isnext(ctx),{*sofar0,{ctx_fnr(ctx),OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindLabel,ctx_lbl(ctx),BindArgRet,src,BindImm,val}},sofar1,type_left,rest);
+generate_param_code(ctx,sofar0,sofar1,{{{{BindArgRet,src}},tp},*type_left},{{ParamId,{id}},*rest}) ->
     update ctx_deref_param(ctx,src) => ctx
     update ctx_bindings(ctx) => bindings
     update split3_nth(id,{},bindings) => prebind,bind,postbind
-    update generate_bind_variable(ctx,BindReg,src,tp,bind) => ctx,newbind,code
+    update generate_bind_variable(ctx,BindArgRet,src,tp,bind) => ctx,newbind,code
     update ctx_newbindings(ctx,{*prebind,newbind,*postbind}) => ctx ->
-    generate_param_code(ctx,{*sofar,*code},type_left,rest);
-generate_param_code(ctx,sofar,{{{{BindReg,src}},tp},*type_left},{{ParamWild,{}},*rest}) ->
+    generate_param_code(ctx,sofar0,{*sofar1,*code},type_left,rest);
+generate_param_code(ctx,sofar0,sofar1,{{{{BindArgRet,src}},tp},*type_left},{{ParamWild,{}},*rest}) ->
     update ctx_deref_param(ctx,src) => ctx ->
-    generate_param_code(ctx,sofar,type_left,rest);
+    generate_param_code(ctx,sofar0,sofar1,type_left,rest);
 
-generate_bind_variable(ctx,BindReg,src,tp,{0,_,_,name,refs})
-    match split3_nth(src,{},ctx_get_reg_list(ctx)) => pre,0,post ->
-    update ctx_put_reg_list(ctx,{*pre,1<<get_scalar_type_size(tp),*post})=>ctx ->
-    ctx,{refs+1,tp,{BindReg,src},name},{};
+// generate_bind_variable(ctx,BindArgRet,src,tp,{0,_,_,name,refs})
+//     match split3_nth(src,{},ctx_get_reg_list(ctx)) => pre,0,post ->
+//     update ctx_put_reg_list(ctx,{*pre,1<<get_scalar_type_size(tp),*post})=>ctx ->
+//     ctx,{refs+1,tp,{BindReg,src},name},{};
 generate_bind_variable(ctx,src_flag,src,tp,{0,_,_,name,refs}) ->
     update ctx_newreg(ctx,1<<get_scalar_type_size(tp)) => ctx,newreg ->
     ctx,{refs+1,tp,{src_flag,newreg},name},{generate_to_reg_move(ctx_fnr(ctx),tp,newreg,src_flag,src)};
 generate_bind_variable(ctx,src_flag,src,tp,{refs,tp,{src_flag2,src2},name}) ->
+    update ctx_deref_param(ctx,src2) => ctx ->
     ctx_set_isnext(ctx),{refs-1,tp,{src_flag2,src2},name},{{ctx_fnr(ctx),OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindLabel,ctx_lbl(ctx),src_flag,src,src_flag2,src2}};
 
 generate_to_reg_move(fn_id,rule_id,tp,newreg,src_flag,src) -> {fn_id,rule_id,OpMove+get_scalar_type_size(tp),0,BindReg,newreg,src_flag,src};
+
+eol_check(2) -> FlagLifeEnd;
+eol_check(_) -> 0;
 
 use_binding(ctx,id) ->
     match split3_nth(id,{},ctx_bindings(ctx)) => prebind,{refs,tp,{src_flag,src},name},post_bind

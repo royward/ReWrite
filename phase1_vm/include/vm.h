@@ -31,6 +31,7 @@ typedef struct {
 
 typedef struct {
     uint32_t sp;
+    uint64_t* argret;
     uint64_t* registers;
     uint8_t* stack;
 } ExecutionState;
