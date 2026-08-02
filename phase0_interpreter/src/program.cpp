@@ -210,8 +210,9 @@ start:
     try {
         const std::vector<Rule>& rules=program[op];
         // find the first match
-        for(const auto& [i, rule]: std::views::enumerate(rules)) {
-            std::vector<DataElement> bindings(rule.names.size(),DataElement{DataUnbound{}});
+        for(std::size_t i=0; i<rules.size(); i++) {
+          auto& rule=rules[i];
+          std::vector<DataElement> bindings(rule.names.size(),DataElement{DataUnbound{}});
             if(do_match_vec(rule.main.match,args,bindings,rule.main.match_count)) {
                 bool guard_ok=true;
                 for(const RuleMatch& grule : rule.pre_arrow) {
