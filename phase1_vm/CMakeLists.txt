@@ -28,3 +28,15 @@ target_compile_options(rewrite_vm PRIVATE
     $<$<CONFIG:Release>:-O3>
     $<$<CONFIG:Debug>:-g>
 )
+
+# Enable Sanitizers for Debug builds
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(rewrite_vm PRIVATE 
+        -g 
+        -fno-omit-frame-pointer 
+        -fsanitize=address,undefined
+    )
+    target_link_options(rewrite_vm PRIVATE 
+        -fsanitize=address,undefined
+    )
+endif()

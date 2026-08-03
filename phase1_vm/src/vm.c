@@ -2,10 +2,9 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
-#define STACK_SIZE 1000000
-#define REGISTERS_SIZE 1000
-#define ARGRET_SIZE 1000
-#define LABEL_COUNT 1000
+#define OVERFLOW_SIZE 1000
+#define REGISTERS_SIZE 100000
+#define LABEL_COUNT 100000
 
 #define OP_LABEL 0x01
 #define OP_MIN_BRANCH 0xF0
@@ -23,7 +22,6 @@ int program_link(Program* program) {
             labels[operation->dst]=i;
         }
     }
-    // now relabel
     for(uint32_t i=0;i<program->count;i++) {
         Operation* operation=&program->code[i];
         if(operation->op>=OP_MIN_BRANCH) {
@@ -75,12 +73,10 @@ void program_unload(Program* program) {
 int execution_init(ExecutionState* exe, Program* p) {
     (void)p;
     exe->registers = (uint64_t*)malloc(REGISTERS_SIZE*sizeof(uint64_t));
-    exe->argret = (uint64_t*)malloc(ARGRET_SIZE*sizeof(uint64_t));
-    exe->stack = (uint8_t*)malloc(STACK_SIZE*sizeof(uint8_t));
-    if(!exe->argret || !exe->registers || !exe->stack) {
-        free(exe->argret);
+    exe->overflow = (uint8_t*)malloc(OVERFLOW_SIZE*sizeof(uint8_t));
+    if(!exe->registers || !exe->overflow) {
         free(exe->registers);
-        free(exe->stack);
+        free(exe->overflow);
         fprintf(stderr, "fatal: problem allocating memory\n");
         return EXIT_FAILURE;
     }
@@ -88,9 +84,8 @@ int execution_init(ExecutionState* exe, Program* p) {
 }
 
 void execution_unload(ExecutionState* exe) {
-    free(exe->argret);
     free(exe->registers);
-    free(exe->stack);
+    free(exe->overflow);
 }
 
 #define OP_LABEL 0x01
@@ -128,7 +123,7 @@ void execution_unload(ExecutionState* exe) {
 
 #define BIND_IMM 0
 #define BIND_REG 1
-#define BIND_STACK 2
+#define BIND_OVERFLOW 2
 #define BIND_ARGRET 3
 
 #define FLAG_LIFE_START 0x10
@@ -151,8 +146,8 @@ void display_operand(FILE* out, uint8_t flag, int64_t val) {
         case BIND_ARGRET: {
             fprintf(out,"x%" PRIu64,val);
         } break;
-        case BIND_STACK: {
-            fprintf(out,"sp+%" PRId64,val);
+        case BIND_OVERFLOW: {
+            fprintf(out,"ov+%" PRId64,val);
         } break;
     }
 }
@@ -296,14 +291,14 @@ void operand_store(ExecutionState* exe, Operation* operation, uint64_t value, ui
         } break;
         case BIND_REG: {
             value&=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
-            exe->registers[operation->dst]=value;
+            exe->registers[operation->dst+sp]=value;
         } break;
         case BIND_ARGRET: {
             value&=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
-            exe->registers[operation->dst]=value;
+            exe->argret[operation->dst]=value;
         } break;
-        case BIND_STACK: {
-            uint8_t* addr=&exe->stack[sp+operation->dst];
+        case BIND_OVERFLOW: {
+            uint8_t* addr=&exe->overflow[operation->dst];
             switch(sz) { // alignment is guaranteed by the compiler
                 case 1:*((uint8_t*)addr)=(uint8_t)value; break;
                 case 2:*((uint16_t*)addr)=(uint16_t)value; break;
@@ -326,13 +321,13 @@ uint64_t operand_load(ExecutionState* exe, uint32_t sz, uint32_t flags_src, uint
             return src&mask;
         } break;
         case BIND_REG: {
-            return exe->registers[src]&mask;
+            return exe->registers[src+sp]&mask;
         } break;
         case BIND_ARGRET: {
             return exe->argret[src]&mask;
         } break;
-        case BIND_STACK: {
-            uint8_t* addr=&exe->stack[sp+src];
+        case BIND_OVERFLOW: {
+            uint8_t* addr=&exe->overflow[src];
             uint64_t value;
             switch(sz) { // alignment is guaranteed by the compiler
                 case 1:value=*((uint8_t*)addr); break;
@@ -368,12 +363,12 @@ int program_execute(Program* program, ExecutionState* exe, uint32_t in_pc) {
                 if(sp==0) {
                     return EXIT_SUCCESS;
                 } else {
-                    pc=*(uint32_t*)(&exe->stack[sp-4]);
+                    pc=exe->registers[sp-1];
                 }
             } break;
             case OP_CALL: {
                 sp+=(int32_t)operation->src1;
-                *(uint32_t*)(&exe->stack[sp-4])=pc;
+                exe->registers[sp-1]=pc;
                 pc = operation->dst-1;
             } break;
             case OP_GOTO: {

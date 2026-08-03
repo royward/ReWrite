@@ -1,6 +1,8 @@
 #include <stdint.h>
-#include <stdbool.h>  // for bool, true, false (C99)
+#include <stdbool.h>
 #include <stdio.h>
+
+#define ARGREG_NO 8
 
 typedef struct {
 // 0
@@ -31,9 +33,9 @@ typedef struct {
 
 typedef struct {
     uint32_t sp;
-    uint64_t* argret;
     uint64_t* registers;
-    uint8_t* stack;
+    uint8_t* overflow;
+    uint64_t argret[ARGREG_NO];
 } ExecutionState;
 
 int program_load(Program* program, const char* filename);
