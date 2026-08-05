@@ -52,7 +52,15 @@ const TypeFn=48;
 const Update=49;
 const DoubleArrow=50;
 
-do_compile(infile,outfile) -> save_binary_file({*outfile,'.rwo'},compile(parse(lex(load_text_file_lines(infile)))));
+const TargetVM=1;
+const TargetX86_64=2;
+const TargetAarch64=2;
+
+compile(infile,outfile,target) -> compile_aux(convert_target_string(target),outfile,parse(lex(load_text_file_lines(infile))));
+
+convert_target_string("vm") -> TargetVM;
+convert_target_string("x86-64") -> TargetX86_64;
+convert_target_string("aarch64") -> TargetAarch64;
 
 is_start_token(c) -> c=='_' || (c>='a' && c<='z') || (c>='A' && c<='Z');
 
@@ -404,7 +412,7 @@ bitmask_or(sofar,{b1,*rest1},{b2,*rest2}) -> bitmask_or({*sofar,b1|b2},rest1,res
 length({}) -> 0;
 length({_,*rest}) -> length(rest)+1;
 
-compile(rules,table,_) -> compile_aux(length(table),0,annotate_table({},table),{},rules);
+compile_aux(target,outfile,rules,table,_) -> compile1(target,outfile,length(table)-1,0,annotate_table({},table),{},rules);
 
 const MaxParamRegs=4;
 
@@ -423,9 +431,6 @@ const BindLabel=0;
 const BindReg=1;
 const BindOverflow=2;
 const BindArgRet=3;
-
-const FlagLifeStart=16;
-const FlagLifeEnd=32;
 
 annotate_type_list_reg(pri,max_reg,reg_count,sofar,{}) -> annotate_type_list_reg(pri+1,max_reg,reg_count,{},sofar);
 annotate_type_list_reg(pri,max_reg,reg_count,sofar,todo) when pri==3 || max_reg==MaxParamRegs -> reg_count,annotate_type_list_stack({},{},{*sofar,*todo});
@@ -470,57 +475,58 @@ const OpCompareEqualBranch=248;
 const OpGoto=254;
 const OpCall=255;
 
-compile_aux(label_id,_,_,sofar,{}) -> convert_to_binary({},sofar);
-compile_aux(label_id,n,table,sofar,{rules,*rest}) ->
+compile1(TargetVM,outfile,label_id,_,_,sofar,{}) -> save_binary_file({*outfile,'.rwo'},convert_to_binary({},sofar));
+compile1(TargetX86_64,outfile,label_id,_,_,sofar,{}) -> save_binary_file({*outfile,'.rwo'},convert_to_binary({},sofar));
+compile1(target,outfile,label_id,n,table,sofar,{rules,*rest}) ->
     match get_nth(n,table) => {_,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right}
-    update compile_function(1,label_id,n,table,0,{{n,0,OpLabel,0,BindLabel,n}},rules,0,bitmask_or({},bitmask1,bitmask2),type_left,type_right) => label_id,code ->
-    compile_aux(label_id,n+1,table,{*sofar,*code},rest);
+    update compile_function(target,true,0,label_id,n,table,0,{{n,0,OpLabel,0,BindLabel,n}},rules,0,bitmask_or({},bitmask1,bitmask2),type_left,type_right) => label_id,code ->
+    compile1(target,outfile,label_id,n+1,table,{*sofar,{{type_left,type_right},code}},rest);
 
-compile_function(isnext,label_id,fn_id,table,rule_id,sofar,{},_,_,_,_) -> label_id,{*sofar,*code_or_not(isnext,{{fn_id,rule_id,OpErrorNoMoreRules,0}})};
-compile_function(isnext,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,type_left,type_right) ->
+compile_function(target,active,lblnext,label_id,fn_id,table,rule_id,sofar,{},_,_,_,_) -> label_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpErrorNoMoreRules,0}})};
+compile_function(target,active,lblnext,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,type_left,type_right) ->
     match rule => {bindings,params,pre_arrow_clauses,post_arrow_clauses,exprs}
-    update compile_rule(isnext,{0,0,label_id,fn_id,rule_id,create_compiler_bindings({},bindings),0,bitmask,{},table},{},params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) => isnext,label_id,code ->
-    compile_function(isnext,label_id+isnext,fn_id,table,rule_id+1,{*sofar,*code,*code_or_not(isnext,{{fn_id,rule_id,OpLabel,0,BindLabel,label_id}})},rest,dummy,bitmask,type_left,type_right);
+    update compile_rule(lblnext,{target,0,true,0,label_id,fn_id,rule_id,create_compiler_bindings({},bindings),0,bitmask,{},table},{},params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) => active,lblnext,label_id,code ->
+    compile_function(target,active,0,label_id,fn_id,table,rule_id+1,{*sofar,*code,*code_or_not(active,{{fn_id,rule_id,OpLabel,0,BindLabel,label_id}})},rest,dummy,bitmask,type_left,type_right);
 
 create_compiler_bindings(sofar,{}) -> sofar;
 create_compiler_bindings(sofar,{{n,ref},*rest}) -> create_compiler_bindings({*sofar,{0,0,{},n,ref}},rest);
 
-ctx_fn({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> fn_id;
-ctx_fnr({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> fn_id,rule_id;
-ctx_lbl({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> label_id;
-ctx_bindings({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bindings;
-//ctx_deref_param({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},n) ->
-//    update clear1_reglist({},reg_count,n) => reg_count ->
-//    {tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
-ctx_newbindings({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},newbindings) -> {tailcall,isnext,label_id,fn_id,rule_id,newbindings,reg_count,bitmask,bind_rhs,table};
-ctx_get_reg_count({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> reg_count;
-ctx_put_reg_count({tailcall,isnext,label_id,fn_id,rule_id,bindings,_,bitmask,bind_rhs,table},new_reg_count) -> {tailcall,isnext,label_id,fn_id,rule_id,bindings,new_reg_count,bitmask,bind_rhs,table};
-ctx_get_bitmask({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bitmask;
-ctx_newreg({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},sz) ->
-    {tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count+1,bitmask,bind_rhs,table},reg_count;
-ctx_get_bind_rhs({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bind_rhs;
-ctx_get_fn_sig({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},n) -> get_nth(n,table);
-ctx_set_tail({_,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},tailcall) -> {tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
-ctx_get_tail({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> tailcall;
-ctx_set_isnext({tailcall,_,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> {tailcall,1,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
-ctx_get_isnext({tailcall,isnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> isnext;
-
-//clear1_reglist(sofar,{_,*todo},0) -> {*sofar,0,*todo};
-//clear1_reglist(sofar,{a,*todo},n) -> clear1_reglist({*sofar,a},todo,n-1);
-
-//new_reg(n,sofar,{},sz) -> {*sofar,sz},n;
-//new_reg(n,sofar,{0,*rest},sz) -> {*sofar,sz,*rest},n;
-//new_reg(n,sofar,{i,*rest},sz) -> new_reg(n+1,{*sofar,i},rest,sz);
+ctx_fn({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> fn_id;
+ctx_fnr({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> fn_id,rule_id;
+ctx_lbl({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> label_id;
+ctx_bindings({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bindings;
+//ctx_deref_param({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},n) ->
+//    update clear1_reglist({target,},reg_count,n) => reg_count ->
+//    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
+ctx_newbindings({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},newbindings) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,newbindings,reg_count,bitmask,bind_rhs,table};
+ctx_get_reg_count({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> reg_count;
+ctx_put_reg_count({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,_,bitmask,bind_rhs,table},new_reg_count) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,new_reg_count,bitmask,bind_rhs,table};
+ctx_get_bitmask({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bitmask;
+ctx_newreg({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},sz) ->
+    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count+1,bitmask,bind_rhs,table},reg_count;
+ctx_get_bind_rhs({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bind_rhs;
+ctx_get_fn_sig({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},n) -> get_nth(n,table);
+ctx_set_tail({target,_,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},tailcall) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
+ctx_get_tail({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> tailcall;
+ctx_set_lblnext({target,tailcall,active,_,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> {target,tailcall,active,label_id,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
+ctx_get_lblnext({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> lblnext;
+ctx_get_lbl_stuff({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> target,active,lblnext,label_id;
+ctx_get_lbl_active({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> active;
+ctx_set_lbl_stuff({target,tailcall,active,_,_,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},lblnext,label_id) ->
+    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
 
 // deal with tail recursion (error if sigs don't match)
-compile_rule(isnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,{{ExprCall,fn_id,args}},type_left,type_right) ->
+compile_rule(lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,{{ExprCall,fn_id,args}},type_left,type_right) ->
     match ctx_get_tail(ctx) => 0
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,_,_,_,_,type_right} ->
-    compile_rule(isnext,ctx_set_tail(ctx,fn_id+1),sofar,params,pre_arrow_clauses,post_arrow_clauses,args,type_left,type_right);
-compile_rule(isnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) ->
+    compile_rule(lblnext,ctx_set_tail(ctx,fn_id+1),sofar,params,pre_arrow_clauses,post_arrow_clauses,args,type_left,type_right);
+compile_rule(lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) ->
     update generate_param_code(ctx,{},{},type_left,params) => ctx,code
     update generate_expr_code(true,ctx,code,type_right,exprs) => ctx,code ->
-    ctx_get_isnext(ctx)&isnext,ctx_lbl(ctx),code_or_not(isnext,{*code,compile_end(ctx_get_tail(ctx),ctx)});
+    ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ret_if_not_zero(lblnext,ctx_get_lblnext(ctx)),ctx_lbl(ctx),code_or_not(ctx_get_lbl_active(ctx),{*code,compile_end(ctx_get_tail(ctx),ctx)});
+
+ret_if_not_zero(0,_) -> 0;
+ret_if_not_zero(_,x) -> x;
 
 compile_end(0,ctx) -> {ctx_fnr(ctx),OpRet,0};
 compile_end(n,ctx) -> {ctx_fnr(ctx),OpGoto,0,BindLabel,n-1};
@@ -528,14 +534,15 @@ compile_end(n,ctx) -> {ctx_fnr(ctx),OpGoto,0,BindLabel,n-1};
 compile_rhs_final_binding(_,sofar,{}) -> sofar;
 compile_rhs_final_binding(ctx,sofar,{{tp,src,dst},*rest}) -> compile_rhs_final_binding(ctx,{*sofar,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,BindReg,dst,BindReg,src}},rest);
 
-code_or_not(0,_) -> {};
+code_or_not(false,_) -> {};
 code_or_not(_,code) -> code;
 
 get_scalar_type_size(tp) match get_type_size_pri(tp) => {_,sz} -> 63-count_leading_zeros(sz);
 
 generate_param_code(ctx,sofar0,sofar1,{},{}) -> ctx,{*sofar0,*sofar1};
 generate_param_code(ctx,sofar0,sofar1,{{{{BindArgRet,src}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
-    generate_param_code(ctx_set_isnext(ctx),{*sofar0,{ctx_fnr(ctx),OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindLabel,ctx_lbl(ctx),BindArgRet,src,BindImm,val}},sofar1,type_left,rest);
+    update generate_conditional(ctx,OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindArgRet,src,BindImm,val) => ctx,code ->
+    generate_param_code(ctx,{*sofar0,*code},sofar1,type_left,rest);
 generate_param_code(ctx,sofar0,sofar1,{{{{BindArgRet,src}},tp},*type_left},{{ParamId,{id}},*rest}) ->
     update ctx_bindings(ctx) => bindings
     update split3_nth(id,{},bindings) => prebind,bind,postbind
@@ -545,21 +552,24 @@ generate_param_code(ctx,sofar0,sofar1,{{{{BindArgRet,src}},tp},*type_left},{{Par
 generate_param_code(ctx,sofar0,sofar1,{{{{BindArgRet,src}},tp},*type_left},{{ParamWild,{}},*rest}) ->
     generate_param_code(ctx,sofar0,sofar1,type_left,rest);
 
-// generate_bind_variable(ctx,BindArgRet,src,tp,{0,_,_,name,refs})
-//     match split3_nth(src,{},ctx_get_reg_count(ctx)) => pre,0,post ->
-//     update ctx_put_reg_count(ctx,{*pre,1<<get_scalar_type_size(tp),*post})=>ctx ->
-//     ctx,{refs+1,tp,{BindReg,src},name},{};
 generate_bind_variable(ctx,src_flag,src,tp,{0,_,_,name,refs}) ->
     update ctx_newreg(ctx,1<<get_scalar_type_size(tp)) => ctx,newreg ->
     ctx,{refs+1,tp,{BindReg,newreg},name},{generate_to_reg_move(ctx_fnr(ctx),tp,newreg,src_flag,src)};
 generate_bind_variable(ctx,src_flag,src,tp,{refs,tp,{src_flag2,src2},name}) ->
-    //update ctx_deref_param(ctx,src2) => ctx ->
-    ctx_set_isnext(ctx),{refs-1,tp,{src_flag2,src2},name},{{ctx_fnr(ctx),OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindLabel,ctx_lbl(ctx),src_flag,src,src_flag2,src2}};
+    update generate_conditional(ctx,OpCompareNotEqualBranch+get_scalar_type_size(tp),0,src_flag,src,src_flag2,src2) => ctx,code ->
+    ctx,{refs-1,tp,{src_flag2,src2},name},code;
 
 generate_to_reg_move(fn_id,rule_id,tp,newreg,src_flag,src) -> {fn_id,rule_id,OpMove+get_scalar_type_size(tp),0,BindReg,newreg,src_flag,src};
 
-// eol_check(2) -> FlagLifeEnd;
-// eol_check(_) -> 0;
+generate_conditional(ctx,op,tp,src_flag,src,src_flag2,src2) -> generate_conditional_aux(ctx,ctx_get_lbl_stuff(ctx),op,tp,src_flag,src,src_flag2,src2);
+
+generate_conditional_aux(ctx,target,0,lblnext,label_id,op,tp,src_flag,src,src_flag2,src2) -> ctx,{};
+generate_conditional_aux(ctx,TargetVM,_,0,label_id,op,tp,src_flag,src,src_flag2,src2) -> ctx_set_lbl_stuff(ctx,label_id+1,label_id+1),{{ctx_fnr(ctx),op,tp,BindLabel,label_id+1,src_flag,src,src_flag2,src2}};
+generate_conditional_aux(ctx,TargetVM,_,lblnext,label_id,op,tp,src_flag,src,src_flag2,src2) -> ctx,{{ctx_fnr(ctx),op,tp,BindLabel,lblnext,src_flag,src,src_flag2,src2}};
+generate_conditional_aux(ctx,_,_,0,label_id,op,tp,src_flag,src,src_flag2,src2) ->
+    ctx_set_lbl_stuff(ctx,label_id+2,label_id+2),{{ctx_fnr(ctx),op,tp,BindLabel,label_id+2,src_flag,src,src_flag2,src2},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id+1}};
+generate_conditional_aux(ctx,_,_,lblnext,label_id,op,tp,src_flag,src,src_flag2,src2) ->
+    ctx_set_lbl_stuff(ctx,label_id+1,label_id+1),{{ctx_fnr(ctx),op,tp,BindLabel,lblnext,src_flag,src,src_flag2,src2},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id+1}};
 
 use_binding(ctx,id) ->
     match split3_nth(id,{},ctx_bindings(ctx)) => prebind,{refs,tp,{src_flag,src},name},post_bind
@@ -613,7 +623,10 @@ generate_expr_code_aux_map(ctx,sofar,{expr,*rest}) ->
     generate_expr_code_aux_map(ctx,{*sofar,{code,bound_param,tp,src_flag,src}},rest);
 
 convert_to_binary(sofar,{}) -> sofar;
-convert_to_binary(sofar,{instr,*rest}) -> convert_to_binary({*sofar,*emit_instruction(instr)},rest);
+convert_to_binary(sofar,{{fninfo,code},*rest}) -> convert_to_binary({*sofar,*convert_to_binary_aux({},code)},rest);
+
+convert_to_binary_aux(sofar,{}) -> sofar;
+convert_to_binary_aux(sofar,{instr,*rest}) -> convert_to_binary_aux({*sofar,*emit_instruction(instr)},rest);
 
 emit_instruction({fn_id,rule_id,op,tp}) -> emit_instruction({fn_id,rule_id,op,tp,-1,-1,-1,-1,-1,-1});
 emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst}) -> emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,-1,-1,-1,-1});
