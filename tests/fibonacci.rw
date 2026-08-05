@@ -1,0 +1,11 @@
+// Example: inefficient fibonacci
+// SPDX-License-Identifier: CC0-1.0
+
+:- fib(n:i64)->i64;
+fib(0) -> 1;
+fib(1) -> 1;
+fib(n) -> fib(n-2)+fib(n-1);
+
+:- fact(n:i64)->i64;
+fact(0)->1;
+fact(n)->n*fact(n-1);
