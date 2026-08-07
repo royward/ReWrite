@@ -16,7 +16,7 @@ typedef struct {
     uint8_t flags_src2;
 // 8
     uint32_t dst;
-    uint32_t reserved1;  // available for future use
+    uint32_t label2;
 // 16
     uint64_t src1;
 // 24

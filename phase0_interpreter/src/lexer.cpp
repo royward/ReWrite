@@ -19,6 +19,7 @@
 
 #include <stdexcept>
 #include <format>
+#include <print>
 #include "token.hpp"
 
 std::string lex_string(std::string_view program, std::size_t& p, char term) {

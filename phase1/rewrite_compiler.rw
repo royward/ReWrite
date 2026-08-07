@@ -54,11 +54,13 @@ const DoubleArrow=50;
 
 const TargetVM=1;
 const TargetX86_64=2;
-const TargetAarch64=2;
+const TargetAarch64=3;
+const TargetVMLL=4;
 
 compile(infile,outfile,target) -> compile_aux(convert_target_string(target),outfile,parse(lex(load_text_file_lines(infile))));
 
 convert_target_string("vm") -> TargetVM;
+convert_target_string("vmll") -> TargetVMLL;
 convert_target_string("x86-64") -> TargetX86_64;
 convert_target_string("aarch64") -> TargetAarch64;
 
@@ -130,7 +132,6 @@ lexer_string(row,col,sofar,endtok,{c,*rest}) -> lexer_string(row,col+1,{*sofar,c
 
 lexer_two_symbol('&&') -> AndAnd;
 lexer_two_symbol('->') -> Arrow;
-//lexer_two_symbol(' when ') -> ColonColon;
 lexer_two_symbol(':-') -> TypeFn;
 lexer_two_symbol('==') -> EqualEqual;
 lexer_two_symbol('=>') -> DoubleArrow;
@@ -140,7 +141,6 @@ lexer_two_symbol('!=') -> NotEqual;
 lexer_two_symbol('||') -> OrOr;
 lexer_two_symbol('<<') -> ShiftLeft;
 lexer_two_symbol('>>') -> ShiftRight;
-//lexer_two_symbol('*') -> Splat;
 lexer_two_symbol(_,_) -> 0;
 
 
@@ -206,6 +206,16 @@ const ExprNever=10;
 
 string_to_int_pos({},acc) -> acc;
 string_to_int_pos({c,*rest},acc) -> string_to_int_pos(rest,acc*10+(c-'0'));
+
+int_to_string36(0) -> "0";
+int_to_string36(n) when n<10 -> {'0'+n};
+int_to_string36(n) when n<36 -> {'a'+n-10};
+int_to_string36(n) -> {*int_to_string36(n/36),*int_to_string36(n%36)};
+
+int_to_string(0) -> "0";
+int_to_string(n) when n<0 -> {'-',*int_to_string(-n)};
+int_to_string(n) when n<10 -> {'0'+n};
+int_to_string(n) -> {*int_to_string(n/10),*int_to_string(n%10)};
 
 parse(s) -> parse_aux0({},{},{},s);
 
@@ -386,8 +396,8 @@ parse_params1(consts,bindings,params,rest) -> bindings,params,rest; // deal with
 // Compiler
 ///////////////////////////////////////////////////////////
 
-get_nth(0,{a,*_}) -> a;
-get_nth(n,{_,*rest}) -> get_nth(n-1,rest);
+nth(0,{a,*_}) -> a;
+nth(n,{_,*rest}) -> nth(n-1,rest);
 
 split3_nth(0,sofar,{a,*rest}) -> sofar,a,rest;
 split3_nth(n,sofar,{a,*rest}) -> split3_nth(n-1,{*sofar,a},rest);
@@ -470,50 +480,58 @@ const OpRet=3;
 const OpErrorNoMoreRules=4;
 const OpAddStack=5;
 const OpMove=16;
+const OpInsert=32;
+const OpExtract=48;
 const OpCompareNotEqualBranch=240;
 const OpCompareEqualBranch=248;
 const OpGoto=254;
 const OpCall=255;
 
-compile1(TargetVM,outfile,label_id,_,_,sofar,{}) -> save_binary_file({*outfile,'.rwo'},convert_to_binary({},sofar));
-compile1(TargetX86_64,outfile,label_id,_,_,sofar,{}) -> save_binary_file({*outfile,'.rwo'},convert_to_binary({},sofar));
+compile1(TargetVM,outfile,label_id,_,table,sofar,{}) -> save_binary_file({*outfile,'.rwo'},convert_to_binary(table,{},sofar));
+compile1(TargetVMLL,outfile,label_id,_,table,sofar,{}) -> save_binary_file({*outfile,'.rwo'},convert_to_binary(table,{},sofar));
+compile1(target,outfile,label_id,_,table,sofar,{}) -> save_text_file({*outfile,'.ll'},convert_to_llvm(target,table,{},sofar));
 compile1(target,outfile,label_id,n,table,sofar,{rules,*rest}) ->
-    match get_nth(n,table) => {_,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right}
-    update compile_function(target,true,0,label_id,n,table,0,{{n,0,OpLabel,0,BindLabel,n}},rules,0,bitmask_or({},bitmask1,bitmask2),type_left,type_right) => label_id,code ->
-    compile1(target,outfile,label_id,n+1,table,{*sofar,{{type_left,type_right},code}},rest);
+    match nth(n,table) => {_,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right}
+    update compile_function(target,0,true,0,label_id,n,table,0,{{n,0,OpLabel,0,BindLabel,n}},rules,0,bitmask_or({},bitmask1,bitmask2),type_left,type_right) => label_id,code ->
+    compile1(target,outfile,label_id,n+1,table,{*sofar,{n,code}},rest);
 
-compile_function(target,active,lblnext,label_id,fn_id,table,rule_id,sofar,{},_,_,_,_) -> label_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpErrorNoMoreRules,0}})};
-compile_function(target,active,lblnext,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,type_left,type_right) ->
+compile_function(target,reg_count,active,lblnext,label_id,fn_id,table,rule_id,sofar,{},_,_,_,_) -> label_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpErrorNoMoreRules,0}})};
+compile_function(target,reg_count,active,lblnext,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,type_left,type_right) ->
     match rule => {bindings,params,pre_arrow_clauses,post_arrow_clauses,exprs}
-    update compile_rule(lblnext,{target,0,true,0,label_id,fn_id,rule_id,create_compiler_bindings({},bindings),0,bitmask,{},table},{},params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) => active,lblnext,label_id,code ->
-    compile_function(target,active,0,label_id,fn_id,table,rule_id+1,{*sofar,*code,*code_or_not(active,{{fn_id,rule_id,OpLabel,0,BindLabel,label_id}})},rest,dummy,bitmask,type_left,type_right);
+    update compile_rule(lblnext,{target,1,0,true,0,label_id,fn_id,rule_id,create_compiler_bindings({},bindings),reg_count,bitmask,{},table},{},params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) =>
+        reg_count,active,lblnext,label_id,code ->
+    compile_function(target,reg_count,active,0,label_id,fn_id,table,rule_id+1,{*sofar,*code,*code_or_not(active,{{fn_id,rule_id,OpLabel,0,BindLabel,label_id}})},rest,dummy,bitmask,type_left,type_right);
 
 create_compiler_bindings(sofar,{}) -> sofar;
 create_compiler_bindings(sofar,{{n,ref},*rest}) -> create_compiler_bindings({*sofar,{0,0,{},n,ref}},rest);
 
-ctx_fn({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> fn_id;
-ctx_fnr({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> fn_id,rule_id;
-ctx_lbl({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> label_id;
-ctx_bindings({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bindings;
-//ctx_deref_param({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},n) ->
+//ctx_fn({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> fn_id;
+ctx_fnr({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> fn_id,rule_id;
+ctx_lbl({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> label_id;
+ctx_bindings({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bindings;
+//ctx_deref_param({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},n) ->
 //    update clear1_reglist({target,},reg_count,n) => reg_count ->
-//    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
-ctx_newbindings({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},newbindings) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,newbindings,reg_count,bitmask,bind_rhs,table};
-ctx_get_reg_count({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> reg_count;
-ctx_put_reg_count({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,_,bitmask,bind_rhs,table},new_reg_count) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,new_reg_count,bitmask,bind_rhs,table};
-ctx_get_bitmask({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bitmask;
-ctx_newreg({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},sz) ->
-    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count+1,bitmask,bind_rhs,table},reg_count;
-ctx_get_bind_rhs({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bind_rhs;
-ctx_get_fn_sig({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},n) -> get_nth(n,table);
-ctx_set_tail({target,_,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},tailcall) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
-ctx_get_tail({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> tailcall;
-ctx_set_lblnext({target,tailcall,active,_,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> {target,tailcall,active,label_id,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
-ctx_get_lblnext({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> lblnext;
-ctx_get_lbl_stuff({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> target,active,lblnext,label_id;
-ctx_get_lbl_active({target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> active;
-ctx_set_lbl_stuff({target,tailcall,active,_,_,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},lblnext,label_id) ->
-    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
+//    {target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
+ctx_newbindings({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},newbindings) -> {target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,newbindings,reg_count,bitmask,bind_rhs,table};
+ctx_get_reg_count({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> reg_count;
+ctx_put_reg_count({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,_,bitmask,bind_rhs,table},new_reg_count) -> {target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,new_reg_count,bitmask,bind_rhs,table};
+ctx_get_bitmask({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bitmask;
+ctx_newreg({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},sz) ->
+    {target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count+1,bitmask,bind_rhs,table},reg_count;
+ctx_get_bind_rhs({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bind_rhs;
+ctx_get_fn_sig({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},n) -> nth(n,table);
+ctx_set_tail({target,callctr,_,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},tailcall) -> {target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
+ctx_get_tail({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> tailcall;
+ctx_set_lblnext({target,callctr,tailcall,active,_,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> {target,callctr,tailcall,active,label_id,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
+ctx_get_lblnext({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> lblnext;
+ctx_get_lbl_stuff({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> target,active,lblnext,label_id;
+ctx_get_lbl_active({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> active;
+ctx_set_lbl_stuff({target,callctr,tailcall,active,_,_,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},lblnext,label_id) ->
+    {target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
+ctx_update_get_callctr({TargetVM,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},inc) ->
+    {TargetVM,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},0;
+ctx_update_get_callctr({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},inc) ->
+    {target,callctr+inc,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},callctr;
 
 // deal with tail recursion (error if sigs don't match)
 compile_rule(lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,{{ExprCall,fn_id,args}},type_left,type_right) ->
@@ -522,11 +540,11 @@ compile_rule(lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,{{Exp
     compile_rule(lblnext,ctx_set_tail(ctx,fn_id+1),sofar,params,pre_arrow_clauses,post_arrow_clauses,args,type_left,type_right);
 compile_rule(lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) ->
     update generate_param_code(ctx,{},{},type_left,params) => ctx,code
-    update generate_expr_code(true,ctx,code,type_right,exprs) => ctx,code ->
-    ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ret_if_not_zero(lblnext,ctx_get_lblnext(ctx)),ctx_lbl(ctx),code_or_not(ctx_get_lbl_active(ctx),{*code,compile_end(ctx_get_tail(ctx),ctx)});
+    update generate_expr_code(0,ctx,code,{},type_right,exprs) => ctx,code ->
+    ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,if_not_zero(lblnext,ctx_get_lblnext(ctx),0),ctx_lbl(ctx),code_or_not(ctx_get_lbl_active(ctx),{*code,compile_end(ctx_get_tail(ctx),ctx)});
 
-ret_if_not_zero(0,_) -> 0;
-ret_if_not_zero(_,x) -> x;
+if_not_zero(0,_,y) -> y;
+if_not_zero(_,x,_) -> x;
 
 compile_end(0,ctx) -> {ctx_fnr(ctx),OpRet,0};
 compile_end(n,ctx) -> {ctx_fnr(ctx),OpGoto,0,BindLabel,n-1};
@@ -541,7 +559,7 @@ get_scalar_type_size(tp) match get_type_size_pri(tp) => {_,sz} -> 63-count_leadi
 
 generate_param_code(ctx,sofar0,sofar1,{},{}) -> ctx,{*sofar0,*sofar1};
 generate_param_code(ctx,sofar0,sofar1,{{{{BindArgRet,src}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
-    update generate_conditional(ctx,OpCompareNotEqualBranch+get_scalar_type_size(tp),0,BindArgRet,src,BindImm,val) => ctx,code ->
+    update generate_conditional(ctx,OpCompareNotEqualBranch,tp,BindArgRet,src,BindImm,val) => ctx,code ->
     generate_param_code(ctx,{*sofar0,*code},sofar1,type_left,rest);
 generate_param_code(ctx,sofar0,sofar1,{{{{BindArgRet,src}},tp},*type_left},{{ParamId,{id}},*rest}) ->
     update ctx_bindings(ctx) => bindings
@@ -556,7 +574,7 @@ generate_bind_variable(ctx,src_flag,src,tp,{0,_,_,name,refs}) ->
     update ctx_newreg(ctx,1<<get_scalar_type_size(tp)) => ctx,newreg ->
     ctx,{refs+1,tp,{BindReg,newreg},name},{generate_to_reg_move(ctx_fnr(ctx),tp,newreg,src_flag,src)};
 generate_bind_variable(ctx,src_flag,src,tp,{refs,tp,{src_flag2,src2},name}) ->
-    update generate_conditional(ctx,OpCompareNotEqualBranch+get_scalar_type_size(tp),0,src_flag,src,src_flag2,src2) => ctx,code ->
+    update generate_conditional(ctx,OpCompareNotEqualBranch,tp,src_flag,src,src_flag2,src2) => ctx,code ->
     ctx,{refs-1,tp,{src_flag2,src2},name},code;
 
 generate_to_reg_move(fn_id,rule_id,tp,newreg,src_flag,src) -> {fn_id,rule_id,OpMove+get_scalar_type_size(tp),0,BindReg,newreg,src_flag,src};
@@ -564,12 +582,20 @@ generate_to_reg_move(fn_id,rule_id,tp,newreg,src_flag,src) -> {fn_id,rule_id,OpM
 generate_conditional(ctx,op,tp,src_flag,src,src_flag2,src2) -> generate_conditional_aux(ctx,ctx_get_lbl_stuff(ctx),op,tp,src_flag,src,src_flag2,src2);
 
 generate_conditional_aux(ctx,target,0,lblnext,label_id,op,tp,src_flag,src,src_flag2,src2) -> ctx,{};
-generate_conditional_aux(ctx,TargetVM,_,0,label_id,op,tp,src_flag,src,src_flag2,src2) -> ctx_set_lbl_stuff(ctx,label_id+1,label_id+1),{{ctx_fnr(ctx),op,tp,BindLabel,label_id+1,src_flag,src,src_flag2,src2}};
+generate_conditional_aux(ctx,TargetVM,_,0,label_id,op,tp,src_flag,src,src_flag2,src2) ->
+    ctx_set_lbl_stuff(ctx,label_id+1,label_id+1),{{ctx_fnr(ctx),op+get_scalar_type_size(tp),0,BindLabel,label_id+1,src_flag,src,src_flag2,src2}};
 generate_conditional_aux(ctx,TargetVM,_,lblnext,label_id,op,tp,src_flag,src,src_flag2,src2) -> ctx,{{ctx_fnr(ctx),op,tp,BindLabel,lblnext,src_flag,src,src_flag2,src2}};
 generate_conditional_aux(ctx,_,_,0,label_id,op,tp,src_flag,src,src_flag2,src2) ->
-    ctx_set_lbl_stuff(ctx,label_id+2,label_id+2),{{ctx_fnr(ctx),op,tp,BindLabel,label_id+2,src_flag,src,src_flag2,src2},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id+1}};
+    update generate_conditional_extractx(ctx,tp,src_flag,src) => ctx,newbind,newreg,code ->
+    ctx_set_lbl_stuff(ctx,label_id+2,label_id+2),{*code,{ctx_fnr(ctx),op+get_scalar_type_size(tp),0,BindLabel,label_id+2,newbind,newreg,src_flag2,src2,label_id+1},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id+1}};
 generate_conditional_aux(ctx,_,_,lblnext,label_id,op,tp,src_flag,src,src_flag2,src2) ->
-    ctx_set_lbl_stuff(ctx,label_id+1,label_id+1),{{ctx_fnr(ctx),op,tp,BindLabel,lblnext,src_flag,src,src_flag2,src2},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id+1}};
+    update generate_conditional_extractx(ctx,tp,src_flag,src) => ctx,newbind,newreg,code ->
+    ctx_set_lbl_stuff(ctx,label_id+1,label_id+1),{*code,{ctx_fnr(ctx),op+get_scalar_type_size(tp),0,BindLabel,lblnext,newbind,newreg,src_flag2,src2,lblnext},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id+1}};
+
+generate_conditional_extractx(ctx,tp,BindArgRet,src) ->
+    update ctx_newreg(ctx,1<<get_scalar_type_size(tp)) => ctx,newreg ->
+    ctx,BindReg,newreg,{generate_to_reg_move(ctx_fnr(ctx),tp,newreg,BindArgRet,src)};
+generate_conditional_extractx(ctx,tp,src_flag,src) -> ctx,src_flag,src,{};
 
 use_binding(ctx,id) ->
     match split3_nth(id,{},ctx_bindings(ctx)) => prebind,{refs,tp,{src_flag,src},name},post_bind
@@ -579,37 +605,43 @@ use_binding(ctx,id) ->
 use_binding_check_reg_end(ctx,2,src) -> match split3_nth(src,{},ctx_get_reg_count(ctx)) => prebind,_,post_bind -> ctx_put_reg_count(ctx,{*prebind,0,*post_bind});
 use_binding_check_reg_end(ctx,ref,_) -> ctx;
 
-generate_expr_code(_,ctx,code,{},{}) -> ctx,code;
+generate_expr_code(_,ctx,code1,code2,{},{}) -> ctx,{*code1,*code2};
 // TODO deal with lists splats and multi-return calls first
-generate_expr_code(f,ctx,sofar,{{{{dst_flag,dst}},tp},*type_left},{expr,*rest}) ->// when dst<=ctx_get_maxreg_rhs(ctx) ->
+generate_expr_code(callctr,ctx,sofar1,sofar2,{{{{dst_flag,dst}},tp},*type_left},{expr,*rest}) ->// when dst<=ctx_get_maxreg_rhs(ctx) ->
     update generate_expr_code_aux(ctx,expr) => ctx,newcode,bound_param,tp,src_flag,src ->
-    //update ctx_new_reg_bind_rhs(ctx,tp,dst) => ctx,newvar ->
-    generate_expr_code(f,ctx,{*sofar,*newcode,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src}},type_left,rest);
+    generate_expr_code(callctr,ctx,{*sofar1,*newcode},{*sofar2,{ctx_fnr(ctx),if_not_zero(callctr,OpInsert,OpMove)+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src,0,callctr}},type_left,rest);
 // generate_expr_code(redirect,ctx,sofar,{{{{dst_flag,dst}},tp},*type_left},{expr,*rest}) ->
 //     match generate_expr_code_aux(ctx,expr) => newcode,tp,src_flag,src ->
 //     generate_expr_code(redirect,ctx,{*sofar,*newcode,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src}},type_left,rest);
 
 generate_expr_code_aux(ctx,{Const,{tp,val}}) -> ctx,{},true,tp,BindImm,val;
-//generate_expr_code_aux(ctx,{ExprId,{id}}) -> match get_nth(id,ctx_bindings(ctx)) => {refs,tp,{src_flag,src},_} -> {},tp,src_flag,src;
+//generate_expr_code_aux(ctx,{ExprId,{id}}) -> match nth(id,ctx_bindings(ctx)) => {refs,tp,{src_flag,src},_} -> {},tp,src_flag,src;
 generate_expr_code_aux(ctx,{ExprId,{id}}) -> update use_binding(ctx,id) => ctx,tp,src_flag,src -> ctx,{},true,tp,src_flag,src;
 generate_expr_code_aux(ctx,{ExprCallInternal,{op,*args}}) -> update generate_expr_code_aux_map(ctx,{},args) => ctx,args_code -> generate_expr_code_infix(ctx,op,args_code);
 generate_expr_code_aux(ctx,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,regleft,maskleft,params_left,regright,maskright,{{{{ret_flags,ret}},tp}}} ->
-    update generate_expr_code(false,ctx,{},params_left,args) => ctx,args_code
+    update ctx_update_get_callctr(ctx,max(length(params_left),1)) => ctx,callctr
+    update generate_expr_code(callctr,ctx,{},{},params_left,args) => ctx,args_code
     match ctx_get_reg_count(ctx)+1 => spinc
     match get_scalar_type_size(tp) => sz
     update ctx_newreg(ctx,1<<sz) => ctx,newreg ->
     ctx,{*args_code,
-        {ctx_fnr(ctx),OpCall,0,BindLabel,fn_id,0,spinc},
+        {ctx_fnr(ctx),OpCall,0,BindLabel,fn_id,0,spinc,0,callctr},
         {ctx_fnr(ctx),OpAddStack,0,0,0,0,-spinc},
-        {ctx_fnr(ctx),OpMove+sz,0,BindReg,newreg,ret_flags,ret},
+        {ctx_fnr(ctx),if_not_zero(callctr,OpExtract,OpMove)+sz,0,BindReg,newreg,ret_flags,ret,0,callctr},
         },
     false,tp,BindReg,newreg;
 
-binop(Plus) -> true,24;
-binop(Minus) -> true,25;
-binop(Star) -> true,26;
-binop(Divide) -> true,27;
-binop(Modulus) -> true,28;
+const OpPlus=24;
+const OpMinus=25;
+const OpTimes=26;
+const OpDiv=27;
+const OpMod=28;
+
+binop(Plus) -> true,OpPlus;
+binop(Minus) -> true,OpMinus;
+binop(Star) -> true,OpTimes;
+binop(Divide) -> true,OpDiv;
+binop(Modulus) -> true,OpMod;
 binop(_) -> false,0;
 
 generate_expr_code_infix(ctx,op,{{code1,bp1,tp,src_flag1,src1},{code2,bp2,tp,src_flag2,src2}}) match binop(op) => true,machine_op ->
@@ -622,8 +654,8 @@ generate_expr_code_aux_map(ctx,sofar,{expr,*rest}) ->
     update generate_expr_code_aux(ctx,expr) => ctx,code,bound_param,tp,src_flag,src ->
     generate_expr_code_aux_map(ctx,{*sofar,{code,bound_param,tp,src_flag,src}},rest);
 
-convert_to_binary(sofar,{}) -> sofar;
-convert_to_binary(sofar,{{fninfo,code},*rest}) -> convert_to_binary({*sofar,*convert_to_binary_aux({},code)},rest);
+convert_to_binary(table,sofar,{}) -> sofar;
+convert_to_binary(table,sofar,{{fnid,code},*rest}) -> convert_to_binary(table,{*sofar,*convert_to_binary_aux({},code)},rest);
 
 convert_to_binary_aux(sofar,{}) -> sofar;
 convert_to_binary_aux(sofar,{instr,*rest}) -> convert_to_binary_aux({*sofar,*emit_instruction(instr)},rest);
@@ -633,6 +665,108 @@ emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst}) -> emit_instruction({fn_id
 emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1}) -> emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1,-1,-1});
 emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1,flags_src2,src2}) ->
     {op,tp,*emitb(2,{},fn_id),rule_id&255,flags_dst&255,flags_src1&255,flags_src2&255,*emitb(4,{},dst),*emitb(4,{},-1),*emitb(8,{},src1),*emitb(8,{},src2)};
+emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1,flags_src2,src2,lbl2}) ->
+    {op,tp,*emitb(2,{},fn_id),rule_id&255,flags_dst&255,flags_src1&255,flags_src2&255,*emitb(4,{},dst),*emitb(4,{},lbl2),*emitb(8,{},src1),*emitb(8,{},src2)};
 
 emitb(0,sofar,_) -> sofar;
 emitb(n,sofar,v) -> emitb(n-1,{*sofar,v&255},v>>8);
+
+///////////////////////////////////////////////////////////
+// LLVM
+///////////////////////////////////////////////////////////
+
+minify_table(sofar,{}) -> sofar;
+minify_table(sofar,{{name,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right},*rest}) -> minify_table({*sofar,{name,min(length(type_left),8)}},rest);
+
+llvm_boilerplate() -> ";File generated by ReWrite compiler 0.0.6. Please do not alter.\n%R8=type{i64,i64,i64,i64,i64,i64,i64,i64}\ndeclare x86_regcallcc void @__rw.error(ptr, i32) noreturn\n";
+
+convert_to_llvm(target,table,sofar,{}) -> {*llvm_boilerplate(),*sofar};
+convert_to_llvm(target,table,sofar,{{fnid,code},*rest}) -> convert_to_llvm(target,table,{*sofar,*convert_to_llvm_fn(target,table,fnid,code)},rest);
+
+convert_to_llvm_fn(target,table,fnid,code) ->
+    match nth(fnid,table) => {name,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right} ->
+    {'\ndefine x86_regcallcc %R8 @__rw',*name,'(i64 %s0,i64 %s1,i64 %s2,i64 %s3,i64 %s4,i64 %s5,i64 %s6,i64 %s7, ptr %A) {\nentry:\n',
+    *llvm_write_alloca(0,min(max(length(type_left),length(type_right)),8),{}),
+    *llvm_write_store_param(0,min(length(type_left),8),{}),
+    '\tbr label %L',*int_to_string36(fnid),'\n',
+    *llvm_emit_instructions(minify_table({},table),{},code),
+    'exit:\n',
+    *llvm_build_epilog1(0,min(length(type_right),8),{}),
+    *llvm_build_epilog2(0,min(length(type_right),8),{}),
+    *llvm_ret(min(length(type_right),8)),
+    '}\n'};
+
+llvm_write_alloca(n,n,sofar) -> sofar;
+llvm_write_alloca(i,n,sofar) -> llvm_write_alloca(i+1,n,{*sofar,'\t%x','0'+i,'=alloca i64\n'});
+
+llvm_write_store_param(n,n,sofar) -> sofar;
+llvm_write_store_param(i,n,sofar) -> llvm_write_store_param(i+1,n,{*sofar,'\tstore i64 %s','0'+i,',ptr %x','0'+i,'\n'});
+
+llvm_build_epilog1(n,n,sofar) -> sofar;
+llvm_build_epilog1(i,n,sofar) -> llvm_build_epilog1(i+1,n,{*sofar,'\t%p','0'+i,'=load i64,ptr %x','0'+i,'\n'});
+
+llvm_build_epilog2(n,n,sofar) -> sofar;
+llvm_build_epilog2(0,n,sofar) -> llvm_build_epilog2(1,n,{*sofar,'\t%m0=insertvalue %R8 undef,i64 %p0,0\n'});
+llvm_build_epilog2(i,n,sofar) -> llvm_build_epilog2(i+1,n,{*sofar,'\t%m','0'+i,'=insertvalue %R8 %m','0'+i-1,',i64 %p','0'+i,',','0'+i,'\n'});
+
+llvm_ret(0) -> {'\tret %R8 undef\n'};
+llvm_ret(n) -> {'\tret %R8 %m','0'+n-1,'\n'};
+
+llvm_emit_instructions(table,sofar,{}) -> sofar;
+llvm_emit_instructions(table,sofar,{instr,*rest}) -> llvm_emit_instructions(table,{*sofar,*add_newline(llvm_emit_instruction(table,instr))},rest);
+
+add_newline("") -> "";
+add_newline(str) -> {*str,'\n'};
+
+llvm_emit_instruction(_,{_,_,OpLabel,_,_,dst}) ->{'L',*int_to_string36(dst),':'};
+llvm_emit_instruction(_,{_,_,OpRet,_}) -> "\tbr label %exit";
+llvm_emit_instruction(_,{_,_,OpAddStack,_,_,_,_,_}) -> "";
+llvm_emit_instruction(_,{_,_,op,_,BindReg,dst,flag_src,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\t%t',*int_to_string36(dst),'=load ',*intsize(op-OpMove),',',*llvm_emit_arg(flag_src,src)};
+llvm_emit_instruction(_,{_,_,op,_,BindArgRet,dst,flag_src,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\tstore ',*intsize(op-OpMove),' ',*llvm_emit_arg(flag_src,src),',ptr %x','0'+dst};
+llvm_emit_instruction(_,{_,_,op,_,BindArgRet,dst,flag_src,src,_,off}) when op>=OpInsert when op<OpInsert+5 ->
+    {'\tstore ',*intsize(op-OpInsert),' ',*llvm_emit_arg(flag_src,src),',ptr %x','0'+dst,'\n\t%a',*int_to_string36(dst+off),'=load ',*intsize(op-OpInsert),',ptr %x','0'+dst};
+llvm_emit_instruction(_,{_,_,op,_,BindReg,dst,BindArgRet,src,_,off}) when op>=OpExtract when op<OpExtract+5 -> {'\t',*llvm_emit_arg(BindReg,dst),'=extractvalue %R8 %z',*int_to_string36(off),',',*int_to_string(src)};
+llvm_emit_instruction(_,{_,_,op,_,_,lbl,flag_src,src,flag_src2,src2,lbl2}) when op>=OpCompareNotEqualBranch when op<OpCompareNotEqualBranch+5 -> match int_to_string36(lbl2) => id ->
+    {'\t%c',*id,'=icmp ne ',*intsize(op-OpCompareNotEqualBranch),' ',*llvm_emit_arg(flag_src,src),',',*llvm_emit_arg(flag_src2,src2),'\n\tbr i1 %c',*id,',label %L',*int_to_string36(lbl),',label %L',*id};
+llvm_emit_instruction(_,{_,_,op,tp,BindReg,dst,flag_src,src,flag_src2,src2}) when op>=24 when op<32 -> {'\t',*llvm_emit_arg(BindReg,dst),'=',*llvm_binop(op,tp),' ',*llvm_emit_arg(flag_src,src),',',*llvm_emit_arg(flag_src2,src2)};
+llvm_emit_instruction(table,{_,_,OpCall,_,_,label,_,_,_,off}) -> match nth(label,table) => {name,arity} ->
+    {'\t%z',*int_to_string36(off),'=call x86_regcallcc %R8 @__rw',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)'};
+llvm_emit_instruction(_,{_,_,op,*_}) -> {'\tunknown:',*int_to_string(op)};
+
+output_lbls(sofar,n,n) -> sofar;
+output_lbls(sofar,i,n) -> output_lbls({*sofar,'i64 %a','0'+i,','},i+1,n);
+
+output_undef(sofar,n,n) -> sofar;
+output_undef(sofar,i,n) -> output_undef({*sofar,'i64 undef,'},i+1,n);
+
+llvm_emit_arg(BindArgRet,src) -> {'ptr %x','0'+src};
+llvm_emit_arg(BindReg,src) -> {'%t',*int_to_string36(src)};
+llvm_emit_arg(BindImm,src) -> int_to_string(src);
+
+llvm_binop(OpPlus,tp) -> {'add ',*llvm_tp(tp)};
+llvm_binop(OpMinus,tp) -> {'sub ',*llvm_tp(tp)};
+llvm_binop(OpTimes,tp) -> {'mul ',*llvm_tp(tp)};
+llvm_binop(OpDiv,tp) when is_unsigned(tp) -> {'udiv ',*llvm_tp(tp)};
+llvm_binop(OpDiv,tp) -> {'sdiv ',*llvm_tp(tp)};
+llvm_binop(OpMod,tp) when is_unsigned(tp) -> {'urem ',*llvm_tp(tp)};
+llvm_binop(OpMod,tp) -> {'srem ',*llvm_tp(tp)};
+
+is_unsigned(TypeU8) -> true;
+is_unsigned(TypeU16) -> true;
+is_unsigned(TypeU32) -> true;
+is_unsigned(TypeU64) -> true;
+is_unsigned(_) -> false;
+
+llvm_tp(TypeI8) -> "i8";
+llvm_tp(TypeU8) -> "i8";
+llvm_tp(TypeI16) -> "i16";
+llvm_tp(TypeU16) -> "i16";
+llvm_tp(TypeI32) -> "i32";
+llvm_tp(TypeU32) -> "i32";
+llvm_tp(TypeI64) -> "i64";
+llvm_tp(TypeU64) -> "i64";
+
+intsize(0) -> "i8";
+intsize(1) -> "i16";
+intsize(2) -> "i32";
+intsize(3) -> "i64";

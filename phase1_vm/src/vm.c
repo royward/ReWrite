@@ -26,6 +26,9 @@ int program_link(Program* program) {
         Operation* operation=&program->code[i];
         if(operation->op>=OP_MIN_BRANCH) {
             operation->dst=labels[operation->dst];
+            if(operation->label2!=(uint32_t)(-1)) {
+                operation->label2=labels[operation->label2];
+            }
         }
     }
     program->labels=labels;
@@ -99,6 +102,8 @@ void execution_unload(ExecutionState* exe) {
 #define OP_TIMES 0x1A
 #define OP_DIVIDE 0x1B
 #define OP_MODULUS 0x1C
+#define OP_INSERT 0x20
+#define OP_EXTRACT 0x30
 #define OP_CMP_NE_BRANCH 0xF0
 // Next two still TODO
 #define OP_CMP_LT_BRANCH 0xF6
@@ -160,7 +165,29 @@ void program_display_label(Program* program, FILE* out, Operation* operation) {
             break;
         }
     }
-    fprintf(out,"%d @line %d",label,operation->dst);
+    fprintf(out,"%d (line %d)",label,operation->dst);
+}
+
+void program_display_label_both(Program* program, FILE* out, Operation* operation) {
+    if(operation->label2==(uint32_t)(-1)) {
+        program_display_label(program,out,operation);
+        return;
+    }
+    uint32_t label=0;
+    for(uint32_t i=0;i<program->label_count;i++) {
+        if(program->labels[i]==operation->dst) {
+            label=i;
+            break;
+        }
+    }
+    uint32_t label2=0;
+    for(uint32_t i=0;i<program->label_count;i++) {
+        if(program->labels[i]==operation->label2) {
+            label2=i;
+            break;
+        }
+    }
+    fprintf(out,"%d/%d (line %d/line %d)",label,label2,operation->dst,operation->label2);
 }
 
 const char* display_type(uint8_t tp) {
@@ -232,6 +259,9 @@ void program_disassemble(Program* program, FILE* out) {
             case OP_CALL: {
                 fprintf(out,"call (sp+=%d) ",(int32_t)operation->src1);
                 program_display_label(program,out,operation);
+                if(operation->src2>0) {
+                    fprintf(out," (o=%d)",(uint32_t)operation->src2);
+                }
             } break;
             case OP_GOTO: {
                 fprintf(out,"goto ");
@@ -251,6 +281,22 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out," = ");
                 display_operand(out,operation->flags_src1,operation->src1);
             } break;
+            case OP_INSERT: case OP_INSERT+1: case OP_INSERT+2: case OP_INSERT+3: case OP_INSERT+4: {
+                uint32_t sz=1<<(op&7);
+                fprintf(out,"insert.%d ",sz);
+                display_operand(out,operation->flags_dst,operation->dst);
+                fprintf(out," = ");
+                display_operand(out,operation->flags_src1,operation->src1);
+                fprintf(out," (o=%d)",(uint32_t)operation->src2);
+            } break;
+            case OP_EXTRACT: case OP_EXTRACT+1: case OP_EXTRACT+2: case OP_EXTRACT+3: case OP_EXTRACT+4: {
+                uint32_t sz=1<<(op&7);
+                fprintf(out,"extract.%d ",sz);
+                display_operand(out,operation->flags_dst,operation->dst);
+                fprintf(out," = ");
+                display_operand(out,operation->flags_src1,operation->src1);
+                fprintf(out," (o=%d)",(uint32_t)operation->src2);
+            } break;
             case OP_CMP_NE_BRANCH: case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
                 uint32_t sz=1<<(op&7);
                 fprintf(out,"test.%d ",sz);
@@ -258,7 +304,7 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out," != ");
                 display_operand(out,operation->flags_src2,operation->src2);
                 fprintf(out," goto ");
-                program_display_label(program,out,operation);
+                program_display_label_both(program,out,operation);
             } break;
             case OP_CMP_EQ_BRANCH: case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
                 uint32_t sz=1<<(op&7);
@@ -267,7 +313,7 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out," == ");
                 display_operand(out,operation->flags_src2,operation->src2);
                 fprintf(out," goto ");
-                program_display_label(program,out,operation);
+                program_display_label_both(program,out,operation);
             } break;
             case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: {
                 fprintf(out,"let.%s ",display_type(operation->type));
@@ -377,7 +423,9 @@ int program_execute(Program* program, ExecutionState* exe, uint32_t in_pc) {
             case OP_ADD_STACK: {
                  sp+=(int32_t)operation->src1;
             } break;
-              case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
+              case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4:
+              case OP_INSERT: case OP_INSERT+1: case OP_INSERT+2: case OP_INSERT+3: case OP_INSERT+4:
+              case OP_EXTRACT: case OP_EXTRACT+1: case OP_EXTRACT+2: case OP_EXTRACT+3: case OP_EXTRACT+4: {
                 uint32_t sz = 1 << (op & 7);
                 uint64_t val = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 operand_store(exe, operation, val, sz, sp);
