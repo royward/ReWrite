@@ -454,6 +454,7 @@ const BindLabel=0;
 const BindReg=1;
 const BindOverflow=2;
 const BindArgRet=3;
+const BindInOut=4;
 
 annotate_type_list_reg(pri,max_reg,reg_count,sofar,{}) -> annotate_type_list_reg(pri+1,max_reg,reg_count,{},sofar);
 annotate_type_list_reg(pri,max_reg,reg_count,sofar,todo) when pri==3 || max_reg==MaxParamRegs -> reg_count,annotate_type_list_stack({},{},{*sofar,*todo});
@@ -510,7 +511,7 @@ compile1(target,outfile,label_id,n,table,sofar,{rules,*rest}) ->
 
 compile1_vm(target,outfile,label_id,table,sofar) ->
     match create_export_wrappers_vm(target,{},{},0,label_id,table) => wrapper_code,wrapperh ->
-    save_c_header(target,outfile,wrapperh),save_binary_file({*outfile,'.rwo'},convert_to_binary(table,{},sofar));
+    save_c_header(target,outfile,wrapperh),save_binary_file({*outfile,'.rwo'},convert_to_binary({},{*sofar,*wrapper_code}));
 
 compile_function(target,reg_count,active,lblnext,label_id,fn_id,table,rule_id,sofar,{},_,_,_,_) -> label_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpErrorNoMoreRules,0}})};
 compile_function(target,reg_count,active,lblnext,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,type_left,type_right) ->
@@ -675,8 +676,8 @@ generate_expr_code_aux_map(ctx,sofar,{expr,*rest}) ->
 // VM
 ///////////////////////////////////////////////////////////
 
-convert_to_binary(table,sofar,{}) -> sofar;
-convert_to_binary(table,sofar,{{fnid,code},*rest}) -> convert_to_binary(table,{*sofar,*convert_to_binary_aux({},code)},rest);
+convert_to_binary(sofar,{}) -> sofar;
+convert_to_binary(sofar,{{fnid,code},*rest}) -> convert_to_binary({*sofar,*convert_to_binary_aux({},code)},rest);
 
 convert_to_binary_aux(sofar,{}) -> sofar;
 convert_to_binary_aux(sofar,{instr,*rest}) -> convert_to_binary_aux({*sofar,*emit_instruction(instr)},rest);
@@ -816,14 +817,31 @@ includes(_) -> "rewrite_base.h";
 create_export_wrappers_vm(target,sofarc,sofarh,_,_,{}) -> sofarc,sofarh;
 create_export_wrappers_vm(target,sofarc,sofarh,fnid,label_id,{{false,*_},*rest}) -> create_export_wrappers_vm(target,sofarc,sofarh,fnid+1,label_id,rest);
 create_export_wrappers_vm(target,sofarc,sofarh,fnid,label_id,{{_,name,_,_,left,_,_,right},*rest}) ->
+    match label_id+1 => new_lbl ->
     create_export_wrappers_vm(target,
-        sofarc,
-        {*sofarh,'\nstatic inline int32_t rw_',*name,'(RWArena* a',*create_export_sigc({},0,"in",left),*create_export_sigc({},0,"*out",right),') {\n',
-        '\tuint64_t inout[',*int_to_string(max(length(left),length(right))),']={',*create_export_vm_in({},0,left),'};\n',
-        '\tint32_t e=RW__vmcall(a,',*int_to_string(label_id+1),',inout);\n\tif(e!=0)return e;\n',
-        *create_export_vm_out({},0,right),
-        '\treturn 0;\n}\n'},
-        fnid+1,label_id+1,rest);
+        {*sofarc,
+        {new_lbl,{{new_lbl,0,OpLabel,0,BindLabel,new_lbl},
+            *create_export_vm_code_in(new_lbl,0,{},left),
+            {new_lbl,0,OpCall,0,BindLabel,fnid,0,2,0,0},
+            {new_lbl,0,OpAddStack,0,0,0,0,-2},
+            *create_export_vm_code_out(new_lbl,0,{},right),
+            {new_lbl,0,OpRet,0}}}},
+        {*sofarh,'\nstatic inline int32_t rw_',*name,'(Program *p,RWArena* a',*create_export_sigc({},0,"in",left),*create_export_sigc({},0,"*out",right),') {\n',
+            '\tuint64_t inout[',*int_to_string(max(length(left),length(right))),']={',*create_export_vm_in({},0,left),'};\n',
+            '\tint32_t e=RW__vmcall(p,a,',*int_to_string(new_lbl),',inout);\n\tif(e!=0)return e;\n',
+            *create_export_vm_out({},0,right),
+            '\treturn 0;\n}\n'},
+        fnid+1,new_lbl,rest);
+
+create_export_vm_code_in(_,_,sofar,{}) -> sofar;
+create_export_vm_code_in(new_lbl,n,sofar,{{regs,tp},*rest}) -> create_export_vm_code_in(new_lbl,n+1,{*sofar,*create_export_param(new_lbl,n,tp,regs)},rest);
+
+create_export_vm_code_out(_,_,sofar,{}) -> sofar;
+create_export_vm_code_out(new_lbl,n,sofar,{{regs,tp},*rest}) -> create_export_vm_code_out(new_lbl,n+1,{*sofar,*create_export_ret(new_lbl,n,tp,regs)},rest);
+
+create_export_param(new_lbl,n,tp,{{flag,dst}}) -> {{new_lbl,0,OpMove+get_scalar_type_size(tp),0,flag,dst,BindInOut,n}};
+
+create_export_ret(new_lbl,n,tp,{{flag,dst}}) -> {{new_lbl,0,OpMove+get_scalar_type_size(tp),0,BindInOut,n,flag,dst}};
 
 create_export_sigc(sofar,_,_,{}) -> sofar;
 create_export_sigc(sofar,n,fill,{{_,tp},*rest}) -> create_export_sigc({*sofar,',',*c_type(tp),' ',*fill,*int_to_string36(n)},n+1,fill,rest);

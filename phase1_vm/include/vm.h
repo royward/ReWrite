@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <inttypes.h>
+#include <stdlib.h>
 
 #define ARGREG_NO 8
 
@@ -39,12 +41,13 @@ struct ExecutionState {
 };
 
 typedef struct Program Program;
-typedef struct ExecutionState ExecutionState;
+typedef struct ExecutionState RWArena;
 
 int program_load(Program* program, const char* filename);
 void program_unload(Program* program);
 void program_disassemble(Program* program, FILE* out);
-int program_execute(Program* program, ExecutionState* exe, uint32_t pc);
-int execution_init(ExecutionState* exe, Program* p);
-void execution_unload(ExecutionState* exe);
+int RW__vmcall(Program* p, RWArena* a, uint32_t label, uint64_t* inout);
+//int program_execute(Program* program, ExecutionState* exe, uint32_t pc);
+int execution_init(RWArena* exe, Program* p);
+void execution_unload(RWArena* exe);
 

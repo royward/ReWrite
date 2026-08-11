@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
     ExecutionState exe;
     execution_init(&exe,&p);
     exe.argret[0]=10;
-    int ret_code=program_execute(&p,&exe,0);
+    //int ret_code=program_execute(&p,&exe,0);
     if(!ret_code) {
         printf("Success %" PRId64 "\n",exe.argret[0]);
     } else {
