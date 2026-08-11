@@ -102,8 +102,8 @@ void execution_unload(ExecutionState* exe) {
 #define OP_TIMES 0x1A
 #define OP_DIVIDE 0x1B
 #define OP_MODULUS 0x1C
-#define OP_INSERT 0x20
-#define OP_EXTRACT 0x30
+#define OP_INSERT_LL 0x20
+#define OP_EXTRACT_LL 0x30
 #define OP_CMP_NE_BRANCH 0xF0
 // Next two still TODO
 #define OP_CMP_LT_BRANCH 0xF6
@@ -130,6 +130,7 @@ void execution_unload(ExecutionState* exe) {
 #define BIND_REG 1
 #define BIND_OVERFLOW 2
 #define BIND_ARGRET 3
+#define BIND_INOUT 4
 
 #define FLAG_LIFE_START 0x10
 #define FLAG_LIFE_END 0x20
@@ -153,6 +154,9 @@ void display_operand(FILE* out, uint8_t flag, int64_t val) {
         } break;
         case BIND_OVERFLOW: {
             fprintf(out,"ov+%" PRId64,val);
+        } break;
+        case BIND_INOUT: {
+            fprintf(out,"(r0+%" PRId64 ")",val);
         } break;
     }
 }
@@ -281,7 +285,7 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out," = ");
                 display_operand(out,operation->flags_src1,operation->src1);
             } break;
-            case OP_INSERT: case OP_INSERT+1: case OP_INSERT+2: case OP_INSERT+3: case OP_INSERT+4: {
+            case OP_INSERT_LL: case OP_INSERT_LL+1: case OP_INSERT_LL+2: case OP_INSERT_LL+3: case OP_INSERT_LL+4: {
                 uint32_t sz=1<<(op&7);
                 fprintf(out,"insert.%d ",sz);
                 display_operand(out,operation->flags_dst,operation->dst);
@@ -289,7 +293,7 @@ void program_disassemble(Program* program, FILE* out) {
                 display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," (o=%d)",(uint32_t)operation->src2);
             } break;
-            case OP_EXTRACT: case OP_EXTRACT+1: case OP_EXTRACT+2: case OP_EXTRACT+3: case OP_EXTRACT+4: {
+            case OP_EXTRACT_LL: case OP_EXTRACT_LL+1: case OP_EXTRACT_LL+2: case OP_EXTRACT_LL+3: case OP_EXTRACT_LL+4: {
                 uint32_t sz=1<<(op&7);
                 fprintf(out,"extract.%d ",sz);
                 display_operand(out,operation->flags_dst,operation->dst);
@@ -343,6 +347,10 @@ void operand_store(ExecutionState* exe, Operation* operation, uint64_t value, ui
             value&=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
             exe->argret[operation->dst]=value;
         } break;
+        case BIND_INOUT: {
+            value&=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
+            ((uint64_t*)exe->registers[0])[operation->dst]=value;
+        } break;
         case BIND_OVERFLOW: {
             uint8_t* addr=&exe->overflow[operation->dst];
             switch(sz) { // alignment is guaranteed by the compiler
@@ -371,6 +379,9 @@ uint64_t operand_load(ExecutionState* exe, uint32_t sz, uint32_t flags_src, uint
         } break;
         case BIND_ARGRET: {
             return exe->argret[src]&mask;
+        } break;
+        case BIND_INOUT: {
+            return ((uint64_t*)exe->registers[0])[src]&mask;
         } break;
         case BIND_OVERFLOW: {
             uint8_t* addr=&exe->overflow[src];
@@ -424,8 +435,8 @@ int program_execute(Program* program, ExecutionState* exe, uint32_t in_pc) {
                  sp+=(int32_t)operation->src1;
             } break;
               case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4:
-              case OP_INSERT: case OP_INSERT+1: case OP_INSERT+2: case OP_INSERT+3: case OP_INSERT+4:
-              case OP_EXTRACT: case OP_EXTRACT+1: case OP_EXTRACT+2: case OP_EXTRACT+3: case OP_EXTRACT+4: {
+              case OP_INSERT_LL: case OP_INSERT_LL+1: case OP_INSERT_LL+2: case OP_INSERT_LL+3: case OP_INSERT_LL+4:
+              case OP_EXTRACT_LL: case OP_EXTRACT_LL+1: case OP_EXTRACT_LL+2: case OP_EXTRACT_LL+3: case OP_EXTRACT_LL+4: {
                 uint32_t sz = 1 << (op & 7);
                 uint64_t val = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 operand_store(exe, operation, val, sz, sp);

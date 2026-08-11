@@ -24,19 +24,22 @@ typedef struct {
 // 32
 } Operation;
 
-typedef struct {
+struct Program {
     Operation* code;
     uint32_t count;
     uint32_t label_count;
     uint32_t* labels;
-} Program;
+};
 
-typedef struct {
+struct ExecutionState {
     uint32_t sp;
     uint64_t* registers;
     uint8_t* overflow;
     uint64_t argret[ARGREG_NO];
-} ExecutionState;
+};
+
+typedef struct Program Program;
+typedef struct ExecutionState ExecutionState;
 
 int program_load(Program* program, const char* filename);
 void program_unload(Program* program);

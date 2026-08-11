@@ -51,13 +51,17 @@ const Type=47;
 const TypeFn=48;
 const Update=49;
 const DoubleArrow=50;
+const Export=51;
 
 const TargetVM=1;
 const TargetX86_64=2;
 const TargetAarch64=3;
 const TargetVMLL=4;
 
-compile(infile,outfile,target) -> compile_aux(convert_target_string(target),outfile,parse(lex(load_text_file_lines(infile))));
+compile(infile,outfile,targetstring) ->
+    match convert_target_string(targetstring) => target
+    match parse(lex(load_text_file_lines(infile))) => rules,fnnames ->
+    compile_aux(target,outfile,rules,fnnames);
 
 convert_target_string("vm") -> TargetVM;
 convert_target_string("vmll") -> TargetVMLL;
@@ -110,6 +114,7 @@ lex_check_spec_identifier("match") -> Match;
 lex_check_spec_identifier("update") -> Update;
 lex_check_spec_identifier("when") -> When;
 lex_check_spec_identifier("type") -> Type;
+lex_check_spec_identifier("export") -> Export;
 lex_check_spec_identifier("_") -> Wildcard;
 lex_check_spec_identifier(x) -> Identifier;
 
@@ -219,7 +224,7 @@ int_to_string(n) -> {*int_to_string(n/10),*int_to_string(n%10)};
 
 parse(s) -> parse_aux0({},{},{},s);
 
-parse_aux0(rules,fnnames,consts,{}) -> rules,fnnames,consts;
+parse_aux0(rules,fnnames,_,{}) -> rules,fnnames;
 parse_aux0(rules,fnnames,consts,{clause,*rest}) -> parse_aux0(parse_aux(rules,fnnames,consts,clause),rest);
 
 // get and add for a straight list of (string,ref)
@@ -260,7 +265,13 @@ parse_aux(rules,fnnames,consts,{{ _,_,TypeFn,_},{_,_,Identifier,name},{_,_,LPare
     update parse_types({},RParen,rest) => types_lhs,rest
     update rest => {{_,_,Arrow,_},*rest}
     update parse_types({},Semicolon,rest) => types_rhs,rest
-    update get_add_symbol_table(0,{},fnnames,name,{types_lhs,types_rhs}) => fnnames,_ ->
+    update get_add_symbol_table(0,{},fnnames,name,{false,types_lhs,types_rhs}) => fnnames,_ ->
+    parse_aux(rules,fnnames,consts,rest);
+parse_aux(rules,fnnames,consts,{{ _,_,TypeFn,_},{_,_,Export,_},{_,_,Identifier,name},{_,_,LParen,_},*rest}) ->
+    update parse_types({},RParen,rest) => types_lhs,rest
+    update rest => {{_,_,Arrow,_},*rest}
+    update parse_types({},Semicolon,rest) => types_rhs,rest
+    update get_add_symbol_table(0,{},fnnames,name,{true,types_lhs,types_rhs}) => fnnames,_ ->
     parse_aux(rules,fnnames,consts,rest);
 parse_aux(rules,fnnames,consts,{{_,_,ConstToken,_},{_,_,Identifier,name},{_,_,Equal,_},{_,_,Integer,val},{_,_,Semicolon,_},*rest}) ->
     parse_aux(rules,fnnames,add_symbol_table({},consts,name,string_to_int_pos(val,0)),rest);
@@ -335,13 +346,13 @@ parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,tok,_},*rest}) match prefix_
     parse_exprs1(consts,fnnames,bindings,sofar,{tok,arg},pri,rest);
 parse_exprs(consts,fnnames,bindings,sofar,_,rest) -> fnnames,bindings,sofar,rest;
 
-parse_exprs1(consts,fnnames,bindings,sofar,this,0,{{_,_,Comma,_},*rest}) -> parse_exprs(consts,fnnames,bindings,{*sofar,this},1,rest);
+parse_exprs1(consts,fnnames,bindings,sofar,this,1,{{_,_,Comma,_},*rest}) -> parse_exprs(consts,fnnames,bindings,{*sofar,this},1,rest);
 parse_exprs1(consts,fnnames,bindings,sofar,this,pri,{{r,c,tok,val},*rest}) match infix_binding_power(tok) => p1,p2 when p1>=pri ->
     update parse_exprs(consts,fnnames,bindings,{},p2,rest) => fnnames,bindings,second,rest ->
     parse_exprs1(consts,fnnames,bindings,sofar,{ExprCallInternal,{tok,this,*second}},pri,rest);
 parse_exprs1(consts,fnnames,bindings,sofar,this,_,rest) -> fnnames,bindings,{*sofar,this},rest;
 
-parse_exprs1nothis(consts,fnnames,bindings,sofar,0,{{_,_,Comma,_},*rest}) -> parse_exprs(consts,fnnames,bindings,sofar,1,rest);
+parse_exprs1nothis(consts,fnnames,bindings,sofar,1,{{_,_,Comma,_},*rest}) -> parse_exprs(consts,fnnames,bindings,sofar,1,rest);
 parse_exprs1nothis(consts,fnnames,bindings,sofar,_,rest) -> fnnames,bindings,sofar,rest;
 
 string_to_expr_param_list(sofar,{}) -> sofar;
@@ -422,13 +433,15 @@ bitmask_or(sofar,{b1,*rest1},{b2,*rest2}) -> bitmask_or({*sofar,b1|b2},rest1,res
 length({}) -> 0;
 length({_,*rest}) -> length(rest)+1;
 
-compile_aux(target,outfile,rules,table,_) -> compile1(target,outfile,length(table)-1,0,annotate_table({},table),{},rules);
+compile_aux(target,outfile,rules,table) ->
+    match annotate_table({},table) => annotated_table ->
+    compile1(target,outfile,length(table)-1,0,annotated_table,{},rules);
 
 const MaxParamRegs=4;
 
 annotate_table(sofar,{}) -> sofar;
-annotate_table(sofar,{{name,{types_left,types_right}},*rest}) ->
-    annotate_table({*sofar,{name,annotate_type_list_reg(0,0,{},{},create_start_annotated_list({},types_left)),
+annotate_table(sofar,{{name,{export,types_left,types_right}},*rest}) ->
+    annotate_table({*sofar,{export,name,annotate_type_list_reg(0,0,{},{},create_start_annotated_list({},types_left)),
                                   annotate_type_list_reg(0,0,{},{},create_start_annotated_list({},types_right))}},rest);
 
 create_start_annotated_list(sofar,{}) -> sofar;
@@ -487,13 +500,17 @@ const OpCompareEqualBranch=248;
 const OpGoto=254;
 const OpCall=255;
 
-compile1(TargetVM,outfile,label_id,_,table,sofar,{}) -> save_binary_file({*outfile,'.rwo'},convert_to_binary(table,{},sofar));
-compile1(TargetVMLL,outfile,label_id,_,table,sofar,{}) -> save_binary_file({*outfile,'.rwo'},convert_to_binary(table,{},sofar));
+compile1(TargetVM,outfile,label_id,_,table,sofar,{}) -> compile1_vm(TargetVM,outfile,label_id,table,sofar);
+compile1(TargetVMLL,outfile,label_id,_,table,sofar,{}) -> compile1_vm(TargetVMLL,outfile,label_id,table,sofar);
 compile1(target,outfile,label_id,_,table,sofar,{}) -> save_text_file({*outfile,'.ll'},convert_to_llvm(target,minify_table({},table),table,{},sofar));
 compile1(target,outfile,label_id,n,table,sofar,{rules,*rest}) ->
-    match nth(n,table) => {_,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right}
+    match nth(n,table) => {_,_,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right}
     update compile_function(target,0,true,0,label_id,n,table,0,{{n,0,OpLabel,0,BindLabel,n}},rules,0,bitmask_or({},bitmask1,bitmask2),type_left,type_right) => label_id,code ->
     compile1(target,outfile,label_id,n+1,table,{*sofar,{n,code}},rest);
+
+compile1_vm(target,outfile,label_id,table,sofar) ->
+    match create_export_wrappers_vm(target,{},{},0,label_id,table) => wrapper_code,wrapperh ->
+    save_c_header(target,outfile,wrapperh),save_binary_file({*outfile,'.rwo'},convert_to_binary(table,{},sofar));
 
 compile_function(target,reg_count,active,lblnext,label_id,fn_id,table,rule_id,sofar,{},_,_,_,_) -> label_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpErrorNoMoreRules,0}})};
 compile_function(target,reg_count,active,lblnext,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,type_left,type_right) ->
@@ -618,7 +635,7 @@ generate_expr_code_aux(ctx,{Const,{tp,val}}) -> ctx,{},true,tp,BindImm,val;
 //generate_expr_code_aux(ctx,{ExprId,{id}}) -> match nth(id,ctx_bindings(ctx)) => {refs,tp,{src_flag,src},_} -> {},tp,src_flag,src;
 generate_expr_code_aux(ctx,{ExprId,{id}}) -> update use_binding(ctx,id) => ctx,tp,src_flag,src -> ctx,{},true,tp,src_flag,src;
 generate_expr_code_aux(ctx,{ExprCallInternal,{op,*args}}) -> update generate_expr_code_aux_map(ctx,{},args) => ctx,args_code -> generate_expr_code_infix(ctx,op,args_code);
-generate_expr_code_aux(ctx,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,regleft,maskleft,params_left,regright,maskright,{{{{ret_flags,ret}},tp}}} ->
+generate_expr_code_aux(ctx,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,_,regleft,maskleft,params_left,regright,maskright,{{{{ret_flags,ret}},tp}}} ->
     update ctx_update_get_callctr(ctx,max(length(params_left),1)) => ctx,callctr
     update generate_expr_code(callctr,ctx,{},{},params_left,args) => ctx,args_code
     match ctx_get_reg_count(ctx)+1 => spinc
@@ -654,6 +671,10 @@ generate_expr_code_aux_map(ctx,sofar,{expr,*rest}) ->
     update generate_expr_code_aux(ctx,expr) => ctx,code,bound_param,tp,src_flag,src ->
     generate_expr_code_aux_map(ctx,{*sofar,{code,bound_param,tp,src_flag,src}},rest);
 
+///////////////////////////////////////////////////////////
+// VM
+///////////////////////////////////////////////////////////
+
 convert_to_binary(table,sofar,{}) -> sofar;
 convert_to_binary(table,sofar,{{fnid,code},*rest}) -> convert_to_binary(table,{*sofar,*convert_to_binary_aux({},code)},rest);
 
@@ -678,14 +699,14 @@ emitb(n,sofar,v) -> emitb(n-1,{*sofar,v&255},v>>8);
 minify_table(sofar,{}) -> sofar;
 minify_table(sofar,{{name,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right},*rest}) -> minify_table({*sofar,{name,min(length(type_left),8)}},rest);
 
-llvm_boilerplate() -> ";File generated by ReWrite compiler 0.0.6. Please do not alter.\n%R8=type{i64,i64,i64,i64,i64,i64,i64,i64}\ndeclare x86_regcallcc void @__rw.error(ptr, i32) noreturn\n";
+llvm_boilerplate() -> ";File generated by ReWrite compiler 0.0.6. Please do not alter.\n%R8=type{i64,i64,i64,i64,i64,i64,i64,i64}\ndeclare x86_regcallcc void @__rw..error(ptr, i32) noreturn\n";
 
 convert_to_llvm(target,small_table,table,sofar,{}) -> {*llvm_boilerplate(),*sofar};
 convert_to_llvm(target,small_table,table,sofar,{{fnid,code},*rest}) -> convert_to_llvm(target,small_table,table,{*sofar,*convert_to_llvm_fn(target,small_table,table,fnid,code)},rest);
 
 convert_to_llvm_fn(target,small_table,table,fnid,code) ->
     match nth(fnid,table) => {name,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right} ->
-    {'\ndefine x86_regcallcc %R8 @__rw',*name,'(i64 %s0,i64 %s1,i64 %s2,i64 %s3,i64 %s4,i64 %s5,i64 %s6,i64 %s7, ptr %A) {\nentry:\n',
+    {'\ndefine x86_regcallcc %R8 @__rw.',*name,'(i64 %s0,i64 %s1,i64 %s2,i64 %s3,i64 %s4,i64 %s5,i64 %s6,i64 %s7, ptr %A) {\nentry:\n',
     *llvm_write_alloca(0,min(max(length(type_left),length(type_right)),8),{}),
     *llvm_write_store_param(0,min(length(type_left),8),{}),
     '\tbr label %L',*int_to_string36(fnid),'\n',
@@ -730,7 +751,7 @@ llvm_emit_instruction(_,{_,_,op,_,_,lbl,flag_src,src,flag_src2,src2,lbl2}) when 
     {'\t%c',*id,'=icmp ne ',*intsize(op-OpCompareNotEqualBranch),' ',*llvm_emit_arg(flag_src,src),',',*llvm_emit_arg(flag_src2,src2),'\n\tbr i1 %c',*id,',label %L',*int_to_string36(lbl),',label %L',*id};
 llvm_emit_instruction(_,{_,_,op,tp,BindReg,dst,flag_src,src,flag_src2,src2}) when op>=OpPlus when op<=OpMod -> {'\t',*llvm_emit_arg(BindReg,dst),'=',*llvm_binop(op,tp),' ',*llvm_emit_arg(flag_src,src),',',*llvm_emit_arg(flag_src2,src2)};
 llvm_emit_instruction(table,{_,_,OpCall,_,_,label,_,_,_,off}) -> match nth(label,table) => {name,arity} ->
-    {'\t%z',*int_to_string36(off),'=call x86_regcallcc %R8 @__rw',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)'};
+    {'\t%z',*int_to_string36(off),'=call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)'};
 llvm_emit_instruction(_,{_,_,op,*_}) -> {'\tunknown:',*int_to_string(op)};
 
 output_lbls(sofar,n,n) -> sofar;
@@ -770,3 +791,48 @@ intsize(0) -> "i8";
 intsize(1) -> "i16";
 intsize(2) -> "i32";
 intsize(3) -> "i64";
+
+///////////////////////////////////////////////////////////
+// C FFI
+///////////////////////////////////////////////////////////
+
+to_upper(sofar,{}) -> sofar;
+to_upper(sofar,{c,*rest}) -> to_upper({*sofar,to_uppercase(c)},rest);
+
+to_uppercase(c) when c>='a' when c<='z' -> c-32;
+to_uppercase(c) -> c;
+
+save_c_header(target,outfile,content) ->
+    match to_upper({},outfile) => file_upper ->
+    save_text_file({*outfile,'.h'},
+        {'#ifndef RW_',*file_upper,'_H\n#define RW_',*file_upper,'_H\n#include "',*includes(target),'"\n\n#ifdef __cplusplus\nextern "C" {\n#endif\n',
+        *content,
+        '\n#ifdef __cplusplus\n}\n#endif\n\n#endif\n'});
+
+includes(TargetVM) -> "vm.h";
+includes(TargetVMLL) -> "vm.h";
+includes(_) -> "rewrite_base.h";
+
+create_export_wrappers_vm(target,sofarc,sofarh,_,_,{}) -> sofarc,sofarh;
+create_export_wrappers_vm(target,sofarc,sofarh,fnid,label_id,{{false,*_},*rest}) -> create_export_wrappers_vm(target,sofarc,sofarh,fnid+1,label_id,rest);
+create_export_wrappers_vm(target,sofarc,sofarh,fnid,label_id,{{_,name,_,_,left,_,_,right},*rest}) ->
+    create_export_wrappers_vm(target,
+        sofarc,
+        {*sofarh,'\nstatic inline int32_t rw_',*name,'(RWArena* a',*create_export_sigc({},0,"in",left),*create_export_sigc({},0,"*out",right),') {\n',
+        '\tuint64_t inout[',*int_to_string(max(length(left),length(right))),']={',*create_export_vm_in({},0,left),'};\n',
+        '\tint32_t e=RW__vmcall(a,',*int_to_string(label_id+1),',inout);\n\tif(e!=0)return e;\n',
+        *create_export_vm_out({},0,right),
+        '\treturn 0;\n}\n'},
+        fnid+1,label_id+1,rest);
+
+create_export_sigc(sofar,_,_,{}) -> sofar;
+create_export_sigc(sofar,n,fill,{{_,tp},*rest}) -> create_export_sigc({*sofar,',',*c_type(tp),' ',*fill,*int_to_string36(n)},n+1,fill,rest);
+
+c_type(TypeI64) -> "int64_t";
+
+create_export_vm_in(sofar,_,{}) -> sofar;
+create_export_vm_in(sofar,n,{{_,tp},*rest}) -> create_export_vm_in({*sofar,'(uint64_t)in',*int_to_string36(n),','},n+1,rest);
+
+create_export_vm_out(sofar,_,{}) -> sofar;
+create_export_vm_out(sofar,n,{{_,tp},*rest}) ->
+    create_export_vm_out({*sofar,'\t*out',*int_to_string36(n),'=(',*c_type(tp),')inout[',*int_to_string36(n),'];\n'},n+1,rest);

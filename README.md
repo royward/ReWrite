@@ -567,10 +567,12 @@ This is nearly done - the only things left to complete this are any additional l
 
 #### Phase 1: compiling to VM
 
-This stage does not involve adding language features, but writing a ReWrite program that compiles itself to a VM targetted binary. Steps are:
+This stage adds static typing but not other language features, and writing a ReWrite program that compiles itself to a VM targetted binary and LLVM IR code. Steps are:
 
-* write ReWrite -> VM compiler, written in ReWrite itself (self-hosting)
-* write the VM (probably in C - this will be fairly low level)
+* Strong static typing (types checked at compile time)
+* write ReWrite -> VM/LLVM compiler, written in ReWrite itself (self-hosting)
+* write the VM in C
+* Interface from C
 
 This is in progress.
 
@@ -578,8 +580,7 @@ This is in progress.
 
 Once ReWrite can build and run itself, the interpreter is no longer necessary, so other features can be added:
 
-* Interface from C, C++ and Rust
-* Strong static typing (types checked at compile time)
+* Interface from Rust
 * Structs
 * Better code optimization
 * More language features and libraries as useful.
