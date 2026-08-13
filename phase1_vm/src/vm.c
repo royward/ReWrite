@@ -73,8 +73,8 @@ void program_unload(Program* program) {
     free(program->labels);
 }
 
-int execution_init(RWArena* exe, Program* p) {
-    (void)p;
+int rw_instance_init(RWInstance* exe, Program* p) {
+    exe->program = p;
     exe->registers = (uint64_t*)malloc(REGISTERS_SIZE*sizeof(uint64_t));
     exe->overflow = (uint8_t*)malloc(OVERFLOW_SIZE*sizeof(uint8_t));
     if(!exe->registers || !exe->overflow) {
@@ -86,7 +86,7 @@ int execution_init(RWArena* exe, Program* p) {
     return EXIT_SUCCESS;
 }
 
-void execution_unload(RWArena* exe) {
+void rw_instance_unload(RWInstance* exe) {
     free(exe->registers);
     free(exe->overflow);
 }
@@ -333,7 +333,7 @@ void program_disassemble(Program* program, FILE* out) {
     }
 }
 
-void operand_store(RWArena* exe, Operation* operation, uint64_t value, uint32_t sz, uint32_t sp) {
+void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32_t sz, uint32_t sp) {
     switch(operation->flags_dst&0xF) {
         case BIND_IMM: {
             fprintf(stderr,"Fatal error trying to store to an immediate\n");
@@ -368,7 +368,7 @@ void operand_store(RWArena* exe, Operation* operation, uint64_t value, uint32_t 
     }
 }
 
-uint64_t operand_load(RWArena* exe, uint32_t sz, uint32_t flags_src, uint64_t src, uint32_t sp) {
+uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t src, uint32_t sp) {
     uint64_t mask=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
     switch(flags_src&0xF) {
         case BIND_IMM: {
@@ -402,7 +402,8 @@ uint64_t operand_load(RWArena* exe, uint32_t sz, uint32_t flags_src, uint64_t sr
     }
 }
 
-int program_execute(Program* program, RWArena* exe, uint32_t in_lbl) {
+int program_execute(RWInstance* exe, uint32_t in_lbl) {
+    Program* program=exe->program;
     uint32_t sp=0; // make sure we are start, even if it was run before
     uint32_t pc=program->labels[in_lbl];
     while(true) {
@@ -518,7 +519,7 @@ int program_execute(Program* program, RWArena* exe, uint32_t in_lbl) {
     }
 }
 
-int RW__vmcall(Program* p,RWArena* a, uint32_t label, uint64_t* inout) {
+int RW__vmcall(RWInstance* a, uint32_t label, uint64_t* inout) {
     a->registers[0]=(uint64_t)inout;
-    return program_execute(p,a,label);
+    return program_execute(a,label);
 }

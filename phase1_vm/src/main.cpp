@@ -29,25 +29,25 @@ extern "C" {
 #include <cinttypes>
 
 int main(int argc, char** argv) {
-    CLI::App app{"ReWrite Stage 1 interpreter"};
-    std::string filename;
-    //std::string callexpr;
-    app.add_option("file", filename, "Source file to interpret")->required();
-    //app.add_option("call", callexpr, "Expression to evaluate")->required();
-    CLI11_PARSE(app, argc, argv);
-    Program p;
-    program_load(&p,filename.c_str());
-    program_disassemble(&p,stdout);
-    ExecutionState exe;
-    execution_init(&exe,&p);
-    exe.argret[0]=10;
-    //int ret_code=program_execute(&p,&exe,0);
-    if(!ret_code) {
-        printf("Success %" PRId64 "\n",exe.argret[0]);
-    } else {
-        printf("Failure\n");
-    }
-    program_unload(&p);
-    execution_unload(&exe);
+    // CLI::App app{"ReWrite Stage 1 interpreter"};
+    // std::string filename;
+    // //std::string callexpr;
+    // app.add_option("file", filename, "Source file to interpret")->required();
+    // //app.add_option("call", callexpr, "Expression to evaluate")->required();
+    // CLI11_PARSE(app, argc, argv);
+    // Program p;
+    // program_load(&p,filename.c_str());
+    // program_disassemble(&p,stdout);
+    // ExecutionState exe;
+    // execution_init(&exe,&p);
+    // exe.argret[0]=10;
+    // //int ret_code=program_execute(&p,&exe,0);
+    // if(!ret_code) {
+    //     printf("Success %" PRId64 "\n",exe.argret[0]);
+    // } else {
+    //     printf("Failure\n");
+    // }
+    // program_unload(&p);
+    // execution_unload(&exe);
     return EXIT_SUCCESS;
 }

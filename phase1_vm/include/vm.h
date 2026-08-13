@@ -33,21 +33,22 @@ struct Program {
     uint32_t* labels;
 };
 
+typedef struct Program Program;
+
 struct ExecutionState {
     uint32_t sp;
     uint64_t* registers;
     uint8_t* overflow;
+    Program* program;
     uint64_t argret[ARGREG_NO];
 };
 
-typedef struct Program Program;
-typedef struct ExecutionState RWArena;
+typedef struct ExecutionState RWInstance;
 
 int program_load(Program* program, const char* filename);
 void program_unload(Program* program);
 void program_disassemble(Program* program, FILE* out);
-int RW__vmcall(Program* p, RWArena* a, uint32_t label, uint64_t* inout);
-//int program_execute(Program* program, ExecutionState* exe, uint32_t pc);
-int execution_init(RWArena* exe, Program* p);
-void execution_unload(RWArena* exe);
+int RW__vmcall(RWInstance* a, uint32_t label, uint64_t* inout);
+int rw_instance_init(RWInstance* exe, Program* p);
+void rw_instance_unload(RWInstance* exe);
 
