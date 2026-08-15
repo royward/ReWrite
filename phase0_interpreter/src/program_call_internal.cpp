@@ -42,9 +42,9 @@ DataElement compare_op(const char* op_name, const DataElement& a, const DataElem
     }
 }
 
-void check_arg_count(std::string_view function, const std::vector<DataElement>& args, std::size_t count) {
-    if(args.size()!=count) {
-        throw std::runtime_error(std::format("wrong arg count for {}: Found {}, expected {}",function,args.size(),count));
+void check_arg_count(std::string_view function, const VecDataElement& args, std::size_t count) {
+    if(args.data.size()-args.offset!=count) {
+        throw std::runtime_error(std::format("wrong arg count for {}: Found {}, expected {}",function,args.data.size()-args.offset,count));
     }
 }
 
@@ -54,47 +54,51 @@ template<typename Type> void check_type(std::string_view function, const DataEle
     }
 }
 
-void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::vector<DataElement>& sofar) {
+void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& sofar) {
     switch(op) {
         case CountTrailingZeros: {
             check_arg_count("count_trailing_zeros",args,1);
-            check_type<DataInt>("count_trailing_zeros",args[0]);
-            sofar.push_back(DataElement{DataInt{std::countr_zero(static_cast<uint64_t>(std::get<DataInt>(args[0].value).value))}});
+            check_type<DataInt>("count_trailing_zeros",args.data[args.offset]);
+            sofar.data.push_back(DataElement{DataInt{std::countr_zero(static_cast<uint64_t>(std::get<DataInt>(args.data[args.offset].value).value))}});
         } break;
         case CountLeadingZeros: {
             check_arg_count("count_leading_zeros",args,1);
-            check_type<DataInt>("count_leading_zeros",args[0]);
-            sofar.push_back(DataElement{DataInt{std::countl_zero(static_cast<uint64_t>(std::get<DataInt>(args[0].value).value))}});
+            check_type<DataInt>("count_leading_zeros",args.data[args.offset]);
+            sofar.data.push_back(DataElement{DataInt{std::countl_zero(static_cast<uint64_t>(std::get<DataInt>(args.data[args.offset].value).value))}});
         } break;
         case PopCount: {
             check_arg_count("pop_count",args,1);
-            check_type<DataInt>("pop_count",args[0]);
-            sofar.push_back(DataElement{DataInt{std::popcount(static_cast<uint64_t>(std::get<DataInt>(args[0].value).value))}});
+            check_type<DataInt>("pop_count",args.data[args.offset]);
+            sofar.data.push_back(DataElement{DataInt{std::popcount(static_cast<uint64_t>(std::get<DataInt>(args.data[args.offset].value).value))}});
          } break;
         case CharToInt: {
             check_arg_count("char_to_int",args,1);
-            check_type<DataChar>("char_to_int",args[0]);
-            sofar.push_back(DataElement{DataInt{static_cast<int64_t>(std::get<DataChar>(args[0].value).value)}});
+            check_type<DataChar>("char_to_int",args.data[args.offset]);
+            sofar.data.push_back(DataElement{DataInt{static_cast<int64_t>(std::get<DataChar>(args.data[args.offset].value).value)}});
         } break;
         case IntToChar: {
             check_arg_count("int_to_char",args,1);
-            check_type<DataInt>("int_to_char", args[0]);
-            sofar.push_back(DataElement{DataChar{static_cast<char>(std::get<DataInt>(args[0].value).value)}});
+            check_type<DataInt>("int_to_char", args.data[args.offset]);
+            sofar.data.push_back(DataElement{DataChar{static_cast<char>(std::get<DataInt>(args.data[args.offset].value).value)}});
         } break;
         case Print: {
             check_arg_count("print",args,1);
-            check_type<DataList>("print",args[0]);
-            const DataList& content_list = std::get<DataList>(args[0].value);
-            for(const DataElement& e : content_list.value) {
+            check_type<DataList>("print",args.data[args.offset]);
+            const DataContainer& d0 = std::get<DataList>(args.data[args.offset].value).value;
+            const std::vector<DataElement>& x0=DataVector::data_vectors[d0.pool_index].list;
+            for(uint32_t i=d0.offset;i<x0.size();i++) {
+                const DataElement& e=x0[i];
                 check_type<DataChar>("print",e);
                 putchar(std::get<DataChar>(e.value).value);
             }
         } break;
         case PrintLn: {
             check_arg_count("println",args,1);
-            check_type<DataList>("println",args[0]);
-            const DataList& content_list = std::get<DataList>(args[0].value);
-            for(const DataElement& e : content_list.value) {
+            check_type<DataList>("println",args.data[args.offset]);
+            const DataContainer& d0 = std::get<DataList>(args.data[args.offset].value).value;
+            const std::vector<DataElement>& x0=DataVector::data_vectors[d0.pool_index].list;
+            for(uint32_t i=d0.offset;i<x0.size();i++) {
+                const DataElement& e=x0[i];
                 check_type<DataChar>("println",e);
                 putchar(std::get<DataChar>(e.value).value);
             }
@@ -103,27 +107,29 @@ void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::ve
         case PrintLnDebug: {
             std::print("Debug:");
             // prints all args and returns them unchanged - can be inserted anywhere for debugging
-            for(std::size_t i=0;i<args.size();i++) {
+            for(std::size_t i=args.offset;i<args.data.size();i++) {
                 if(i!=0)putchar(',');
-                std::print("{}",args[i].to_string());
-                sofar.push_back(args[i]);
+                std::print("{}",args.data[i].to_string());
+                sofar.data.push_back(args.data[i]);
             }
             putchar('\n');
         } break;
        case PrintLnAny: {
-            for(std::size_t i=0;i<args.size();i++) {
+            for(std::size_t i=args.offset;i<args.data.size();i++) {
                 if(i!=0)putchar(',');
-                std::print("{}",args[i].to_string());
+                std::print("{}",args.data[i].to_string());
             }
             putchar('\n');
         } break;
         case LoadTextFile: {
             check_arg_count("load_text_file",args,1);
             // get filename from char list
-            check_type<DataList>("load_text_file",args[0]);
-            const DataList& filename_list = std::get<DataList>(args[0].value);
+            check_type<DataList>("load_text_file",args.data[args.offset]);
+            const DataContainer& filename_list = std::get<DataList>(args.data[args.offset].value).value;
+            const std::vector<DataElement>& filenamev=DataVector::data_vectors[filename_list.pool_index].list;
             std::string filename;
-            for(const DataElement& e : filename_list.value) {
+            for(uint32_t i=filename_list.offset;i<filenamev.size();i++) {
+                const DataElement& e=filenamev[i];
                 check_type<DataChar>("load_text_file",e);
                 filename += std::get<DataChar>(e.value).value;
             }
@@ -137,15 +143,20 @@ void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::ve
             for(char c : content) {
                 chars.push_back(DataElement{DataChar{c}});
             }
-            sofar.push_back(DataElement{DataList{std::move(chars)}});
+            uint32_t newvec=DataVector::allocate();
+            DataVector::data_vectors[newvec].list=std::move(chars);
+            DataContainer dc(newvec,0);
+            sofar.data.push_back(DataElement{DataList{std::move(dc)}});
         } break;
         case LoadTextFileLines: {
             check_arg_count("load_text_file",args,1);
             // get filename from char list
-            check_type<DataList>("load_text_file",args[0]);
-            const DataList& filename_list = std::get<DataList>(args[0].value);
+            check_type<DataList>("load_text_file",args.data[args.offset]);
+            const DataContainer& filename_list = std::get<DataList>(args.data[args.offset].value).value;
+            const std::vector<DataElement>& filenamev=DataVector::data_vectors[filename_list.pool_index].list;
             std::string filename;
-            for(const DataElement& e : filename_list.value) {
+            for(uint32_t i=filename_list.offset;i<filenamev.size();i++) {
+                const DataElement& e=filenamev[i];
                 check_type<DataChar>("load_text_file",e);
                 filename += std::get<DataChar>(e.value).value;
             }
@@ -161,45 +172,62 @@ void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::ve
                 for(char c : line) {
                     chars.push_back(DataElement{DataChar{c}});
                 }
-                lines.push_back(DataElement{DataList{std::move(chars)}});
+                uint32_t newvec=DataVector::allocate();
+                DataVector::data_vectors[newvec].list=std::move(chars);
+                DataContainer dc(newvec,0);
+                lines.push_back(DataElement{DataList{std::move(dc)}});
             }
-            sofar.push_back(DataElement{DataList{std::move(lines)}});
+            uint32_t newvec=DataVector::allocate();
+            DataVector::data_vectors[newvec].list=std::move(lines);
+            DataContainer dc(newvec,0);
+            sofar.data.push_back(DataElement{DataList{std::move(dc)}});
         } break;
         case SaveTextFile: {
             check_arg_count("save_text_file",args,2);
              // get filename
-            check_type<DataList>("save_text_file",args[0]);
-            check_type<DataList>("save_text_file",args[1]);
-            const DataList& filename_list = std::get<DataList>(args[0].value);
+            check_type<DataList>("save_text_file",args.data[args.offset]);
+            check_type<DataList>("save_text_file",args.data[args.offset+1]);
+            const DataContainer& filename_list = std::get<DataList>(args.data[args.offset].value).value;
+            const std::vector<DataElement>& filenamev=DataVector::data_vectors[filename_list.pool_index].list;
             std::string filename;
-            for(const DataElement& e : filename_list.value) {
+            for(uint32_t i=filename_list.offset;i<filenamev.size();i++) {
+                const DataElement& e=filenamev[i];
                 check_type<DataChar>("save_text_file",e);
                 filename += std::get<DataChar>(e.value).value;
             }
             // get content
-            const DataList& content_list = std::get<DataList>(args[1].value);
+            const DataContainer& content_list = std::get<DataList>(args.data[args.offset+1].value).value;
+            const std::vector<DataElement>& content_listv=DataVector::data_vectors[content_list.pool_index].list;
             std::ofstream file(filename, std::ios::out | std::ios::binary);
             if(!file.is_open()) {
                 throw std::runtime_error(std::format("save_text_file: could not open file: {}", filename));
             }
-            for(const DataElement& e : content_list.value) {
+            for(uint32_t i=content_list.offset;i<content_listv.size();i++) {
+                const DataElement& e=content_listv[i];
                 check_type<DataChar>("save_text_file",e);
                 file << std::get<DataChar>(e.value).value;
             }
         } break;
         case SaveBinaryFile: {
             check_arg_count("save_binary_file", args, 2);
-            check_type<DataList>("save_text_file",args[0]);
-            check_type<DataList>("save_text_file",args[1]);
-            const DataList& filename_list = std::get<DataList>(args[0].value);
+            check_type<DataList>("save_text_file",args.data[args.offset]);
+            check_type<DataList>("save_text_file",args.data[args.offset+1]);
+            const DataContainer& filename_list = std::get<DataList>(args.data[args.offset].value).value;
+            const std::vector<DataElement>& filenamev=DataVector::data_vectors[filename_list.pool_index].list;
             std::string filename;
-            for(const DataElement& e : filename_list.value) {
+            for(uint32_t i=filename_list.offset;i<filenamev.size();i++) {
+                const DataElement& e=filenamev[i];
                 check_type<DataChar>("save_text_file",e);
                 filename += std::get<DataChar>(e.value).value;
             }
-            const DataList& content = std::get<DataList>(args[1].value);
+            const DataContainer& content = std::get<DataList>(args.data[args.offset+1].value).value;
+            const std::vector<DataElement>& contentv=DataVector::data_vectors[content.pool_index].list;
             std::ofstream file(filename, std::ios::out | std::ios::binary);
-            for(const DataElement& e : content.value) {
+            if(!file.is_open()) {
+                throw std::runtime_error(std::format("save_binary_file: could not open file: {}", filename));
+            }
+            for(uint32_t i=content.offset;i<contentv.size();i++) {
+                const DataElement& e=contentv[i];
                 check_type<DataInt>("save_binary_file", e);
                 uint8_t byte = static_cast<uint8_t>(std::get<DataInt>(e.value).value);
                 file.write(reinterpret_cast<const char*>(&byte), 1);
@@ -211,10 +239,10 @@ void do_call_library(TokenKind op, const std::vector<DataElement>& args, std::ve
     }
 }
 
-DataElement do_call_internal(TokenKind op, const std::vector<DataElement>& args) {
-    switch(args.size()) {
+DataElement do_call_internal(TokenKind op, const VecDataElement& args) {
+    switch(args.data.size()-args.offset) {
         case 1: {
-            const DataElement& arg=args[0];
+            const DataElement& arg=args.data[args.offset];
             std::size_t argtype=arg.value.index();
             switch(op) {
                 case Minus: {
@@ -242,8 +270,8 @@ DataElement do_call_internal(TokenKind op, const std::vector<DataElement>& args)
             }
         } break;
         case 2: {
-            const DataElement& arg0=args[0];
-            const DataElement& arg1=args[1];
+            const DataElement& arg0=args.data[args.offset];
+            const DataElement& arg1=args.data[args.offset+1];
             std::size_t argtype0=arg0.value.index();
             std::size_t argtype1=arg1.value.index();
             switch(op) {
@@ -326,7 +354,7 @@ DataElement do_call_internal(TokenKind op, const std::vector<DataElement>& args)
                 default: throw std::runtime_error(std::format("unknown binary op: {}",(int)op));
             }
         } break;
-        default: throw std::runtime_error(std::format("do_call_internal only works with 1 or 2 args, found {}",args.size()));
+        default: throw std::runtime_error(std::format("do_call_internal only works with 1 or 2 args, found {}",args.data.size()-args.offset));
     }
     return DataElement{DataUnbound{}}; // keep compiler happy
 }

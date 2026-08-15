@@ -36,10 +36,16 @@ struct FourTokenKind {
     inline bool check_token(TokenKind t) {return t==a || t==b || t==c || t==d;};
 };
 
-struct Id { uint32_t value; };
+struct Id {
+    uint32_t value;
+    uint32_t count;
+};
 struct Const { DataElement value; };
 
-struct ParamSplat { uint32_t value; };
+struct ParamSplat {
+    uint32_t value;
+    uint32_t count;
+};
 struct ParamSplatWild {};
 struct ParamList { std::vector<Parameter> items; };
 struct ParamWildcard {};
@@ -48,6 +54,7 @@ using ParameterVariant = std::variant<Id, ParamSplat, ParamSplatWild, Const, Par
 
 struct Parameter {
     ParameterVariant value;
+    void annotate_with_counts(std::vector<uint32_t> counts, std::vector<uint32_t> touched);
 };
 
 struct ExprSplat { std::unique_ptr<Expression> inner; };
@@ -61,6 +68,7 @@ using ExpressionVariant = std::variant <Id, ExprSplat, Const, ExprList, Call, Ca
 
 struct Expression {
     ExpressionVariant value;
+    void annotate_with_counts(std::vector<uint32_t> counts);
 };
 
 struct RuleMatch {
@@ -75,6 +83,12 @@ struct Rule {
     std::vector<RuleMatch> pre_arrow;
     std::vector<RuleMatch> post_arrow;
     std::vector<std::string> names; // debugging only, and getting size for bind vector
+    void annotate_with_counts();
+};
+
+struct VecDataElement {
+    std::vector<DataElement> data;
+    uint32_t offset = 0;
 };
 
 class Program {
@@ -83,9 +97,9 @@ public:
     //std::vector<DataElement> run(const std::string& fn, const std::vector<DataElement>& args) const;
     std::vector<DataElement> run_string(std::string& call);
 private:
-    void do_call_single(const Expression& expression, const std::vector<DataElement>& bindings, std::vector<DataElement>& sofar) const;
-    void do_call_multi(const std::vector<Expression>& expressions, const std::vector<DataElement>& bindings, std::vector<DataElement>& sofar) const;
-    void do_call_function(uint32_t op, std::vector<DataElement>& sofar, std::vector<DataElement> args) const;
+    void do_call_single(const Expression& expression, const std::vector<DataElement>& bindings, VecDataElement& sofar) const;
+    void do_call_multi(const std::vector<Expression>& expressions, const std::vector<DataElement>& bindings, VecDataElement& sofar) const;
+    void do_call_function(uint32_t op, VecDataElement& args, VecDataElement& sofar) const;
     // Implementations for parsing in parser.cpp
     void parse_rule(Parser& parser);
     void parse_const(Parser& parser);

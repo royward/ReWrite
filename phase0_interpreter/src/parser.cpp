@@ -133,11 +133,16 @@ void Program::parse_const(Parser& parser) {
         throw std::runtime_error(std::format("const already declared {}",name));
     }
     const std::vector<DataElement> empty_bindings;
-    std::vector<DataElement> values;
+    VecDataElement values;
     for(const Expression& e : expr) {
         do_call_single(e, empty_bindings, values);
     }
-    constants[name] = std::move(values);
+    if(values.offset==0) {
+        constants[name] = std::move(values.data);
+    } else {
+        std::vector<DataElement> sub(values.data.begin()+values.offset,values.data.end());
+        constants[name] = std::move(sub);
+    }
 }
 
 Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map) {
@@ -168,7 +173,7 @@ Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, s
                 std::string s=static_cast<std::string>(t.text);
                 param_id_map.try_emplace(s,param_id_map.size());
                 uint32_t id=static_cast<uint32_t>(param_id_map[s]);
-                return Parameter{Id{id}};
+                return Parameter{Id{id,0}};
             }
         }
         case Wildcard : {
@@ -181,7 +186,7 @@ Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, s
                 std::string s=static_cast<std::string>(t2.text);
                 param_id_map.try_emplace(s,param_id_map.size());
                 uint32_t id=static_cast<uint32_t>(param_id_map[s]);
-                return Parameter{ParamSplat{id}};
+                return Parameter{ParamSplat{id,0}};
             } else if(t2.kind==Wildcard) {
                 return Parameter{ParamSplatWild{}};
             } else {
@@ -257,7 +262,7 @@ std::tuple<uint8_t, TokenKind> prefix_binding_power(TokenKind op) {
     switch(op) {
         case Minus: return {110, Minus};      // unary minus, binds tighter than any infix op
         case Not:   return {110, Not};        // unary logical/bitwise not
-        case Tilda:   return {110, Tilda};        // unary logical/bitwise not
+        case Tilda: return {110, Tilda};        // unary logical/bitwise not
         default:    return {0, Eof};
     }
 }
@@ -348,25 +353,12 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                         throw std::runtime_error(std::format("parameter not bound on right hand size: {}",s));
                     }
                     uint32_t id=static_cast<uint32_t>(search->second);
-                    expr=Expression{Id{id}};
+                    expr=Expression{Id{id,0}};
                 }
             } break;
             case Star: {
                 Expression splat_expr=parse_expression(parser,param_id_map,200);
                 expr=Expression{ExprSplat{std::make_unique<Expression>(std::move(splat_expr))}};
-                // Token t2=parser.current();
-                // parser.advance();
-                // if(t2.kind==Identifier) {
-                //     std::string s=static_cast<std::string>(t2.text);
-                //     auto search=param_id_map.find(s);
-                //     if(search==param_id_map.end()) {
-                //         throw std::runtime_error(std::format("parameter not bound on left hand size: {}",s));
-                //     }
-                //     uint32_t id=static_cast<uint32_t>(search->second);
-                //     expr=Expression{ExprSplat{std::make_unique<Expression>(Expression{Id{id}})}};
-                // } else {
-                //     parse_error(t2,{"identifier"});
-                // };
             } break;
             case LBrace: {
                 std::vector<Expression> list_internal=parse_expression_list(parser, param_id_map, FourTokenKind{RBrace,RBrace,RBrace,RBrace}, Comma);
@@ -521,6 +513,7 @@ void Program::parse_rule(Parser& parser) {
             if(function_id>=program.size()) {
                 program.resize(function_id+1);
             }
+            rule.annotate_with_counts();
             program[function_id].push_back(std::move(rule));
         } else {
             parse_error(parser.current(),{"("});
@@ -528,5 +521,93 @@ void Program::parse_rule(Parser& parser) {
     } else {
         parse_error(parser.current(),{"identifier"});
     }
+}
+
+void Rule::annotate_with_counts() {
+    // go backward through all the rules, annotating each identifer with the access index
+    std::vector<uint32_t> counts=std::vector<uint32_t>(names.size());
+    std::vector<uint32_t> touched;
+    for(Expression& element : main.expr | std::views::reverse) {
+        element.annotate_with_counts(counts);
+    }
+    for(RuleMatch& rm : post_arrow | std::views::reverse) {
+        for(Parameter& param : rm.match | std::views::reverse) {
+            param.annotate_with_counts(counts,touched);
+        }
+        if(rm.update) {
+            for(uint32_t i : touched) {
+                counts[i]=0;
+            }
+        }
+        touched.clear();
+        for(Expression& element : rm.expr | std::views::reverse) {
+            element.annotate_with_counts(counts);
+        }
+    }
+    for(RuleMatch& rm : pre_arrow | std::views::reverse) {
+        for(Parameter& param : rm.match | std::views::reverse) {
+            param.annotate_with_counts(counts,touched);
+        }
+        if(rm.update) {
+            for(uint32_t i : touched) {
+                counts[i]=0;
+            }
+        }
+        touched.clear();
+        for(Expression& element : rm.expr | std::views::reverse) {
+            element.annotate_with_counts(counts);
+        }
+    }
+    for(Parameter& param : main.match | std::views::reverse) {
+        param.annotate_with_counts(counts,touched);
+    }
+}
+
+void Parameter::annotate_with_counts(std::vector<uint32_t> counts, std::vector<uint32_t> touched) {
+   std::visit([&counts, &touched](auto& alt) {
+        using T = std::decay_t<decltype(alt)>;
+        if constexpr (std::is_same_v<T, Id>) {
+            alt.count=counts[alt.value];
+            counts[alt.value]++;
+            touched.push_back(alt.value);
+        } else if constexpr (std::is_same_v<T, ParamSplat>) {
+            alt.count=counts[alt.value];
+            counts[alt.value]++;
+            touched.push_back(alt.value);
+        } else if constexpr (std::is_same_v<T, ParamList>) {
+            for(Parameter& x : alt.items | std::views::reverse) {
+                x.annotate_with_counts(counts,touched);
+            }
+        }
+    }, value);
+}
+
+void Expression::annotate_with_counts(std::vector<uint32_t> counts) {
+    std::visit([&counts](auto& alt) {
+        using T = std::decay_t<decltype(alt)>;
+        if constexpr (std::is_same_v<T, Id>) {
+            alt.count=counts[alt.value];
+            counts[alt.value]++;
+        } else if constexpr (std::is_same_v<T, ExprSplat>) {
+            alt.inner.get()->annotate_with_counts(counts);
+        } else if constexpr (std::is_same_v<T, ExprList>) {
+            for(Expression& x : alt.items | std::views::reverse) {
+                x.annotate_with_counts(counts);
+            }
+        } else if constexpr (std::is_same_v<T, Call>) {
+            for(Expression& x : alt.args | std::views::reverse) {
+                x.annotate_with_counts(counts);
+            }
+        } else if constexpr (std::is_same_v<T, CallInternal>) {
+            for(Expression& x : alt.args | std::views::reverse) {
+                x.annotate_with_counts(counts);
+            }
+        } else if constexpr (std::is_same_v<T, CallLibrary>) {
+            for(Expression& x : alt.args | std::views::reverse) {
+                x.annotate_with_counts(counts);
+            }
+        }
+    }, value);
+
 }
 

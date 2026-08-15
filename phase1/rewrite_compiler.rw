@@ -37,7 +37,6 @@ const RParen=33;
 const Semicolon=34;
 const ShiftLeft=35;
 const ShiftRight=36;
-//const Splat=37;
 const Star=38;
 const True=39;
 const Integer=40;
@@ -182,19 +181,9 @@ lexer_one_symbol(_) -> 0;
 // - the function name associative list
 // - the constant associative list
 
-const TypeList=1;
 const TypeBool=2;
 const TypeChar=3;
-const TypeI8=4;
-const TypeU8=5;
-const TypeI16=6;
-const TypeU16=7;
-const TypeI32=8;
-const TypeU32=9;
 const TypeI64=10;
-const TypeU64=11;
-const TypeI128=12;
-const TypeU128=13;
 
 const Const=1;
 const ParamId=2;
@@ -284,14 +273,7 @@ parse_types(sofar,endtok,{{_,_,LBrace,_},*rest}) -> match parse_types({},RBrace,
 parse_types1(sofar,endtok,{{_,_,Comma,_},*rest}) -> parse_types(sofar,endtok,rest);
 parse_types1(sofar,endtok,{{_,_,endtok,_},*rest}) -> sofar,rest; // deal with no trailing comma
 
-base_type("i8") -> true,TypeI8;
-base_type("u8") -> true,TypeU8;
-base_type("i16") -> true,TypeI16;
-base_type("u16") -> true,TypeU16;
-base_type("i32") -> true,TypeI32;
-base_type("u32") -> true,TypeU32;
 base_type("i64") -> true,TypeI64;
-base_type("u64") -> true,TypeU64;
 base_type("bool") -> true,TypeBool;
 base_type("char") -> true,TypeChar;
 base_type("string") -> true,{true,Char};
@@ -475,16 +457,9 @@ annotate_type_list_stack(stack,sofar,{{{r,{}},t},*rest}) match get_type_size_pri
     annotate_type_list_stack(stack,{*sofar,{{r,{BindOverflow,offset}},t}},rest);
 annotate_type_list_stack(stack,sofar,{t,*rest}) -> annotate_type_list_stack(stack,{*sofar,t},rest);
 
-get_type_size_pri(TypeBool) -> {0,1};
-get_type_size_pri(TypeChar) -> {0,1};
-get_type_size_pri(TypeI8) -> {0,1};
-get_type_size_pri(TypeU8) -> {0,1};
-get_type_size_pri(TypeI16) -> {0,2};
-get_type_size_pri(TypeU16) -> {0,2};
-get_type_size_pri(TypeI32) -> {0,4};
-get_type_size_pri(TypeU32) -> {0,4};
+get_type_size_pri(TypeBool) -> {0,8}; // just make everything size 8 for the first pass
+get_type_size_pri(TypeChar) -> {0,8};
 get_type_size_pri(TypeI64) -> {0,8};
-get_type_size_pri(TypeU64) -> {0,8};
 get_type_size_pri({true,_}) -> {1,4,2,4};
 get_type_size_pri({false,_}) -> {1,4,2,4};
 
@@ -778,24 +753,10 @@ llvm_binop(OpDiv,tp) -> {'sdiv ',*llvm_tp(tp)};
 llvm_binop(OpMod,tp) when is_unsigned(tp) -> {'urem ',*llvm_tp(tp)};
 llvm_binop(OpMod,tp) -> {'srem ',*llvm_tp(tp)};
 
-is_unsigned(TypeU8) -> true;
-is_unsigned(TypeU16) -> true;
-is_unsigned(TypeU32) -> true;
-is_unsigned(TypeU64) -> true;
 is_unsigned(_) -> false;
 
-llvm_tp(TypeI8) -> "i8";
-llvm_tp(TypeU8) -> "i8";
-llvm_tp(TypeI16) -> "i16";
-llvm_tp(TypeU16) -> "i16";
-llvm_tp(TypeI32) -> "i32";
-llvm_tp(TypeU32) -> "i32";
 llvm_tp(TypeI64) -> "i64";
-llvm_tp(TypeU64) -> "i64";
 
-intsize(0) -> "i8";
-intsize(1) -> "i16";
-intsize(2) -> "i32";
 intsize(3) -> "i64";
 
 ///////////////////////////////////////////////////////////
@@ -887,8 +848,6 @@ create_export_ll_sigc_out(sofar,i,n) -> create_export_ll_sigc_out({*sofar,',ptr 
 
 create_export_ll_pre_call(code,reglist,{}) -> code,reglist;
 create_export_ll_pre_call(code,reglist,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,8} -> create_export_ll_pre_call(code,{*reglist,reg},rest);
-create_export_ll_pre_call(code,reglist,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,sz} ->
-    create_export_ll_pre_call({*code,'\t%x',reg,'=',z_or_s(tp),'ext ',*llvm_tp(tp),' %val32 to i64\n'},{*reglist,{'x',*reg}},rest);
 
 create_export_ll_params(sofar,{}) -> sofar;
 create_export_ll_params(sofar,{reg,*rest}) -> create_export_ll_params({*sofar,'i64 %',*reg,','},rest);
@@ -897,5 +856,3 @@ create_export_ll_post_call(code,_,{}) -> code;
 create_export_ll_post_call(code,n,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,8} ->
     match int_to_string36(n) => ni ->
     create_export_ll_post_call({*code,'\t%eo',*ni,'=extractvalue %R8 %z,',*int_to_string(n),'\n\tstore i64 %eo',*ni,',ptr %out',*ni,'\n'},n+1,rest);
-//create_export_ll_post_call(code,n,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,sz} ->
-//    create_export_ll_post_call({*code,'\t%x',reg,'=',z_or_s(tp),'ext ',*llvm_tp(tp),' %val32 to i64\n'},rest);
