@@ -1,3 +1,6 @@
+// Combined examples to make running tests easier
+// SPDX-License-Identifier: CC0-1.0
+
 //clamp.rw
 const TokNumber = 1;
 const TokPlus = 2;
@@ -8,7 +11,7 @@ const TokEof = 0;
 eval(TokNumber, a, _) -> a; // just return the first one
 eval(TokPlus, a, b) -> a+b;
 eval(TokMinus, a, b) -> a-b;
-eval(TokEof, _, _) -> TokEof;
+eval(_, _, _) -> TokEof;
 
 :- export equal(i64,i64) -> bool;
 equal(x,x) -> true;

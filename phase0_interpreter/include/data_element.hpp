@@ -94,7 +94,6 @@ public:
     uint32_t get_refcount() {
         return DataVector::data_vectors[pool_index].refcount;
     }
-    //void ensure_unique();
 };
 
 struct DataUnbound {};

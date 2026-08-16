@@ -62,25 +62,6 @@ uint32_t DataVector::count_free() {
     return count;
 }
 
-
-// void DataContainer::ensure_unique() {
-//     uint32_t old_index = pool_index;
-//     if (old_index == 0 || DataVector::data_vectors[old_index].refcount <= 1) {
-//         return;
-//     }
-//     uint32_t new_index = DataVector::allocate();
-//
-//     const auto& old_list = DataVector::data_vectors[old_index].list;
-//     auto& new_list = DataVector::data_vectors[new_index].list;
-//     new_list.assign(old_list.begin() + offset, old_list.end());
-//     for (const auto& element : DataVector::data_vectors[new_index].list) {
-//         element.incref(1); // Uses your new DataElement::incref method
-//     }
-//     pool_index = new_index;
-//     DataVector::decref(old_index);
-// }
-
-
 std::string display_single_char(char ch, char term) {
     if(ch==term) {
         return {'\\',term};
