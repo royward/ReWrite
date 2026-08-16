@@ -89,6 +89,7 @@ int rw_instance_init(RWInstance* exe, Program* p) {
 void rw_instance_unload(RWInstance* exe) {
     free(exe->registers);
     free(exe->overflow);
+    free(exe);
 }
 
 #define OP_LABEL 0x01
