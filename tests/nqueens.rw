@@ -13,7 +13,7 @@ nqueens_aux(col_so_far,{c,*col_todo},rows_done) ->
     {*nqueens_try(col_so_far,col_todo,c,rows_done),
      *nqueens_aux({*col_so_far,c},col_todo,rows_done)};
 
-nqueens_try(col_so_far,col_todo,c,rows_done) when attack(c,1,rows_done) -> {}; // no solutions here
+nqueens_try(col_so_far,col_todo,c,rows_done) when attack(c,1,rows_done,3) -> {}; // no solutions here
 nqueens_try(col_so_far,col_todo,c,rows_done) -> nqueens_aux({},{*col_so_far,*col_todo},{c,*rows_done}); // got another row
 
 attack(c,offset,{}) -> false;

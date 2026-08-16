@@ -132,7 +132,7 @@ void Program::parse_const(Parser& parser) {
     if(constants.find(name)!=constants.end()) {
         throw std::runtime_error(std::format("const already declared {}",name));
     }
-    const std::vector<DataElement> empty_bindings;
+    std::vector<DataElement> empty_bindings;
     VecDataElement values;
     for(const Expression& e : expr) {
         do_call_single(e, empty_bindings, values);
@@ -563,7 +563,7 @@ void Rule::annotate_with_counts() {
     }
 }
 
-void Parameter::annotate_with_counts(std::vector<uint32_t> counts, std::vector<uint32_t> touched) {
+void Parameter::annotate_with_counts(std::vector<uint32_t>& counts, std::vector<uint32_t>& touched) {
    std::visit([&counts, &touched](auto& alt) {
         using T = std::decay_t<decltype(alt)>;
         if constexpr (std::is_same_v<T, Id>) {
@@ -582,7 +582,7 @@ void Parameter::annotate_with_counts(std::vector<uint32_t> counts, std::vector<u
     }, value);
 }
 
-void Expression::annotate_with_counts(std::vector<uint32_t> counts) {
+void Expression::annotate_with_counts(std::vector<uint32_t>& counts) {
     std::visit([&counts](auto& alt) {
         using T = std::decay_t<decltype(alt)>;
         if constexpr (std::is_same_v<T, Id>) {

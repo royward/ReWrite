@@ -67,13 +67,15 @@ int main(int argc, char** argv) {
     CLI::App app{"ReWrite Stage 1 interpreter"};
     std::string filename;
     std::string callexpr;
+    bool fast = false;
     app.add_option("file", filename, "Source file to interpret")->required();
     app.add_option("call", callexpr, "Expression to evaluate")->required();
+    app.add_flag("--fast", fast, "Enable fast execution mode");
     CLI11_PARSE(app, argc, argv);
     try {
         std::string s=load_file(filename);
         //std::println("{}",s);
-        Program prog(s);
+        Program prog(s,fast);
         std::vector<DataElement> results=prog.run_string(callexpr);
         std::println("Results:");
         for(auto& r : results) {

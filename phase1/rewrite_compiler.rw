@@ -59,7 +59,7 @@ const TargetVMLL=4;
 
 compile(infile,outfile,targetstring) ->
     match convert_target_string(targetstring) => target
-    match parse(lex(load_text_file_lines(infile))) => rules,fnnames ->
+    match parse(lex(load_text_file(infile))) => rules,fnnames ->
     compile_aux(target,outfile,rules,fnnames);
 
 convert_target_string("vm") -> TargetVM;
@@ -81,27 +81,20 @@ min(_,y) -> y;
 max(x,y) when x>y -> x;
 max(_,y) -> y;
 
-lex(s) -> lex_aux({},{},0,0,s,{});
+lex(s) -> lex_aux({},0,0,s);
 
-lex_aux(full,{},_,_,{},{}) -> full;
-lex_aux(full,stmt,_,_,{},{}) -> {*full,stmt};
-lex_aux(full,stmt,row,col,{l,*rest},{}) -> lex_aux(full,stmt,row+1,col,rest,l);
-lex_aux(full,stmt,row,col,lines,rest_line) ->
-    update lex_aux2(stmt,row,col,rest_line) => add_full,stmt,row,col,rest_line ->
-    lex_aux({*full,*add_full},stmt,row,col,lines,rest_line);
-
-lex_aux2(acc,row,col,{}) -> {},acc,row,col,{};
-lex_aux2(acc,row,col,{';',*rest}) -> {{*acc,{row,col,Semicolon,";"}}},{},row,col+1,rest;
-lex_aux2(acc,row,col,{c,*rest}) when is_start_token(c) -> match lex_get_token(1,{c},rest) => sz,val,newrest ->
-    lex_aux2({*acc,{row,col,lex_check_spec_identifier(val),val}},row,col+sz,newrest);
-lex_aux2(acc,row,col,{c,*rest}) when is_digit(c) -> match lex_get_digit(1,{c},rest) => sz,val,newrest -> lex_aux2({*acc,{row,col,Integer,val}},row,col+sz,newrest);
-lex_aux2(acc,row,col,{c,*rest}) when is_whitespace(c) -> lex_aux2(acc,row,col+1,rest);
-lex_aux2(acc,row,col,{'//',*rest}) -> match lex_aux_absorb_comment(rest) => newrest -> lex_aux2(acc,row,0,newrest);
-lex_aux2(acc,row,col,{'"',*rest}) -> match lexer_string(row,col+1,{},'"',rest) => newrow,newcol,val,newrest -> lex_aux2({*acc,{row,col,String,val}},newrow,newcol,newrest);
-lex_aux2(acc,row,col,{'\'',*rest}) -> match lexer_string(row,col+1,{},'\'',rest) => newrow,newcol,val,newrest -> lex_aux2({*acc,{row,col,Char,val}},newrow,newcol,newrest);
-lex_aux2(acc,row,col,{'#',*rest}) -> match lex_get_token(1,{},rest) => sz,val,newrest -> lex_aux2({*acc,{row,col,lex_do_hash(val),{'#',*val}}},row,col+sz,newrest);
-lex_aux2(acc,row,col,{c1,c2,*rest}) match lexer_two_symbol(c1,c2) => sym when sym!=0 -> lex_aux2({*acc,{row,col,sym,{c1,c2}}},row,col+2,rest);
-lex_aux2(acc,row,col,{c,*rest}) match lexer_one_symbol(c) => sym when sym!=0 -> lex_aux2({*acc,{row,col,sym,{c}}},row,col+1,rest);
+lex_aux(acc,row,col,{}) -> acc;
+lex_aux(acc,row,col,{c,*rest}) when is_start_token(c) -> match lex_get_token(1,{c},rest) => sz,val,newrest ->
+    lex_aux({*acc,{row,col,lex_check_spec_identifier(val),val}},row,col+sz,newrest);
+lex_aux(acc,row,col,{c,*rest}) when is_digit(c) -> match lex_get_digit(1,{c},rest) => sz,val,newrest -> lex_aux({*acc,{row,col,Integer,val}},row,col+sz,newrest);
+lex_aux(acc,row,col,{c,*rest}) when is_whitespace(c) -> lex_aux(acc,row,col+1,rest);
+lex_aux(acc,row,col,{'//',*rest}) -> match lex_aux_absorb_comment(rest) => newrest -> lex_aux(acc,row,0,newrest);
+lex_aux(acc,row,col,{'\n',*rest}) -> lex_aux(acc,row+1,0,rest);
+lex_aux(acc,row,col,{'"',*rest}) -> match lexer_string(row,col+1,{},'"',rest) => newrow,newcol,val,newrest -> lex_aux({*acc,{row,col,String,val}},newrow,newcol,newrest);
+lex_aux(acc,row,col,{'\'',*rest}) -> match lexer_string(row,col+1,{},'\'',rest) => newrow,newcol,val,newrest -> lex_aux({*acc,{row,col,Char,val}},newrow,newcol,newrest);
+lex_aux(acc,row,col,{'#',*rest}) -> match lex_get_token(1,{},rest) => sz,val,newrest -> lex_aux({*acc,{row,col,lex_do_hash(val),{'#',*val}}},row,col+sz,newrest);
+lex_aux(acc,row,col,{c1,c2,*rest}) match lexer_two_symbol(c1,c2) => sym when sym!=0 -> lex_aux({*acc,{row,col,sym,{c1,c2}}},row,col+2,rest);
+lex_aux(acc,row,col,{c,*rest}) match lexer_one_symbol(c) => sym when sym!=0 -> lex_aux({*acc,{row,col,sym,{c}}},row,col+1,rest);
 
 lex_get_token(col,sofar,{c,*rest}) when is_rest_token(c) -> lex_get_token(col+1,{*sofar,c},rest);
 lex_get_token(*x) -> *x;
@@ -211,10 +204,10 @@ int_to_string(n) when n<0 -> {'-',*int_to_string(-n)};
 int_to_string(n) when n<10 -> {'0'+n};
 int_to_string(n) -> {*int_to_string(n/10),*int_to_string(n%10)};
 
-parse(s) -> parse_aux0({},{},{},s);
+parse(s) -> parse_aux({},{},{},s);
 
-parse_aux0(rules,fnnames,_,{}) -> rules,fnnames;
-parse_aux0(rules,fnnames,consts,{clause,*rest}) -> parse_aux0(parse_aux(rules,fnnames,consts,clause),rest);
+//parse_aux0(rules,fnnames,_,{}) -> rules,fnnames;
+//parse_aux0(rules,fnnames,consts,{clause,*rest}) -> parse_aux0(parse_aux(rules,fnnames,consts,clause),rest);
 
 // get and add for a straight list of (string,ref)
 get_add_symbol_list(n,sofar,{},val) -> {*sofar,{val,1}},n;
@@ -242,7 +235,7 @@ get_add_symbol_table(n,sofar,{{key,val},*rest},key,false) -> {*sofar,{key,val},*
 get_add_symbol_table(n,sofar,{{key,val},*rest},key,val) -> {*sofar,{key,val},*rest},n;
 get_add_symbol_table(n,sofar,{x,*rest},key,val) -> get_add_symbol_table(n+1,{*sofar,x},rest,key,val);
 
-parse_aux(rules,fnnames,consts,{}) -> rules,fnnames,consts;
+parse_aux(rules,fnnames,consts,{}) -> rules,fnnames;
 parse_aux(rules,fnnames,consts,{{_,_,Identifier,name},{_,_,LParen,_},*rest}) ->
     update get_add_symbol_table(0,{},fnnames,name,false) => fnnames,fn_id
     update parse_params(consts,{},{},rest) => bindings,params,{{_,_,RParen,_},*rest}
@@ -422,8 +415,8 @@ compile_aux(target,outfile,rules,table) ->
 const MaxParamRegs=4;
 
 annotate_table(sofar,{}) -> sofar;
-annotate_table(sofar,{{name,{export,types_left,types_right}},*rest}) ->
-    annotate_table({*sofar,{export,name,annotate_type_list_reg(0,0,{},{},create_start_annotated_list({},types_left)),
+annotate_table(sofar,{{name,{exportx,types_left,types_right}},*rest}) ->
+    annotate_table({*sofar,{exportx,name,annotate_type_list_reg(0,0,{},{},create_start_annotated_list({},types_left)),
                                   annotate_type_list_reg(0,0,{},{},create_start_annotated_list({},types_right))}},rest);
 
 create_start_annotated_list(sofar,{}) -> sofar;
@@ -763,14 +756,15 @@ intsize(3) -> "i64";
 // C FFI
 ///////////////////////////////////////////////////////////
 
-to_upper(sofar,{}) -> sofar;
-to_upper(sofar,{c,*rest}) -> to_upper({*sofar,to_uppercase(c)},rest);
+to_upper_sanitize(sofar,{}) -> sofar;
+to_upper_sanitize(sofar,{c,*rest}) -> to_upper_sanitize({*sofar,to_upper_sanitize_aux(c)},rest);
 
-to_uppercase(c) when c>='a' when c<='z' -> c-32;
-to_uppercase(c) -> c;
+to_upper_sanitize_aux(c) when c>='a' when c<='z' -> c-32;
+to_upper_sanitize_aux(c) when (c>='A' && c<='Z') || (c>='0' && c<='9') -> c;
+to_upper_sanitize_aux(c) -> '_';
 
 save_c_header(target,outfile,content) ->
-    match to_upper({},outfile) => file_upper ->
+    match to_upper_sanitize({},outfile) => file_upper ->
     save_text_file({*outfile,'.h'},
         {'#ifndef RW_',*file_upper,'_H\n#define RW_',*file_upper,'_H\n#include "',*includes(target),'"\n\n',
         '#ifdef __cplusplus\nnamespace ',*outfile,' {\nextern "C" {\n#endif\n',
@@ -814,6 +808,7 @@ create_export_vm_sigc(sofar,_,_,{}) -> sofar;
 create_export_vm_sigc(sofar,n,fill,{{_,tp},*rest}) -> create_export_vm_sigc({*sofar,',',*c_type(tp),' ',*fill,*int_to_string36(n)},n+1,fill,rest);
 
 c_type(TypeI64) -> "int64_t";
+c_type(TypeBool) -> "bool";
 
 create_export_vm_in(sofar,_,{}) -> sofar;
 create_export_vm_in(sofar,n,{{_,tp},*rest}) -> create_export_vm_in({*sofar,'(uint64_t)in',*int_to_string36(n),','},n+1,rest);

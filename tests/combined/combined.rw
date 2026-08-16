@@ -1,0 +1,45 @@
+//clamp.rw
+const TokNumber = 1;
+const TokPlus = 2;
+const TokMinus = 3;
+const TokEof = 0;
+
+:- export eval(op:i64,i64,i64) -> i64;
+eval(TokNumber, a, _) -> a; // just return the first one
+eval(TokPlus, a, b) -> a+b;
+eval(TokMinus, a, b) -> a-b;
+eval(TokEof, _, _) -> TokEof;
+
+:- export equal(i64,i64) -> bool;
+equal(x,x) -> true;
+equal(_,_) -> false;
+
+:- export fact(n:i64)->i64;
+fact(0)->1;
+fact(n)->n*fact(n-1);
+
+//factorial2.rw
+//factorial_errcheck.rw
+
+:- export fib(n:i64)->i64;
+fib(0) -> 1;
+fib(1) -> 1;
+fib(n) -> fib(n-2)+fib(n-1);
+
+//listn2.rw
+//listn.rw
+//member.rw
+//min_max.rw
+//misc_splat.rw
+//nprime.rw
+//nqueens_bitmask.rw
+//nqueens.rw
+//post_arrow_match.rw
+//reverse.rw
+//roman_numerals.rw
+//string_to_int.rw
+
+:- export swap(i64,i64) -> i64,i64;
+swap(x,y) -> y,x;
+
+//validate.rw

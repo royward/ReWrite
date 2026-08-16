@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.7] - 2026-08-16
+
+### Changed
+- reference counting in the interpreter for major speed improvement (1219s -> 23.5s on self parser)
+
+### Added
+- --fast flag for further interpreter speed improvements at the expense of not always showing arguments in error messages (23.5s -> 4.7s speed on self parser)
+
 ## [0.0.6] - 2026-07-17
 
 ### Changed

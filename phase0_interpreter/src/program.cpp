@@ -14,7 +14,7 @@
 DataElement do_call_internal(TokenKind op, const VecDataElement& args);
 void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& sofar);
 
-Program::Program(std::string_view source) {
+Program::Program(std::string_view source, bool fast) : fast(fast) {
     Parser parser;
     parser.tokens=lex(source);
     // for(auto t:parser.tokens) {
@@ -75,7 +75,7 @@ bool compare_equal(const DataElement& x, const DataElement& y) {
 
 bool do_match_list(const std::vector<Parameter>& parameters, DataContainer values, std::vector<DataElement>& bindings, uint32_t bind_level);
 
-bool do_match_single(const Parameter& parameter, const DataElement& x, std::vector<DataElement>& bindings, uint32_t bind_level) {
+bool do_match_single(const Parameter& parameter, DataElement& x, std::vector<DataElement>& bindings, uint32_t bind_level) {
     return std::visit([&bindings, &bind_level, &x](const auto& alt) {
         using T = std::decay_t<decltype(alt)>;
         if constexpr (std::is_same_v<T, Id>) {
@@ -191,9 +191,10 @@ bool do_match_list(const std::vector<Parameter>& parameters, DataContainer value
                 if(v.last_match<bind_level) {
                     v=x;
                     v.last_match=bind_level;
-                    return true;
                 } else {
-                    return compare_equal(x,v);
+                    if(!compare_equal(x,v)) {
+                        return false;
+                    }
                 }
             }
         } else if (std::holds_alternative<ParamSplatWild>(parameter.value)) {
@@ -207,7 +208,7 @@ bool do_match_list(const std::vector<Parameter>& parameters, DataContainer value
                 return false; // ran out of parameters
             }
             DataElement d=x0f[vi+values.offset];
-            if(!do_match_single(parameter,std::move(d),bindings,bind_level)) {
+            if(!do_match_single(parameter,d,bindings,bind_level)) {
                 return false;
             }
             vi++;
@@ -217,17 +218,21 @@ bool do_match_list(const std::vector<Parameter>& parameters, DataContainer value
     return vi==vlen; // didn't have extra parameters
 }
 
-void Program::do_call_multi(const std::vector<Expression>& expressions, const std::vector<DataElement>& bindings, VecDataElement& sofar) const {
+void Program::do_call_multi(const std::vector<Expression>& expressions, std::vector<DataElement>& bindings, VecDataElement& sofar) const {
     for(const auto& e : expressions) {
         do_call_single(e,bindings,sofar);
     }
 }
 
-void Program::do_call_single(const Expression& expression, const std::vector<DataElement>& bindings, VecDataElement& sofar) const {
+void Program::do_call_single(const Expression& expression, std::vector<DataElement>& bindings, VecDataElement& sofar) const {
     std::visit([this,&bindings,&sofar](const auto& alt) {
         using T = std::decay_t<decltype(alt)>;
         if constexpr (std::is_same_v<T, Id>) {
-            sofar.data.push_back(bindings[alt.value]);
+            if(alt.count==0) {
+                sofar.data.push_back(std::move(bindings[alt.value]));
+            } else {
+                sofar.data.push_back(bindings[alt.value]);
+            }
         } else if constexpr (std::is_same_v<T, ExprSplat>) {
             VecDataElement splattable;
             do_call_single(*alt.inner,bindings,splattable);
@@ -236,9 +241,15 @@ void Program::do_call_single(const Expression& expression, const std::vector<Dat
                 if(!holds_alternative<DataList>(e.value)) {
                     throw std::runtime_error("splat only works on lists");
                 }
-                const DataContainer& d0=std::get<DataList>(e.value).value;
-                const std::vector<DataElement>& x0f=DataVector::data_vectors[d0.pool_index].list;
-                sofar.data.insert(sofar.data.end(),x0f.begin()+d0.offset,x0f.end());
+                DataContainer& d0=std::get<DataList>(e.value).value;
+                //std::println("{} {} {} {}",sofar.data.size(),sofar.offset,d0.get_refcount(),DataVector::data_vectors[d0.pool_index].list.size());
+                if(sofar.data.size()==sofar.offset && d0.get_refcount()==1) {
+                    sofar.data=std::move(DataVector::data_vectors[d0.pool_index].list);
+                    sofar.offset=d0.offset;
+                } else {
+                    const std::vector<DataElement>& x0f=DataVector::data_vectors[d0.pool_index].list;
+                    sofar.data.insert(sofar.data.end(),x0f.begin()+d0.offset,x0f.end());
+                }
             }
         } else if constexpr (std::is_same_v<T, Const>) {
             sofar.data.push_back(alt.value);
@@ -311,7 +322,9 @@ start:
                             throw std::runtime_error(std::format("failure in post arrow match({})",i));
                         }
                     }
-
+                    if(fast) {
+                        args.data.clear();
+                    }
                     // found matching rule, now evaluate right side, being careful to handle tail recursion
                     std::size_t process_with_tail=0;
                     if(rule.main.expr.size()>0 && std::holds_alternative<Call>(rule.main.expr[rule.main.expr.size()-1].value)) {
@@ -336,11 +349,15 @@ start:
         }
     } catch(const std::runtime_error& e) {
         std::string argprint;
-        for(std::size_t i=args.offset;i<args.data.size();i++) {
-            if(i!=0) {
-                argprint+=',';
+        if(fast && args.data.empty()) {
+            argprint="<optimized out>";
+        } else {
+            for(std::size_t i=args.offset;i<args.data.size();i++) {
+                if(i!=0) {
+                    argprint+=',';
+                }
+                argprint+=args.data[i].to_string();
             }
-            argprint+=args.data[i].to_string();
         }
         std::string name;
         for (const auto& [key, val] : function_map) {
@@ -376,7 +393,7 @@ std::vector<DataElement> Program::run_string(std::string& call) {
     parser.tokens=lex(call);
     std::unordered_map<std::string, std::size_t> param_id_map;
     std::vector<Expression> expressions=parse_expression_list(parser, param_id_map, FourTokenKind{Eof,Eof,Eof,Eof}, Comma);
-    const std::vector<DataElement> empty_bindings;
+    std::vector<DataElement> empty_bindings;
     VecDataElement result;
     do_call_multi(expressions, empty_bindings, result);
     std::vector<DataElement> sub(result.data.begin()+result.offset,result.data.end());
