@@ -70,6 +70,7 @@ std::string display_single_char(char ch, char term) {
         case '\t':return {'\\','t'};
         case '\r':return {'\\','r'};
         case '\n':return {'\\','n'};
+        case '\0':return {'\\','0'};
         default: return {ch};
     }
 }

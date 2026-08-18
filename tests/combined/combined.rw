@@ -1,6 +1,10 @@
 // Combined examples to make running tests easier
 // SPDX-License-Identifier: CC0-1.0
 
+:- export equal(i64,i64) -> bool;
+equal(x,x) -> true;
+equal(_,_) -> false;
+
 //clamp.rw
 const TokNumber = 1;
 const TokPlus = 2;
@@ -11,15 +15,18 @@ const TokEof = 0;
 eval(TokNumber, a, _) -> a; // just return the first one
 eval(TokPlus, a, b) -> a+b;
 eval(TokMinus, a, b) -> a-b;
-eval(_, _, _) -> TokEof;
-
-:- export equal(i64,i64) -> bool;
-equal(x,x) -> true;
-equal(_,_) -> false;
+eval(TokEof, _, _) -> TokEof;
 
 :- export fact(n:i64)->i64;
 fact(0)->1;
 fact(n)->n*fact(n-1);
+
+//:- export fact_tail(n:i64) -> i64;
+//fact_tail(n) -> fact_aux(1,n);
+//
+//:- fact_aux(i64,i64) -> i64;
+//fact_aux(acc,0) -> acc;
+//fact_aux(acc,n) -> fact_aux(acc*n,n-1);
 
 //factorial2.rw
 //factorial_errcheck.rw

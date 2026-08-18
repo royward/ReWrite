@@ -28,7 +28,8 @@ typedef struct {
 
 struct Program {
     Operation* code;
-    uint32_t count;
+    uint32_t instr_max;
+    const char* symbols;
     uint32_t label_count;
     uint32_t* labels;
 };
@@ -40,6 +41,9 @@ struct ExecutionState {
     uint64_t* registers;
     uint8_t* overflow;
     Program* program;
+    uint32_t errtype;
+    uint32_t errline;
+    const char* errsym;
     uint64_t argret[ARGREG_NO];
 };
 
@@ -51,4 +55,5 @@ void program_disassemble(Program* program, FILE* out);
 int RW__vmcall(RWInstance* a, uint32_t label, uint64_t* inout);
 int rw_instance_init(RWInstance* exe, Program* p);
 void rw_instance_unload(RWInstance* exe);
+int rw_instance_get_error(RWInstance* exe, uint32_t* line, const char** function);
 

@@ -83,7 +83,9 @@ int main(int argc, char** argv) {
         }
         uint32_t free_size=DataVector::count_free();
         std::println("List use: {}/{} freed",free_size,DataVector::data_vectors.size()-1);
+        return 0;
     } catch(const std::runtime_error& e) {
         std::println("Error: {}", e.what());
+        return 1;
     }
 }

@@ -38,6 +38,7 @@ std::string lex_string(std::string_view program, std::size_t& p, char term) {
                 case 't': c='\t'; break;
                 case 'r': c='\r'; break;
                 case 'n': c='\n'; break;
+                case '0': c='\0'; break;
                 default: c=esc;
             }
         }

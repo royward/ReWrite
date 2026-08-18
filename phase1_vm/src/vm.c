@@ -9,6 +9,12 @@
 #define OP_LABEL 0x01
 #define OP_MIN_BRANCH 0xF0
 
+typedef struct {
+    uint64_t d0,d1,d2;
+    uint32_t d3;
+    uint32_t instr_max;
+} ProgramHeader;
+
 int program_link(Program* program) {
     uint32_t* labels=(uint32_t*)malloc(program->label_count*sizeof(uint32_t));
     if(!labels) {
@@ -16,13 +22,13 @@ int program_link(Program* program) {
         return EXIT_FAILURE;
     }
     // first get the label offsets
-    for(uint32_t i=0;i<program->count;i++) {
+    for(uint32_t i=1;i<program->instr_max;i++) {
         Operation* operation=&program->code[i];
         if(operation->op==OP_LABEL) {
             labels[operation->dst]=i;
         }
     }
-    for(uint32_t i=0;i<program->count;i++) {
+    for(uint32_t i=1;i<program->instr_max;i++) {
         Operation* operation=&program->code[i];
         if(operation->op>=OP_MIN_BRANCH) {
             operation->dst=labels[operation->dst];
@@ -42,13 +48,8 @@ int program_load(Program* program, const char* filename) {
         return EXIT_FAILURE;
     }
     fseek(f, 0, SEEK_END);
-    long size = ftell(f);
+    unsigned long size = ftell(f);
     fseek(f, 0, SEEK_SET);
-    if(size%sizeof(Operation)!=0) {
-        fprintf(stderr, "fatal: problem loading file - incomplete\n");
-        fclose(f);
-        return EXIT_FAILURE;
-    }
     program->code = malloc(size);
     if(!program->code) {
         fprintf(stderr, "fatal: problem allocating memory\n");
@@ -57,7 +58,14 @@ int program_load(Program* program, const char* filename) {
     }
     fread(program->code, 1, size, f);
     fclose(f);
-    program->count = size / sizeof(Operation);
+    ProgramHeader* ph=(ProgramHeader*)program->code;
+    program->instr_max = ph->instr_max;
+    if(size<program->instr_max*sizeof(Operation)) {
+        fprintf(stderr, "fatal: problem loading file - incomplete\n");
+        fclose(f);
+        return EXIT_FAILURE;
+    }
+    program->symbols = ((const char*)program->code)+ph->instr_max*sizeof(Operation);
     program->label_count = LABEL_COUNT;
     int ok=program_link(program);
     if(ok) {
@@ -95,7 +103,6 @@ void rw_instance_unload(RWInstance* exe) {
 #define OP_LABEL 0x01
 #define OP_ERROR 0x02
 #define OP_RET 0x03
-#define OP_ERROR_NO_MORE_RULES 0x04
 #define OP_ADD_STACK 0x05
 #define OP_MOVE 0x10
 #define OP_PLUS 0x18
@@ -244,7 +251,7 @@ const char* display_binop(uint8_t op) {
 
 void program_disassemble(Program* program, FILE* out) {
     fprintf(out,"  line func:rule op\n");
-    for(uint32_t i=0;i<program->count;i++) {
+    for(uint32_t i=1;i<program->instr_max;i++) {
         Operation* operation=&program->code[i];
         fprintf(out,"%6d %4d %3d: %02x: ",i,operation->fn_id,operation->rule_id,operation->op);
         uint8_t op=operation->op;
@@ -253,10 +260,7 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out,"label %d",operation->dst);
             } break;
             case OP_ERROR: {
-                fprintf(out,"error");
-            } break;
-            case OP_ERROR_NO_MORE_RULES: {
-                fprintf(out,"no more rules");
+                fprintf(out,"error type:%d line:%d sym:%s",operation->type,operation->dst,program->symbols+operation->src1);
             } break;
             case OP_RET: {
                 fprintf(out,"ret");
@@ -405,6 +409,9 @@ uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t
 
 int program_execute(RWInstance* exe, uint32_t in_lbl) {
     Program* program=exe->program;
+    exe->errtype=0;
+    exe->errline=0;
+    exe->errsym=NULL;
     uint32_t sp=0; // make sure we are start, even if it was run before
     uint32_t pc=program->labels[in_lbl];
     while(true) {
@@ -414,13 +421,15 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_LABEL: {
                 // NOP
             } break;
-            case OP_ERROR:
-            case OP_ERROR_NO_MORE_RULES: {
-                return EXIT_FAILURE;
+            case OP_ERROR: {
+                exe->errtype=operation->type;
+                exe->errline=operation->dst;
+                exe->errsym=program->symbols+operation->src1;
+                return exe->errtype;
             };
             case OP_RET: {
                 if(sp==0) {
-                    return EXIT_SUCCESS;
+                    return 0;
                 } else {
                     pc=exe->registers[sp-1];
                 }
@@ -471,7 +480,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     case OP_DIVIDE: {
                         if(src2 == 0) {
                             fprintf(stderr, "fatal: division by zero in division\n");
-                            exit(EXIT_FAILURE);
+                            exe->errtype=1;
+                            return exe->errtype;
                         }
                         switch(operation->type) {
                             case TYPE_I8: dst=((int8_t)(src1))/(int8_t)src2; break;
@@ -484,7 +494,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                             case TYPE_U64: dst=((uint64_t)(src1))/(uint64_t)src2; break;
                             default: {
                                 fprintf(stderr,"unknown type in division\n");
-                                exit(EXIT_FAILURE);
+                                exe->errtype=1;
+                                return exe->errtype;
                             }
                         }
                     } break;
@@ -504,7 +515,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                             case TYPE_U64: dst=((uint64_t)(src1))%(uint64_t)src2; break;
                             default: {
                                 fprintf(stderr,"unknown type in modulus\n");
-                                exit(EXIT_FAILURE);
+                                exe->errtype=1;
+                                return exe->errtype;
                             }
                         }
                     } break;
@@ -513,7 +525,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             } break;
             default: {
                 fprintf(stderr,"Illegal Instruction\n");
-                exit(EXIT_FAILURE);
+                exe->errtype=1;
+                return exe->errtype;
             }
         }
         pc++;
@@ -522,5 +535,15 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
 
 int RW__vmcall(RWInstance* a, uint32_t label, uint64_t* inout) {
     a->registers[0]=(uint64_t)inout;
-    return program_execute(a,label);
+    program_execute(a,label);
+    return a->errtype;
+}
+
+int rw_instance_get_error(RWInstance* exe, uint32_t* line, const char** function) {
+    int err=exe->errtype;
+    if(err!=0) {
+        *line=exe->errline;
+        *function=exe->errsym;
+    }
+    return err;
 }

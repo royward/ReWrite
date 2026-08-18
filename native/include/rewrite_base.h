@@ -19,8 +19,6 @@ typedef struct {
     uint32_t instance_size;
     uint32_t instance_max_size;
     uint32_t error_code;
-    uint32_t function;
-    uint32_t rulenum;
     uint32_t linenum;
     const char* function_name;
     JumpTarget* jump_buffer;
@@ -28,5 +26,6 @@ typedef struct {
 
 RWInstance* setup_rw_instance(size_t sz);
 void free_rw_instance(RWInstance* ret);
+int rw_instance_get_error(RWInstance* exe, uint32_t* line, const char** function);
 
 #endif
