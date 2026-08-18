@@ -631,30 +631,47 @@ use_binding_check_reg_end(ctx,2,src) -> match split3_nth(src,{},ctx_get_reg_coun
 use_binding_check_reg_end(ctx,ref,_) -> ctx;
 
 generate_expr_code(_,ctx,code1,code2,{},{}) -> ctx,{*code1,*code2};
-// TODO deal with lists splats and multi-return calls first
-generate_expr_code(callctr,ctx,sofar1,sofar2,{{{{dst_flag,dst}},tp},*type_left},{expr,*rest}) ->// when dst<=ctx_get_maxreg_rhs(ctx) ->
-    update generate_expr_code_aux(ctx,expr) => ctx,newcode,{{bound_param,tp,src_flag,src}} ->
-    generate_expr_code(callctr,ctx,{*sofar1,*newcode},{*sofar2,{ctx_fnr(ctx),if_not_zero(callctr,OpInsert,OpMove)+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src,0,callctr}},type_left,rest);
+// TODO deal with lists and splats first
+generate_expr_code(callctr,ctx,sofar1,sofar2,type_left,{expr,*rest}) ->
+    update generate_expr_code_aux(ctx,expr) => ctx,newcode,callout_ret
+    match callout_insert(ctx_fnr(ctx),callctr,{},callout_ret,type_left) => code_insert,type_left_rest ->
+    generate_expr_code(callctr,ctx,{*sofar1,*newcode},{*sofar2,*code_insert},type_left_rest,rest);
 // generate_expr_code(redirect,ctx,sofar,{{{{dst_flag,dst}},tp},*type_left},{expr,*rest}) ->
 //     match generate_expr_code_aux(ctx,expr) => newcode,tp,src_flag,src ->
 //     generate_expr_code(redirect,ctx,{*sofar,*newcode,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src}},type_left,rest);
 
-
 generate_expr_code_aux(ctx,{Const,{tp,val}}) -> ctx,{},{{true,tp,BindImm,val}};
 generate_expr_code_aux(ctx,{ExprId,{id}}) -> update use_binding(ctx,id) => ctx,tp,src_flag,src -> ctx,{},{{true,tp,src_flag,src}};
 generate_expr_code_aux(ctx,{ExprCallInternal,{op,*args}}) -> update generate_expr_code_aux_map(ctx,{},args) => ctx,args_code -> generate_expr_code_infix(ctx,op,args_code);
-generate_expr_code_aux(ctx,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,regright,maskright,{{{{ret_flags,ret}},tp}}} ->
+generate_expr_code_aux(ctx,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,regright,maskright,type_right} ->
     update ctx_update_get_callctr(ctx,max(length(params_left),1)) => ctx,callctr
     update generate_expr_code(callctr,ctx,{},{},params_left,args) => ctx,args_code
     match ctx_get_reg_count(ctx)+1 => spinc
-    match get_scalar_type_size(tp) => sz
-    update ctx_newreg(ctx,1<<sz) => ctx,newreg ->
+    update generate_callout_bindings(ctx,{},type_right) => ctx,callout ->
     ctx,{*args_code,
         {ctx_fnr(ctx),OpCall,0,BindLabel,fn_id,0,spinc,0,callctr},
         {ctx_fnr(ctx),OpAddStack,0,0,0,0,-spinc},
-        {ctx_fnr(ctx),if_not_zero(callctr,OpExtract,OpMove)+sz,0,BindReg,newreg,ret_flags,ret,0,callctr},
+        *callout_extract(ctx_fnr(ctx),callctr,{},callout)
         },
-    {{false,tp,BindReg,newreg}};
+    callout_ret({},callout);
+
+generate_callout_bindings(ctx,sofar,{}) -> ctx,sofar;
+generate_callout_bindings(ctx,sofar,{{{{ret_flags,ret}},tp},*rest}) ->
+    match get_scalar_type_size(tp) => sz
+    update ctx_newreg(ctx,1<<sz) => ctx,newreg ->
+    generate_callout_bindings(ctx,{*sofar,{sz,newreg,{{ret_flags,ret}},tp}},rest);
+
+callout_insert(l1,l2,callctr,sofar,{},type_left_rest) -> sofar,type_left_rest;
+callout_insert(l1,l2,callctr,sofar,{{_,tp,src_flag,src},*rest0},{{{{dst_flag,dst}},tp},*rest1}) ->
+    match get_scalar_type_size(tp) => sz ->
+    callout_insert(l1,l2,callctr,{*sofar,{l1,l2,if_not_zero(callctr,OpInsert,OpMove)+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src,0,callctr}},rest0,rest1);
+
+callout_extract(l1,l2,callctr,sofar,{}) -> sofar;
+callout_extract(l1,l2,callctr,sofar,{{sz,newreg,{{ret_flags,ret}},tp},*rest}) ->
+    callout_extract(l1,l2,callctr,{*sofar,{l1,l2,if_not_zero(callctr,OpExtract,OpMove)+sz,0,BindReg,newreg,ret_flags,ret,0,callctr}},rest);
+
+callout_ret(sofar,{}) -> sofar;
+callout_ret(sofar,{{sz,newreg,{{ret_flags,ret}},tp},*rest}) -> callout_ret({*sofar,{false,tp,BindReg,newreg}},rest);
 
 const OpPlus=24;
 const OpMinus=25;
