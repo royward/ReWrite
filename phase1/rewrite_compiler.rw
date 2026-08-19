@@ -461,6 +461,8 @@ const OpLabel=1;
 const OpError=2;
 const OpRet=3;
 const OpAddStack=5;
+const OpLLAlloc=14;
+const OPLLStore=15;
 const OpMove=16;
 const OpInsert=32;
 const OpExtract=48;
@@ -502,31 +504,27 @@ compile_function(target,reg_count,active,lblnext,label_id,fn_id,table,rule_id,so
     label_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpError,ErrNoMatch,0,fnlineno,0,symoffset}})};
 compile_function(target,reg_count,active,lblnext,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,type_left,type_right) ->
     match rule => {linerule,bindings,params,pre_arrow_clauses,post_arrow_clauses,exprs}
-    update compile_rule(linerule,lblnext,{target,1,0,true,0,label_id,fn_id,rule_id,create_compiler_bindings({},bindings),reg_count,bitmask,{},table},{},params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) =>
+    update compile_rule(target,linerule,lblnext,{target,1,0,true,0,label_id,fn_id,rule_id,create_compiler_bindings({},bindings),reg_count,bitmask,{},table},{},params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) =>
         reg_count,active,lblnext,label_id,code ->
     compile_function(target,reg_count,active,0,label_id,fn_id,table,rule_id+1,{*sofar,*code,*code_or_not(active,{{fn_id,rule_id,OpLabel,0,BindLabel,label_id}})},rest,dummy,bitmask,type_left,type_right);
 
 create_compiler_bindings(sofar,{}) -> sofar;
 create_compiler_bindings(sofar,{{n,ref},*rest}) -> create_compiler_bindings({*sofar,{0,0,{},n,ref}},rest);
 
-//ctx_fn({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> fn_id;
 ctx_fnr({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> fn_id,rule_id;
 ctx_lbl({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> label_id;
 ctx_bindings({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bindings;
-//ctx_deref_param({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},n) ->
-//    update clear1_reglist({target,},reg_count,n) => reg_count ->
-//    {target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
 ctx_newbindings({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},newbindings) -> {target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,newbindings,reg_count,bitmask,bind_rhs,table};
 ctx_get_reg_count({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> reg_count;
 ctx_put_reg_count({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,_,bitmask,bind_rhs,table},new_reg_count) -> {target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,new_reg_count,bitmask,bind_rhs,table};
-ctx_get_bitmask({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bitmask;
+//ctx_get_bitmask({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bitmask;
 ctx_newreg({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},sz) ->
     {target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count+1,bitmask,bind_rhs,table},reg_count;
-ctx_get_bind_rhs({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bind_rhs;
+//ctx_get_bind_rhs({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> bind_rhs;
 ctx_get_fn_sig({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},n) -> nth(n,table);
 ctx_set_tail({target,callctr,_,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},tailcall) -> {target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
 ctx_get_tail({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> tailcall;
-ctx_set_lblnext({target,callctr,tailcall,active,_,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> {target,callctr,tailcall,active,label_id,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
+//ctx_set_lblnext({target,callctr,tailcall,active,_,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> {target,callctr,tailcall,active,label_id,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table};
 ctx_get_lblnext({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> lblnext;
 ctx_get_lbl_stuff({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> target,active,lblnext,label_id;
 ctx_get_lbl_active({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table}) -> active;
@@ -538,35 +536,33 @@ ctx_update_get_callctr({target,callctr,tailcall,active,lblnext,label_id,fn_id,ru
     {target,callctr+inc,tailcall,active,lblnext,label_id,fn_id,rule_id,bindings,reg_count,bitmask,bind_rhs,table},callctr;
 
 // deal with tail recursion (error if sigs don't match)
-compile_rule(linerule,lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,{{ExprCall,fn_id,args}},type_left,type_right)
-    match ctx_get_tail(ctx) => 0
-    match ctx_get_fn_sig(ctx,fn_id) => {_,_,_,_,_,_,type_left_new,_,_,type_right} ->
-    compile_rule(linerule,lblnext,ctx_set_tail(ctx,fn_id+1),sofar,params,pre_arrow_clauses,post_arrow_clauses,args,type_left,type_left_new);
-compile_rule(linerule,lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right)
+compile_rule(target,linerule,lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,{{ExprCall,fn_id,args}},type_left,type_right)
     match ctx_get_tail(ctx) => 0 ->
-    update generate_param_code(ctx,{},{},type_left,params) => ctx,code
+    match ctx_get_fn_sig(ctx,fn_id) => {_,_,_,_,_,_,type_left_new,_,_,type_right} ->
+    compile_rule(target,linerule,lblnext,ctx_set_tail(ctx,fn_id+1),sofar,params,pre_arrow_clauses,post_arrow_clauses,args,type_left,type_left_new);
+compile_rule(target,linerule,lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right)
+    match ctx_get_tail(ctx) => 0 ->
+    update generate_llvm_alloc_store_code(target,ctx_fnr(ctx),OpLLAlloc,{},0,min(max(length(type_left),length(type_right)),8)) => code
+    update generate_llvm_alloc_store_code(target,ctx_fnr(ctx),OPLLStore,code,0,min(length(type_left),8)) => code
+    update generate_param_code(ctx,code,{},type_left,params) => ctx,code
     update generate_expr_code(0,ctx,code,{},type_right,exprs) => ctx,code ->
-    ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,if_not_zero(lblnext,ctx_get_lblnext(ctx),0),ctx_lbl(ctx),code_or_not(ctx_get_lbl_active(ctx),{*code,{ctx_fnr(ctx),OpRet,0}});
-//compile_rule(linerule,lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right)
+    ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,if_not_zero(lblnext,ctx_get_lblnext(ctx),0),ctx_lbl(ctx),code_or_not(ctx_get_lbl_active(ctx),
+        {*code,{ctx_fnr(ctx),OpRet,0}});
+compile_rule(target,linerule,lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) ->
+    match ctx_get_tail(ctx)-1 => call_id
+    match ctx_get_fn_sig(ctx,call_id) => {_,_,_,_,_,_,type_left_new,_,_,_}
+    update generate_llvm_alloc_store_code(target,ctx_fnr(ctx),OpLLAlloc,{},0,min(max(length(type_left),length(type_left_new)),8)) => code
+    update generate_llvm_alloc_store_code(target,ctx_fnr(ctx),OPLLStore,code,0,min(length(type_left),8)) => code
+    update generate_param_code(ctx,code,{},type_left,params) => ctx,code
+    update ctx_update_get_callctr(ctx,max(length(type_left_new),1)) => ctx,callctr
+    update generate_expr_code(callctr,ctx,code,{},type_left_new,exprs) => ctx,code ->
+    ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,if_not_zero(lblnext,ctx_get_lblnext(ctx),0),ctx_lbl(ctx),code_or_not(ctx_get_lbl_active(ctx),
+        {*code,{ctx_fnr(ctx),OpGoto,0,BindLabel,call_id,0,0,0,callctr}});
 
-// compile_rule(linerule,lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) ->
-//     update generate_param_code(ctx,{},{},type_left,params) => ctx,code
-//     update generate_expr_code(0,ctx,code,{},type_right,exprs) => ctx,code ->
-//     ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,if_not_zero(lblnext,ctx_get_lblnext(ctx),0),ctx_lbl(ctx),code_or_not(ctx_get_lbl_active(ctx),{*code,compile_end(ctx_get_tail(ctx),ctx)});
-
-//generate_expr_code_aux(ctx,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,regright,maskright,{{{{ret_flags,ret}},tp}}} ->
-//    update ctx_update_get_callctr(ctx,max(length(params_left),1)) => ctx,callctr
-//    update generate_expr_code(callctr,ctx,{},{},params_left,args) => ctx,args_code
-//    match ctx_get_reg_count(ctx)+1 => spinc
-//    match get_scalar_type_size(tp) => sz
-//    update ctx_newreg(ctx,1<<sz) => ctx,newreg ->
-//    ctx,{*args_code,
-//        {ctx_fnr(ctx),OpCall,0,BindLabel,fn_id,0,spinc,0,callctr},
-//        {ctx_fnr(ctx),OpAddStack,0,0,0,0,-spinc},
-//        {ctx_fnr(ctx),if_not_zero(callctr,OpExtract,OpMove)+sz,0,BindReg,newreg,ret_flags,ret,0,callctr},
-//        },
-//    false,tp,BindReg,newreg;
-
+generate_llvm_alloc_store_code(TargetVM,_,_,_,sofar,_,_) -> sofar;
+generate_llvm_alloc_store_code(_,_,x,_,sofar,_,_) when x!=0 -> sofar;
+generate_llvm_alloc_store_code(target,l1,l2,op,sofar,n,n) -> sofar;
+generate_llvm_alloc_store_code(target,l1,l2,op,sofar,i,n) -> generate_llvm_alloc_store_code(target,l1,l2,op,{*sofar,{l1,l2,op,0,0,i}},i+1,n);
 
 if_not_zero(0,_,y) -> y;
 if_not_zero(_,x,_) -> x;
@@ -709,7 +705,7 @@ emit_instruction({fn_id,rule_id,op,tp}) -> emit_instruction({fn_id,rule_id,op,tp
 emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst}) -> emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,0,0,0,0});
 emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1}) -> emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1,0,0});
 emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1,flags_src2,src2}) ->
-    {op,tp,*emitb(2,{},fn_id),rule_id&255,flags_dst&255,flags_src1&255,flags_src2&255,*emitb(4,{},dst),*emitb(4,{},0),*emitb(8,{},src1),*emitb(8,{},src2)};
+    {op,tp,*emitb(2,{},fn_id),rule_id&255,flags_dst&255,flags_src1&255,flags_src2&255,*emitb(4,{},dst),*emitb(4,{},-1),*emitb(8,{},src1),*emitb(8,{},src2)};
 emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1,flags_src2,src2,lbl2}) ->
     {op,tp,*emitb(2,{},fn_id),rule_id&255,flags_dst&255,flags_src1&255,flags_src2&255,*emitb(4,{},dst),*emitb(4,{},lbl2),*emitb(8,{},src1),*emitb(8,{},src2)};
 
@@ -743,10 +739,10 @@ convert_to_llvm(target,small_table,table,symtext,symsz,sofar,{{fnid,code},*rest}
 
 convert_to_ll_fn(target,small_table,table,fnid,code) ->
     match nth(fnid,table) => {_,_,_,name,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right} ->
-    {'\ndefine x86_regcallcc %R8 @__rw.',*name,'(i64 %s0,i64 %s1,i64 %s2,i64 %s3,i64 %s4,i64 %s5,i64 %s6,i64 %s7, ptr %A) {\nentry:\n',
-    *ll_write_alloca(0,min(max(length(type_left),length(type_right)),8),{}),
-    *ll_write_store_param(0,min(length(type_left),8),{}),
-    '\tbr label %L',*int_to_string36(fnid),'\n',
+    {'\ndefine x86_regcallcc %R8 @__rw.',*name,'(i64 %s0,i64 %s1,i64 %s2,i64 %s3,i64 %s4,i64 %s5,i64 %s6,i64 %s7, ptr %A) {\n',
+    //*ll_write_alloca(0,min(max(length(type_left),length(type_right)),8),{}),
+    //*ll_write_store_param(0,min(length(type_left),8),{}),
+    //'\tbr label %L',*int_to_string36(fnid),'\n',
     *ll_emit_instructions(small_table,{},code),
     'exit:\n',
     *ll_build_epilog1(0,min(length(type_right),8),{}),
@@ -790,10 +786,12 @@ ll_emit_instruction(_,{_,_,op,tp,BindReg,dst,flag_src,src,flag_src2,src2}) when 
     {'\t',*ll_emit_arg(BindReg,dst),'=',*ll_binop(op,tp),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2)};
 ll_emit_instruction(table,{_,_,OpCall,_,_,label,_,_,_,off}) -> match nth(label,table) => {name,_,_,arity} ->
     {'\t%z',*int_to_string36(off),'=call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)'};
-ll_emit_instruction(table,{_,off,OpGoto,_,_,label}) -> match nth(label,table) => {name,_,_,arity} ->
-    {'\t%q',*int_to_string36(off),'=musttail call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)\n\tret %R8 %q',*int_to_string36(off)};
+ll_emit_instruction(table,{_,_,OpGoto,_,_,label,_,_,_,off}) -> match nth(label,table) => {name,_,_,arity} ->
+    {'\t%z',*int_to_string36(off),'=musttail call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)\n\tret %R8 %z',*int_to_string36(off)};
 ll_emit_instruction(_,{_,_,OpError,code,_,line,_,sym}) ->
     {'\tcall void @__rw__error(ptr %A,i32 ',*int_to_string(code),',i32 ',*int_to_string(line),',i32 ',*int_to_string(sym),',ptr @.fn.syms)\n\tunreachable\n'};
+ll_emit_instruction(_,{_,_,OpLLAlloc,_,_,dst}) ->{'\t%x','0'+dst,'=alloca i64'};
+ll_emit_instruction(_,{_,_,OpLLStore,_,_,dst}) ->{'\tstore i64 %s','0'+dst,',ptr %x','0'+dst};
 ll_emit_instruction(_,{_,_,op,*_}) -> {'\tunknown:',*int_to_string(op)};
 
 output_lbls(sofar,n,n) -> sofar;

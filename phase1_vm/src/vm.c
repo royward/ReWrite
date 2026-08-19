@@ -104,6 +104,8 @@ void rw_instance_unload(RWInstance* exe) {
 #define OP_ERROR 0x02
 #define OP_RET 0x03
 #define OP_ADD_STACK 0x05
+#define OP_ALLOC 0x0E
+#define OP_STORE 0x0F
 #define OP_MOVE 0x10
 #define OP_PLUS 0x18
 #define OP_MINUS 0x19
@@ -259,6 +261,12 @@ void program_disassemble(Program* program, FILE* out) {
             case OP_LABEL: {
                 fprintf(out,"label %d",operation->dst);
             } break;
+            case OP_ALLOC: {
+                fprintf(out,"ll_alloc %d",operation->dst);
+            } break;
+            case OP_STORE: {
+                fprintf(out,"ll_store %d",operation->dst);
+            } break;
             case OP_ERROR: {
                 fprintf(out,"error type:%d line:%d sym:%s",operation->type,operation->dst,program->symbols+operation->src1);
             } break;
@@ -275,6 +283,9 @@ void program_disassemble(Program* program, FILE* out) {
             case OP_GOTO: {
                 fprintf(out,"goto ");
                 program_display_label(program,out,operation);
+                if(operation->src2>0) {
+                    fprintf(out," (o=%d)",(uint32_t)operation->src2);
+                }
             } break;
             case OP_ADD_STACK: {
                 if((int32_t)operation->src1>=0) {
@@ -418,7 +429,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
         Operation* operation=&program->code[pc];
         uint8_t op=operation->op;
         switch(op) {
-            case OP_LABEL: {
+            case OP_LABEL:
+            case OP_ALLOC:
+            case OP_STORE: {
                 // NOP
             } break;
             case OP_ERROR: {
