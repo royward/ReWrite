@@ -1,0 +1,9 @@
+// Example: recursive factorial using tail recursion and an accumulator
+// SPDX-License-Identifier: CC0-1.0
+
+:- export fact_tail(n:i64) -> i64;
+fact_tail(n) -> fact_aux(1,n);
+
+:- fact_aux(i64,i64) -> i64;
+fact_aux(acc,0) -> acc;
+fact_aux(acc,n) -> fact_aux(acc*n,n-1);
