@@ -267,7 +267,7 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out,"ll_alloc %d",operation->dst);
             } break;
             case OP_STORE: {
-                fprintf(out,"ll_store %d",operation->dst);
+                fprintf(out,"ll_store.%s %d",display_type(operation->type),operation->dst);
             } break;
             case OP_ERROR: {
                 fprintf(out,"error type:%d line:%d sym:%s",operation->type,operation->dst,program->symbols+operation->src1);

@@ -466,7 +466,7 @@ const OpError=2;
 const OpRet=3;
 const OpAddStack=5;
 const OpLLAlloc=14;
-const OPLLStore=15;
+const OpLLStore=15;
 const OpMove=16;
 const OpInsert=32;
 const OpExtract=48;
@@ -560,8 +560,8 @@ compile_rule(target,linerule,lblnext,ctx,sofar,params,pre_arrow_clauses,post_arr
         {*code,{ctx_fnr(ctx),OpGoto,0,BindLabel,call_id,0,0,0,callctr}});
 
 generate_params_clauses(target,ctx,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) ->
-    update generate_llvm_alloc_store_code(target,ctx_fnr(ctx),OpLLAlloc,{},0,min(max(length(type_left),length(type_right)),8)) => code
-    update generate_llvm_alloc_store_code(target,ctx_fnr(ctx),OPLLStore,code,0,min(length(type_left),8)) => code
+    update generate_llvm_alloc_code(target,ctx_fnr(ctx),{},0,min(max(length(type_left),length(type_right)),8)) => code
+    update generate_llvm_store_code(target,ctx_fnr(ctx),code,0,type_left) => code
     update generate_param_code(1,ctx,code,{},type_left,params) => ctx,code
     update generate_clause_code(2,false,ctx,code,pre_arrow_clauses) => bind_level,ctx,code
     update generate_clause_code(bind_level,true,ctx,code,post_arrow_clauses) => _,ctx,code ->
@@ -605,10 +605,15 @@ generate_bind_variable(bindlevel,ctx,src_flag,src,tp,{refs,tp,{src_flag2,src2},n
     update generate_conditional(ctx,OpCompareNotEqualBranch,tp,src_flag,src,src_flag2,src2) => ctx,code ->
     ctx,{bindlevel,tp,{src_flag2,src2},name},code;
 
-generate_llvm_alloc_store_code(TargetVM,_,_,_,sofar,_,_) -> sofar;
-generate_llvm_alloc_store_code(_,_,x,_,sofar,_,_) when x!=0 -> sofar;
-generate_llvm_alloc_store_code(target,l1,l2,op,sofar,n,n) -> sofar;
-generate_llvm_alloc_store_code(target,l1,l2,op,sofar,i,n) -> generate_llvm_alloc_store_code(target,l1,l2,op,{*sofar,{l1,l2,op,0,0,i}},i+1,n);
+generate_llvm_alloc_code(TargetVM,_,_,sofar,_,_) -> sofar;
+generate_llvm_alloc_code(_,_,x,sofar,_,_) when x!=0 -> sofar;
+generate_llvm_alloc_code(target,l1,l2,sofar,n,n) -> sofar;
+generate_llvm_alloc_code(target,l1,l2,sofar,i,n) -> generate_llvm_alloc_code(target,l1,l2,{*sofar,{l1,l2,OpLLAlloc,0,0,i}},i+1,n);
+
+generate_llvm_store_code(TargetVM,_,_,sofar,_,_) -> sofar;
+generate_llvm_store_code(_,_,x,sofar,_,_) when x!=0 -> sofar;
+generate_llvm_store_code(target,l1,l2,sofar,n,{}) -> sofar;
+generate_llvm_store_code(target,l1,l2,sofar,i,{{_,tp},*rest}) -> generate_llvm_store_code(target,l1,l2,{*sofar,{l1,l2,OpLLStore,tp,0,i}},i+1,rest);
 
 if_not_zero(0,_,y) -> y;
 if_not_zero(_,x,_) -> x;
@@ -775,28 +780,24 @@ convert_to_llvm(target,small_table,table,symtext,symsz,sofar,{{fnid,code},*rest}
 convert_to_ll_fn(target,small_table,table,fnid,code) ->
     match nth(fnid,table) => {_,_,_,name,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right} ->
     {'\ndefine x86_regcallcc %R8 @__rw.',*name,'(i64 %s0,i64 %s1,i64 %s2,i64 %s3,i64 %s4,i64 %s5,i64 %s6,i64 %s7, ptr %A) {\n',
-    //*ll_write_alloca(0,min(max(length(type_left),length(type_right)),8),{}),
-    //*ll_write_store_param(0,min(length(type_left),8),{}),
-    //'\tbr label %L',*int_to_string36(fnid),'\n',
     *ll_emit_instructions(small_table,{},code),
     'exit:\n',
-    *ll_build_epilog1(0,min(length(type_right),8),{}),
-    *ll_build_epilog2(0,min(length(type_right),8),{}),
+    *ll_build_epilog1(0,type_right,{}),
+    *ll_build_epilog2(0,type_right,{}),
     *ll_ret(min(length(type_right),8)),
     '}\n'};
 
-ll_write_alloca(n,n,sofar) -> sofar;
-ll_write_alloca(i,n,sofar) -> ll_write_alloca(i+1,n,{*sofar,'\t%x','0'+i,'=alloca i64\n'});
+ll_build_epilog1(n,{},sofar) -> sofar;
+ll_build_epilog1(i,{{_,tp},*rest},sofar) -> ll_build_epilog1(i+1,rest,{*sofar,'\t%p','0'+i,'=load ',*ll_tp(tp),',ptr %x','0'+i,'\n'});
 
-ll_write_store_param(n,n,sofar) -> sofar;
-ll_write_store_param(i,n,sofar) -> ll_write_store_param(i+1,n,{*sofar,'\tstore i64 %s','0'+i,',ptr %x','0'+i,'\n'});
+ll_build_epilog2(n,{},sofar) -> sofar;
+ll_build_epilog2(i,{{_,tp},*rest},sofar) match ll_tp(tp) => "i64" -> ll_build_epilog2(i+1,rest,{*sofar,'\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %p','0'+i,',','0'+i,'\n'});
+ll_build_epilog2(i,{{_,tp},*rest},sofar) -> ll_build_epilog2(i+1,rest,{*sofar,
+    '\t%pp','0'+i,'=zext ',*ll_tp(tp),' %p','0'+i,' to i64\n',
+    '\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %pp','0'+i,',','0'+i,'\n'});
 
-ll_build_epilog1(n,n,sofar) -> sofar;
-ll_build_epilog1(i,n,sofar) -> ll_build_epilog1(i+1,n,{*sofar,'\t%p','0'+i,'=load i64,ptr %x','0'+i,'\n'});
-
-ll_build_epilog2(n,n,sofar) -> sofar;
-ll_build_epilog2(0,n,sofar) -> ll_build_epilog2(1,n,{*sofar,'\t%m0=insertvalue %R8 undef,i64 %p0,0\n'});
-ll_build_epilog2(i,n,sofar) -> ll_build_epilog2(i+1,n,{*sofar,'\t%m','0'+i,'=insertvalue %R8 %m','0'+i-1,',i64 %p','0'+i,',','0'+i,'\n'});
+ll_lastp(0) -> "undef";
+ll_lastp(i) -> {'%m','0'+i-1};
 
 ll_ret(0) -> {'\tret %R8 undef\n'};
 ll_ret(n) -> {'\tret %R8 %m','0'+n-1,'\n'};
@@ -825,8 +826,9 @@ ll_emit_instruction(table,{_,_,OpGoto,_,_,label,_,_,_,off}) -> match nth(label,t
     {'\t%z',*int_to_string36(off),'=musttail call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)\n\tret %R8 %z',*int_to_string36(off)};
 ll_emit_instruction(_,{_,_,OpError,code,_,line,_,sym}) ->
     {'\tcall void @__rw__error(ptr %A,i32 ',*int_to_string(code),',i32 ',*int_to_string(line),',i32 ',*int_to_string(sym),',ptr @.fn.syms)\n\tunreachable\n'};
-ll_emit_instruction(_,{_,_,OpLLAlloc,_,_,dst}) ->{'\t%x','0'+dst,'=alloca i64'};
-ll_emit_instruction(_,{_,_,OpLLStore,_,_,dst}) ->{'\tstore i64 %s','0'+dst,',ptr %x','0'+dst};
+ll_emit_instruction(_,{_,_,OpLLAlloc,_,_,dst}) -> {'\t%x','0'+dst,'=alloca i64'};
+ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) match ll_tp(tp) => "i64" -> {'\tstore i64 %s','0'+dst,',ptr %x','0'+dst};
+ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) -> {'\t%ss','0'+dst,'=trunc i64 %s','0'+dst,' to ',*ll_tp(tp),'\n\tstore ',*ll_tp(tp),' %ss','0'+dst,',ptr %x','0'+dst};
 ll_emit_instruction(_,{_,_,op,*_}) -> {'\tunknown:',*int_to_string(op)};
 
 output_lbls(sofar,n,n) -> sofar;
@@ -853,6 +855,7 @@ ll_binop(OpLessThanEqual,tp) -> {'icmp sle ',*ll_tp(tp)};
 
 is_unsigned(_) -> false;
 
+ll_tp(TypeBool) -> "i1";
 ll_tp(TypeI64) -> "i64";
 
 intsize(0) -> "i1";
@@ -916,6 +919,9 @@ create_export_vm_sigc(sofar,n,fill,{{_,tp},*rest}) -> create_export_vm_sigc({*so
 c_type(TypeI64) -> "int64_t";
 c_type(TypeBool) -> "bool";
 
+z_or_s(tp) when is_unsigned(tp) -> 'z';
+z_or_s(_) -> 's';
+
 create_export_vm_in(sofar,_,{}) -> sofar;
 create_export_vm_in(sofar,n,{{_,tp},*rest}) -> create_export_vm_in({*sofar,'(uint64_t)in',*int_to_string36(n),','},n+1,rest);
 
@@ -958,7 +964,7 @@ create_export_ll_sigc_out(sofar,i,n) -> create_export_ll_sigc_out({*sofar,',ptr 
 create_export_ll_pre_call(code,reglist,{}) -> code,reglist;
 create_export_ll_pre_call(code,reglist,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,64} -> create_export_ll_pre_call(code,{*reglist,reg},rest);
 create_export_ll_pre_call(code,reglist,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,sz} ->
-    create_export_ll_pre_call({*code,'\t%x',reg,'=',z_or_s(tp),'ext ',*int_to_string(sz),' %',reg,' to i64\n'},{*reglist,{'x',*reg}},rest);
+    create_export_ll_pre_call({*code,'\t%x',*reg,'=',z_or_s(tp),'ext i',*int_to_string(sz),' %',*reg,' to i64\n'},{*reglist,{'x',*reg}},rest);
 
 create_export_ll_params(sofar,{}) -> sofar;
 create_export_ll_params(sofar,{reg,*rest}) -> create_export_ll_params({*sofar,'i64 %',*reg,','},rest);

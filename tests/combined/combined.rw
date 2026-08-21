@@ -5,9 +5,16 @@
 equal(x,x) -> true;
 equal(_,_) -> false;
 
-//:- export min_max(i64,i64) -> i64,i64;
-//min_max(a,b) when a<b -> a,b;
-//smin_max(a,b) -> b,a;
+:- export min_max(i64,i64) -> i64,i64;
+min_max(a,b) when a<b -> a,b;
+min_max(a,b) -> b,a;
+
+// :- export clamp(i64,i64,i64) -> i64;
+// clamp(x,lo,hi) ->
+//     update min_max(lo,hi) => lo,hi
+//     update min_max(x,lo) => _,x
+//     update min_max(x,hi) => x,_ ->
+//     x;
 
 const TokNumber = 1;
 const TokPlus = 2;
@@ -67,7 +74,7 @@ wildcard_test0(a,b) -> 3;
 :- wildcard_test1(i64,i64) -> i64;
 wildcard_test1(_,_) -> 3;
 
-:- neg(bool) -> bool;
+:- export neg(bool) -> bool;
 neg(false) -> true;
 neg(true) -> false;
 
