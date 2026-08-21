@@ -455,7 +455,7 @@ annotate_type_list_stack(stack,sofar,{{{r,{}},t},*rest}) match get_type_size_pri
     annotate_type_list_stack(stack,{*sofar,{{r,{BindOverflow,offset}},t}},rest);
 annotate_type_list_stack(stack,sofar,{t,*rest}) -> annotate_type_list_stack(stack,{*sofar,t},rest);
 
-get_type_size_pri(TypeBool) -> {0,64}; // just make everything size 8 for the first pass
+get_type_size_pri(TypeBool) -> {0,1};
 get_type_size_pri(TypeChar) -> {0,32};
 get_type_size_pri(TypeI64) -> {0,64};
 get_type_size_pri({true,_}) -> {1,4,2,4};
@@ -957,6 +957,8 @@ create_export_ll_sigc_out(sofar,i,n) -> create_export_ll_sigc_out({*sofar,',ptr 
 
 create_export_ll_pre_call(code,reglist,{}) -> code,reglist;
 create_export_ll_pre_call(code,reglist,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,64} -> create_export_ll_pre_call(code,{*reglist,reg},rest);
+create_export_ll_pre_call(code,reglist,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,sz} ->
+    create_export_ll_pre_call({*code,'\t%x',reg,'=',z_or_s(tp),'ext ',*int_to_string(sz),' %',reg,' to i64\n'},{*reglist,{'x',*reg}},rest);
 
 create_export_ll_params(sofar,{}) -> sofar;
 create_export_ll_params(sofar,{reg,*rest}) -> create_export_ll_params({*sofar,'i64 %',*reg,','},rest);
@@ -965,3 +967,9 @@ create_export_ll_post_call(code,_,{}) -> code;
 create_export_ll_post_call(code,n,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,64} ->
     match int_to_string36(n) => ni ->
     create_export_ll_post_call({*code,'\t%eo',*ni,'=extractvalue %R8 %z,',*int_to_string(n),'\n\tstore i64 %eo',*ni,',ptr %out',*ni,'\n'},n+1,rest);
+create_export_ll_post_call(code,n,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,sz} ->
+    match int_to_string36(n) => ni ->
+    create_export_ll_post_call({*code,
+        '\t%eo',*ni,'=extractvalue %R8 %z,',*int_to_string(n),'\n',
+        '\t%et',*ni,'=trunc i64 %eo',*ni,' to i',*int_to_string(sz),'\n',
+        '\tstore i',*int_to_string(sz),' %et',*ni,',ptr %out',*ni,'\n'},n+1,rest);
