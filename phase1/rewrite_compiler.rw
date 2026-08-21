@@ -447,17 +447,17 @@ annotate_type_list_reg(pri,max_reg,reg_count,sofar,{{{r,{}},t},*rest}) match get
 annotate_type_list_reg(pri,max_reg,reg_count,sofar,{t,*rest}) -> annotate_type_list_reg(pri,max_reg,reg_count,{*sofar,t},rest);
 
 annotate_type_list_stack(stack,sofar,{}) -> stack,sofar;
-annotate_type_list_stack(stack,sofar,{{{{}},t},*rest}) match get_type_size_pri(t) => {p,sz} update get_aligned_bitmask(0,{},stack,sz) => stack,offset ->
+annotate_type_list_stack(stack,sofar,{{{{}},t},*rest}) match get_type_size_pri(t) => {p,sz} update get_aligned_bitmask(0,{},stack,min(sz>>3,1)) => stack,offset ->
     annotate_type_list_stack(stack,{*sofar,{{{BindOverflow,offset}},t}},rest);
-annotate_type_list_stack(stack,sofar,{{{{},r},t},*rest}) match get_type_size_pri(t) => {p,sz,_,_} update get_aligned_bitmask(0,{},stack,sz) => stack,offset ->
+annotate_type_list_stack(stack,sofar,{{{{},r},t},*rest}) match get_type_size_pri(t) => {p,sz,_,_} update get_aligned_bitmask(0,{},stack,min(sz>>3,1)) => stack,offset ->
     annotate_type_list_stack(stack,{*sofar,{{{BindOverflow,offset},r},t}},rest);
-annotate_type_list_stack(stack,sofar,{{{r,{}},t},*rest}) match get_type_size_pri(t) => {_,_,p,sz} update get_aligned_bitmask(0,{},stack,sz) => stack,offset ->
+annotate_type_list_stack(stack,sofar,{{{r,{}},t},*rest}) match get_type_size_pri(t) => {_,_,p,sz} update get_aligned_bitmask(0,{},stack,min(sz>>3,1)) => stack,offset ->
     annotate_type_list_stack(stack,{*sofar,{{r,{BindOverflow,offset}},t}},rest);
 annotate_type_list_stack(stack,sofar,{t,*rest}) -> annotate_type_list_stack(stack,{*sofar,t},rest);
 
-get_type_size_pri(TypeBool) -> {0,8}; // just make everything size 8 for the first pass
-get_type_size_pri(TypeChar) -> {0,8};
-get_type_size_pri(TypeI64) -> {0,8};
+get_type_size_pri(TypeBool) -> {0,64}; // just make everything size 8 for the first pass
+get_type_size_pri(TypeChar) -> {0,32};
+get_type_size_pri(TypeI64) -> {0,64};
 get_type_size_pri({true,_}) -> {1,4,2,4};
 get_type_size_pri({false,_}) -> {1,4,2,4};
 
@@ -545,7 +545,7 @@ compile_rule(target,linerule,lblnext,ctx,sofar,params,pre_arrow_clauses,post_arr
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,_,_,_,_,type_left_new,_,_,type_right} ->
     compile_rule(target,linerule,lblnext,ctx_set_tail(ctx,fn_id+1),sofar,params,pre_arrow_clauses,post_arrow_clauses,args,type_left,type_left_new);
 compile_rule(target,linerule,lblnext,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right)
-    match println_any(type_left),ctx_get_tail(ctx) => 0 ->
+    match ctx_get_tail(ctx) => 0 ->
     update generate_params_clauses(target,ctx,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) => ctx,code
     update generate_expr_code(0,ctx,code,{},type_right,exprs) => ctx,code ->
     ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,if_not_zero(lblnext,ctx_get_lblnext(ctx),0),ctx_lbl(ctx),code_or_not(ctx_get_lbl_active(ctx),
@@ -622,7 +622,8 @@ compile_rhs_final_binding(ctx,sofar,{{tp,src,dst},*rest}) -> compile_rhs_final_b
 code_or_not(false,_) -> {};
 code_or_not(_,code) -> code;
 
-get_scalar_type_size(tp) match get_type_size_pri(tp) => {_,sz} -> 63-count_leading_zeros(sz);
+get_scalar_type_size(tp) match get_type_size_pri(tp) => {_,0} -> 0;
+get_scalar_type_size(tp) match get_type_size_pri(tp) => {_,sz} -> 64-count_leading_zeros(sz>>3);
 
 generate_to_reg_move(fn_id,rule_id,tp,newreg,src_flag,src) -> {fn_id,rule_id,OpMove+get_scalar_type_size(tp),0,BindReg,newreg,src_flag,src};
 
@@ -854,7 +855,8 @@ is_unsigned(_) -> false;
 
 ll_tp(TypeI64) -> "i64";
 
-intsize(3) -> "i64";
+intsize(0) -> "i1";
+intsize(sz) -> {'i',*int_to_string(4<<sz)};
 
 ///////////////////////////////////////////////////////////
 // C FFI
@@ -954,12 +956,12 @@ create_export_ll_sigc_out(sofar,n,n) -> sofar;
 create_export_ll_sigc_out(sofar,i,n) -> create_export_ll_sigc_out({*sofar,',ptr %out',*int_to_string36(i)},i+1,n);
 
 create_export_ll_pre_call(code,reglist,{}) -> code,reglist;
-create_export_ll_pre_call(code,reglist,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,8} -> create_export_ll_pre_call(code,{*reglist,reg},rest);
+create_export_ll_pre_call(code,reglist,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,64} -> create_export_ll_pre_call(code,{*reglist,reg},rest);
 
 create_export_ll_params(sofar,{}) -> sofar;
 create_export_ll_params(sofar,{reg,*rest}) -> create_export_ll_params({*sofar,'i64 %',*reg,','},rest);
 
 create_export_ll_post_call(code,_,{}) -> code;
-create_export_ll_post_call(code,n,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,8} ->
+create_export_ll_post_call(code,n,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,64} ->
     match int_to_string36(n) => ni ->
     create_export_ll_post_call({*code,'\t%eo',*ni,'=extractvalue %R8 %z,',*int_to_string(n),'\n\tstore i64 %eo',*ni,',ptr %out',*ni,'\n'},n+1,rest);

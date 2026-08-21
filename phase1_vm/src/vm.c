@@ -226,17 +226,17 @@ const char* display_type(uint8_t tp) {
 uint32_t type_to_size(uint8_t tp) {
     switch(tp) {
         case TYPE_BOOL: return 1; break;
-        case TYPE_CHAR: return 1; break;
-        case TYPE_I8: return 1; break;
-        case TYPE_U8: return 1; break;
-        case TYPE_I16: return 2; break;
-        case TYPE_U16: return 2; break;
-        case TYPE_I32: return 4; break;
-        case TYPE_U32: return 4; break;
-        case TYPE_I64: return 8; break;
-        case TYPE_U64: return 8; break;
-        case TYPE_I128: return 16; break;
-        case TYPE_U128: return 16; break;
+        case TYPE_CHAR: return 32; break;
+        case TYPE_I8: return 8; break;
+        case TYPE_U8: return 8; break;
+        case TYPE_I16: return 16; break;
+        case TYPE_U16: return 16; break;
+        case TYPE_I32: return 32; break;
+        case TYPE_U32: return 32; break;
+        case TYPE_I64: return 64; break;
+        case TYPE_U64: return 64; break;
+        case TYPE_I128: return 128; break;
+        case TYPE_U128: return 128; break;
         default: return 0;
     }
 }
@@ -297,14 +297,14 @@ void program_disassemble(Program* program, FILE* out) {
                 }
             } break;
             case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
-                uint32_t sz=1<<(op&7);
+                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"let.%d ",sz);
                 display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out," = ");
                 display_operand(out,operation->flags_src1,operation->src1);
             } break;
             case OP_INSERT_LL: case OP_INSERT_LL+1: case OP_INSERT_LL+2: case OP_INSERT_LL+3: case OP_INSERT_LL+4: {
-                uint32_t sz=1<<(op&7);
+                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"insert.%d ",sz);
                 display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out," = ");
@@ -312,7 +312,7 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out," (o=%d)",(uint32_t)operation->src2);
             } break;
             case OP_EXTRACT_LL: case OP_EXTRACT_LL+1: case OP_EXTRACT_LL+2: case OP_EXTRACT_LL+3: case OP_EXTRACT_LL+4: {
-                uint32_t sz=1<<(op&7);
+                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"extract.%d ",sz);
                 display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out," = ");
@@ -320,7 +320,7 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out," (o=%d)",(uint32_t)operation->src2);
             } break;
             case OP_CMP_NE_BRANCH: case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
-                uint32_t sz=1<<(op&7);
+                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"test.%d ",sz);
                 display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," != ");
@@ -329,7 +329,7 @@ void program_disassemble(Program* program, FILE* out) {
                 program_display_label_both(program,out,operation);
             } break;
             case OP_CMP_EQ_BRANCH: case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
-                uint32_t sz=1<<(op&7);
+                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"test.%d ",sz);
                 display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," == ");
@@ -358,24 +358,24 @@ void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32
             exit(EXIT_FAILURE);
         } break;
         case BIND_REG: {
-            value&=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
+            value&=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
             exe->registers[operation->dst+sp]=value;
         } break;
         case BIND_ARGRET: {
-            value&=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
+            value&=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
             exe->argret[operation->dst]=value;
         } break;
         case BIND_INOUT: {
-            value&=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
+            value&=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
             ((uint64_t*)exe->registers[0])[operation->dst]=value;
         } break;
         case BIND_OVERFLOW: {
             uint8_t* addr=&exe->overflow[operation->dst];
             switch(sz) { // alignment is guaranteed by the compiler
-                case 1:*((uint8_t*)addr)=(uint8_t)value; break;
-                case 2:*((uint16_t*)addr)=(uint16_t)value; break;
-                case 4:*((uint32_t*)addr)=(uint32_t)value; break;
-                case 8:*((uint64_t*)addr)=(uint64_t)value; break;
+                case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
+                case 16:*((uint16_t*)addr)=(uint16_t)value; break;
+                case 32:*((uint32_t*)addr)=(uint32_t)value; break;
+                case 64:*((uint64_t*)addr)=(uint64_t)value; break;
                 default: fprintf(stderr,"unknown size in operand_store\n"); exit(EXIT_FAILURE);
             }
         } break;
@@ -387,7 +387,7 @@ void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32
 }
 
 uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t src, uint32_t sp) {
-    uint64_t mask=(sz>=8)?(uint64_t)-1LL:(uint64_t)((1LL<<(sz<<3))-1);
+    uint64_t mask=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
     switch(flags_src&0xF) {
         case BIND_IMM: {
             return src&mask;
@@ -405,10 +405,10 @@ uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t
             uint8_t* addr=&exe->overflow[src];
             uint64_t value;
             switch(sz) { // alignment is guaranteed by the compiler
-                case 1:value=*((uint8_t*)addr); break;
-                case 2:value=*((uint16_t*)addr); break;
-                case 4:value=*((uint32_t*)addr); break;
-                case 8:value=*((uint64_t*)addr); break;
+                case 1:case 8: value=*((uint8_t*)addr); break;
+                case 16:value=*((uint16_t*)addr); break;
+                case 32:value=*((uint32_t*)addr); break;
+                case 64:value=*((uint64_t*)addr); break;
                 default: fprintf(stderr,"unknown size in operand_load\n"); exit(EXIT_FAILURE);
             }
             return value&mask;
@@ -460,23 +460,41 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_ADD_STACK: {
                  sp+=(int32_t)operation->src1;
             } break;
-              case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4:
-              case OP_INSERT_LL: case OP_INSERT_LL+1: case OP_INSERT_LL+2: case OP_INSERT_LL+3: case OP_INSERT_LL+4:
-              case OP_EXTRACT_LL: case OP_EXTRACT_LL+1: case OP_EXTRACT_LL+2: case OP_EXTRACT_LL+3: case OP_EXTRACT_LL+4: {
-                uint32_t sz = 1 << (op & 7);
+            case OP_MOVE: case OP_INSERT_LL: case OP_EXTRACT_LL: {
+                uint64_t val = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
+                operand_store(exe, operation, val, 1, sp);
+            }
+            case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4:
+            case OP_INSERT_LL+1: case OP_INSERT_LL+2: case OP_INSERT_LL+3: case OP_INSERT_LL+4:
+            case OP_EXTRACT_LL+1: case OP_EXTRACT_LL+2: case OP_EXTRACT_LL+3: case OP_EXTRACT_LL+4: {
+                uint32_t sz =8<<(op&7);
                 uint64_t val = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 operand_store(exe, operation, val, sz, sp);
             } break;
-            case OP_CMP_NE_BRANCH: case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
-                uint32_t sz = 1 << (op & 7);
+            case OP_CMP_NE_BRANCH: {
+                uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp);
+                if(src1 != src2) {
+                    pc = operation->dst-1; // -1 because pc++ at end of loop
+                }
+            } break;
+            case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
+                uint32_t sz =8<<(op&7);
                 uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 if(src1 != src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
-            case OP_CMP_EQ_BRANCH: case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
-                uint32_t sz = 1 << (op & 7);
+            case OP_CMP_EQ_BRANCH: {
+                uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp);
+                if(src1 == src2) {
+                    pc = operation->dst-1; // -1 because pc++ at end of loop
+                }
+            } break;
+            case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
+                uint32_t sz =8<<(op&7);
                 uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 if(src1 == src2) {
