@@ -112,10 +112,11 @@ void rw_instance_unload(RWInstance* exe) {
 #define OP_TIMES 0x1A
 #define OP_DIVIDE 0x1B
 #define OP_MODULUS 0x1C
+#define OP_LT 0x1D
+#define OP_LTE 0x1E
 #define OP_INSERT_LL 0x20
 #define OP_EXTRACT_LL 0x30
 #define OP_CMP_NE_BRANCH 0xF0
-// Next two still TODO
 #define OP_CMP_LT_BRANCH 0xF6
 #define OP_CMP_LE_BRANCH 0xF7
 #define OP_CMP_EQ_BRANCH 0xF8
@@ -246,7 +247,8 @@ const char* display_binop(uint8_t op) {
         case OP_MINUS: return "-"; break;
         case OP_TIMES: return "*"; break;
         case OP_DIVIDE: return "/"; break;
-        case OP_MODULUS: return "%"; break;
+        case OP_LT: return "<"; break;
+        case OP_LTE: return "<="; break;
         default: return "(unknown)";
     }
 }
@@ -335,7 +337,7 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out," goto ");
                 program_display_label_both(program,out,operation);
             } break;
-            case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: {
+            case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
                 fprintf(out,"let.%s ",display_type(operation->type));
                 display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out," = ");
@@ -481,7 +483,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
-            case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: {
+            case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
                 uint32_t sz = type_to_size(operation->type);
                 uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
@@ -490,6 +492,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     case OP_PLUS: dst = src1+src2; break;
                     case OP_MINUS: dst = src1-src2; break;
                     case OP_TIMES: dst = src1*src2; break;
+                    case OP_LT: dst = src1<src2; break;
+                    case OP_LTE: dst = src1<=src2; break;
                     case OP_DIVIDE: {
                         if(src2 == 0) {
                             fprintf(stderr, "fatal: division by zero in division\n");

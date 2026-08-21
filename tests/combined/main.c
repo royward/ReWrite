@@ -4,6 +4,7 @@
 
 int main(int argc, char** argv) {
     (void)argc;
+    (void)argv;
     Program p;
     program_load(&p,"combined.rwo");
     program_disassemble(&p,stdout);

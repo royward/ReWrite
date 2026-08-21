@@ -4,6 +4,7 @@
 
 int main(int argc, char** argv) {
     (void)argc;
+    (void)argv;
     RWInstance* exe=setup_rw_instance(1000000);
 #include "tests.h"
     free_rw_instance(exe);

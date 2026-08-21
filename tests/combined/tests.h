@@ -2,9 +2,18 @@
     int64_t result1;
     bool resultb;
     int ret_code;
+
     printf("fact:");
     ret_code=rw_fact(exe,10,&result0);
     if(!ret_code && result0==3628800) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("min_max:");
+    ret_code=rw_min_max(exe,6,7,&result0,&result1);
+    if(!ret_code && result0==6 && result1==7) { printf("success\n"); } else { printf("fail:%d %ld %ld\n",ret_code,result0,result1); };
+
+    printf("max_min:");
+    ret_code=rw_min_max(exe,6,7,&result0,&result1);
+    if(!ret_code && result0==6 && result1==7) { printf("success\n"); } else { printf("fail:%d %ld %ld\n",ret_code,result0,result1); };
 
     printf("eval:");
     ret_code=rw_eval(exe,3,10,6,&result0);

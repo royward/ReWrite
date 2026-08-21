@@ -5,7 +5,10 @@
 equal(x,x) -> true;
 equal(_,_) -> false;
 
-//clamp.rw
+:- export min_max(i64,i64) -> i64,i64;
+min_max(a,b) when a<b -> a,b;
+min_max(a,b) -> b,a;
+
 const TokNumber = 1;
 const TokPlus = 2;
 const TokMinus = 3;
@@ -57,5 +60,15 @@ multiret(a,b) -> sub(swap(a,b))+1;
 
 :- sub(i64,i64) -> i64;
 sub(a,b) -> a-b;
+
+:- wildcard_test0(i64,i64) -> i64;
+wildcard_test0(a,b) -> 3;
+
+:- wildcard_test1(i64,i64) -> i64;
+wildcard_test1(_,_) -> 3;
+
+:- neg(bool) -> bool;
+neg(false) -> true;
+neg(true) -> false;
 
 //validate.rw
