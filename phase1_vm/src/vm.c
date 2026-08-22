@@ -270,7 +270,9 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out,"ll_store.%s %d",display_type(operation->type),operation->dst);
             } break;
             case OP_ERROR: {
-                fprintf(out,"error type:%d line:%d sym:%s",operation->type,operation->dst,program->symbols+operation->src1);
+                fprintf(out,"error type:");
+                display_operand(out,operation->flags_dst,operation->dst);
+                fprintf(out," line:%ld sym:%s",operation->src1,program->symbols+operation->src2);
             } break;
             case OP_RET: {
                 fprintf(out,"ret");
@@ -437,9 +439,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 // NOP
             } break;
             case OP_ERROR: {
-                exe->errtype=operation->type;
-                exe->errline=operation->dst;
-                exe->errsym=program->symbols+operation->src1;
+                exe->errtype=operand_load(exe, 64, operation->flags_dst, operation->dst, sp);
+                exe->errline=operation->src1;
+                exe->errsym=program->symbols+operation->src2;
                 return exe->errtype;
             };
             case OP_RET: {
@@ -510,8 +512,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     case OP_PLUS: dst = src1+src2; break;
                     case OP_MINUS: dst = src1-src2; break;
                     case OP_TIMES: dst = src1*src2; break;
-                    case OP_LT: dst = src1<src2; break;
-                    case OP_LTE: dst = src1<=src2; break;
+                    case OP_LT: dst = (int64_t)src1<(int64_t)src2; break;
+                    case OP_LTE: dst = (int64_t)src1<=(int64_t)src2; break;
                     case OP_DIVIDE: {
                         if(src2 == 0) {
                             fprintf(stderr, "fatal: division by zero in division\n");

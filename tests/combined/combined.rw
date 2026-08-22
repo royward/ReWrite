@@ -35,8 +35,10 @@ fact(n)->n*fact(n-1);
 fact2(n) when n>0 -> n*fact2(n-1);
 fact2(_) -> 1;
 
+const ErrNegUnexpected = 88;
+
 :- export fact_err(n:i64)->i64;
-//fact_err(n) when n<0 -> #error;
+fact_err(n) when n<0 -> #error(ErrNegUnexpected);
 fact_err(0)->1;
 fact_err(n)->n*fact_err(n-1);
 
@@ -46,8 +48,6 @@ fact_tail(n) -> fact_aux(1,n);
 :- fact_aux(i64,i64) -> i64;
 fact_aux(acc,0) -> acc;
 fact_aux(acc,n) -> fact_aux(acc*n,n-1);
-
-//factorial_errcheck.rw
 
 :- export fib(n:i64)->i64;
 fib(0) -> 1;

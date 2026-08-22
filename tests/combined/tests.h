@@ -44,7 +44,7 @@
         uint32_t line;
         rw_instance_get_error(exe,&line,&function);
         if(ret_code==3 && strcmp(function,"eval")==0) {
-            printf("success\n");
+            printf("success line:%d\n",line);
         } else {
             printf("fail:%d %s\n",ret_code,function);
         }
@@ -58,12 +58,31 @@
     ret_code=rw_equal(exe,7,7,&resultb);
     if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,(int)resultb); };
 
-    printf("fact_tail:");
-    ret_code=rw_fact_tail(exe,10,&result0);
+    printf("fact_err:");
+    ret_code=rw_fact_err(exe,10,&result0);
     if(!ret_code && result0==3628800) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("fact_err:");
+    ret_code=rw_fact_err(exe,-10,&result0);
+    if(!ret_code) {
+        printf("fail\n");
+    } else {
+        const char* function;
+        uint32_t line;
+        rw_instance_get_error(exe,&line,&function);
+        if(ret_code==88 && strcmp(function,"fact_err")==0) {
+            printf("success line:%d\n",line);
+        } else {
+            printf("fail:%d %s\n",ret_code,function);
+        }
+    };
 
     printf("fact2:");
     ret_code=rw_fact2(exe,10,&result0);
+    if(!ret_code && result0==3628800) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("fact_tail:");
+    ret_code=rw_fact_tail(exe,10,&result0);
     if(!ret_code && result0==3628800) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
     printf("fib:");
