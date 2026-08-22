@@ -15,6 +15,22 @@
     ret_code=rw_min_max(exe,6,7,&result0,&result1);
     if(!ret_code && result0==6 && result1==7) { printf("success\n"); } else { printf("fail:%d %ld %ld\n",ret_code,result0,result1); };
 
+    printf("clamp:");
+    ret_code=rw_clamp(exe,3,5,10,&result0);
+    if(!ret_code && result0==5) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("clamp:");
+    ret_code=rw_clamp(exe,8,5,10,&result0);
+    if(!ret_code && result0==8) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("clamp:");
+    ret_code=rw_clamp(exe,13,5,10,&result0);
+    if(!ret_code && result0==10) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("clamp:");
+    ret_code=rw_clamp(exe,3,10,5,&result0);
+    if(!ret_code && result0==5) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
     printf("eval:");
     ret_code=rw_eval(exe,3,10,6,&result0);
     if(!ret_code && result0==4) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
@@ -44,6 +60,10 @@
 
     printf("fact_tail:");
     ret_code=rw_fact_tail(exe,10,&result0);
+    if(!ret_code && result0==3628800) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("fact2:");
+    ret_code=rw_fact2(exe,10,&result0);
     if(!ret_code && result0==3628800) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
     printf("fib:");

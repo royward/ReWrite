@@ -9,12 +9,12 @@ equal(_,_) -> false;
 min_max(a,b) when a<b -> a,b;
 min_max(a,b) -> b,a;
 
-// :- export clamp(i64,i64,i64) -> i64;
-// clamp(x,lo,hi) ->
-//     update min_max(lo,hi) => lo,hi
-//     update min_max(x,lo) => _,x
-//     update min_max(x,hi) => x,_ ->
-//     x;
+:- export clamp(i64,i64,i64) -> i64;
+clamp(x,lo,hi) ->
+    update min_max(lo,hi) => lo,hi
+    update min_max(x,lo) => _,x
+    update min_max(x,hi) => x,_ ->
+    x;
 
 const TokNumber = 1;
 const TokPlus = 2;
@@ -31,6 +31,15 @@ eval(TokEof, _, _) -> TokEof;
 fact(0)->1;
 fact(n)->n*fact(n-1);
 
+:- export fact2(n:i64)->i64;
+fact2(n) when n>0 -> n*fact2(n-1);
+fact2(_) -> 1;
+
+:- export fact_err(n:i64)->i64;
+//fact_err(n) when n<0 -> #error;
+fact_err(0)->1;
+fact_err(n)->n*fact_err(n-1);
+
 :- export fact_tail(n:i64) -> i64;
 fact_tail(n) -> fact_aux(1,n);
 
@@ -38,7 +47,6 @@ fact_tail(n) -> fact_aux(1,n);
 fact_aux(acc,0) -> acc;
 fact_aux(acc,n) -> fact_aux(acc*n,n-1);
 
-//factorial2.rw
 //factorial_errcheck.rw
 
 :- export fib(n:i64)->i64;
@@ -49,7 +57,6 @@ fib(n) -> fib(n-2)+fib(n-1);
 //listn2.rw
 //listn.rw
 //member.rw
-//min_max.rw
 //misc_splat.rw
 //nprime.rw
 //nqueens_bitmask.rw

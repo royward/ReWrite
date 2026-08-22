@@ -199,15 +199,15 @@ const ExprNever=10;
 string_to_int_pos({},acc) -> acc;
 string_to_int_pos({c,*rest},acc) -> string_to_int_pos(rest,acc*10+(c-'0'));
 
-int_to_string36(0) -> "0";
-int_to_string36(n) when n<10 -> {'0'+n};
-int_to_string36(n) when n<36 -> {'a'+n-10};
-int_to_string36(n) -> {*int_to_string36(n/36),*int_to_string36(n%36)};
+int2s36(0) -> "0";
+int2s36(n) when n<10 -> {'0'+n};
+int2s36(n) when n<36 -> {'a'+n-10};
+int2s36(n) -> {*int2s36(n/36),*int2s36(n%36)};
 
-int_to_string(0) -> "0";
-int_to_string(n) when n<0 -> {'-',*int_to_string(-n)};
-int_to_string(n) when n<10 -> {'0'+n};
-int_to_string(n) -> {*int_to_string(n/10),*int_to_string(n%10)};
+int2s(0) -> "0";
+int2s(n) when n<0 -> {'-',*int2s(-n)};
+int2s(n) when n<10 -> {'0'+n};
+int2s(n) -> {*int2s(n/10),*int2s(n%10)};
 
 parse(target,s) -> parse_aux(target,{},{},{},0,{},s);
 
@@ -651,12 +651,8 @@ generate_conditional_extractx(ctx,tp,BindArgRet,src) ->
 generate_conditional_extractx(ctx,tp,src_flag,src) -> ctx,src_flag,src,{};
 
 use_binding(ctx,id) ->
-    match split3_nth(id,{},ctx_bindings(ctx)) => prebind,{refs,tp,{src_flag,src},name},post_bind
-    update use_binding_check_reg_end(ctx,refs,src) => ctx ->
+    match split3_nth(id,{},ctx_bindings(ctx)) => prebind,{refs,tp,{src_flag,src},name},post_bind ->
     ctx_newbindings(ctx,{*prebind,{refs-1,tp,{src_flag,src},name},*post_bind}),tp,src_flag,src;
-
-use_binding_check_reg_end(ctx,2,src) -> match split3_nth(src,{},ctx_get_reg_count(ctx)) => prebind,_,post_bind -> ctx_put_reg_count(ctx,{*prebind,0,*post_bind});
-use_binding_check_reg_end(ctx,ref,_) -> ctx;
 
 generate_expr_code(_,ctx,code1,code2,{},{}) -> ctx,{*code1,*code2};
 // TODO deal with lists and splats first
@@ -773,7 +769,7 @@ ll_boilerplate() -> {
 
 ll_boilerplate_end() -> "\nattributes #0={returns_twice}\n";
 
-convert_to_llvm(target,small_table,table,symtext,symsz,sofar,{}) -> {*ll_boilerplate(),*int_to_string(symsz),'x i8] c"',*symtext,'"\n',*sofar};
+convert_to_llvm(target,small_table,table,symtext,symsz,sofar,{}) -> {*ll_boilerplate(),*int2s(symsz),'x i8] c"',*symtext,'"\n',*sofar};
 convert_to_llvm(target,small_table,table,symtext,symsz,sofar,{{fnid,code},*rest}) ->
     convert_to_llvm(target,small_table,table,symtext,symsz,{*sofar,*convert_to_ll_fn(target,small_table,table,fnid,code)},rest);
 
@@ -808,38 +804,39 @@ ll_emit_instructions(table,sofar,{instr,*rest}) -> ll_emit_instructions(table,{*
 add_newline("") -> "";
 add_newline(str) -> {*str,'\n'};
 
-ll_emit_instruction(_,{_,_,OpLabel,_,_,dst}) ->{'L',*int_to_string36(dst),':'};
+ll_emit_instruction(_,{_,_,OpLabel,_,_,dst}) ->{'L',*int2s36(dst),':'};
 ll_emit_instruction(_,{_,_,OpRet,_}) -> "\tbr label %exit";
 ll_emit_instruction(_,{_,_,OpAddStack,_,_,_,_,_}) -> "";
-ll_emit_instruction(_,{_,_,op,_,BindReg,dst,BindArgRet,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\t%t',*int_to_string36(dst),'=load ',*intsize(op-OpMove),',',*ll_emit_arg(BindArgRet,src)};
+ll_emit_instruction(_,{_,_,op,_,BindReg,dst,BindArgRet,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\t%t',*int2s36(dst),'=load ',*intsize(op-OpMove),',',*ll_emit_arg(BindArgRet,src)};
 ll_emit_instruction(_,{_,_,op,_,BindArgRet,dst,flag_src,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\tstore ',*intsize(op-OpMove),' ',*ll_emit_arg(flag_src,src),',ptr %x','0'+dst};
+ll_emit_instruction(_,{_,_,op,_,BindReg,dst,flag_src,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\t%t',*int2s36(dst),'=or ',*intsize(op-OpMove),' ','%t',*int2s36(src),',0'};
 ll_emit_instruction(_,{_,_,op,_,BindArgRet,dst,flag_src,src,_,off}) when op>=OpInsert when op<OpInsert+5 ->
-    {'\tstore ',*intsize(op-OpInsert),' ',*ll_emit_arg(flag_src,src),',ptr %x','0'+dst,'\n\t%a',*int_to_string36(dst+off),'=load ',*intsize(op-OpInsert),',ptr %x','0'+dst};
-ll_emit_instruction(_,{_,_,op,_,BindReg,dst,BindArgRet,src,_,off}) when op>=OpExtract when op<OpExtract+5 -> {'\t',*ll_emit_arg(BindReg,dst),'=extractvalue %R8 %z',*int_to_string36(off),',',*int_to_string(src)};
-ll_emit_instruction(_,{_,_,op,_,_,lbl,flag_src,src,flag_src2,src2,lbl2}) when op>=OpCompareNotEqualBranch when op<OpCompareNotEqualBranch+5 -> match int_to_string36(lbl2) => id ->
-    {'\t%c',*id,'=icmp ne ',*intsize(op-OpCompareNotEqualBranch),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2),'\n\tbr i1 %c',*id,',label %L',*int_to_string36(lbl),',label %L',*id};
+    {'\tstore ',*intsize(op-OpInsert),' ',*ll_emit_arg(flag_src,src),',ptr %x','0'+dst,'\n\t%a',*int2s36(dst+off),'=load ',*intsize(op-OpInsert),',ptr %x','0'+dst};
+ll_emit_instruction(_,{_,_,op,_,BindReg,dst,BindArgRet,src,_,off}) when op>=OpExtract when op<OpExtract+5 -> {'\t',*ll_emit_arg(BindReg,dst),'=extractvalue %R8 %z',*int2s36(off),',',*int2s(src)};
+ll_emit_instruction(_,{_,_,op,_,_,lbl,flag_src,src,flag_src2,src2,lbl2}) when op>=OpCompareNotEqualBranch when op<OpCompareNotEqualBranch+5 -> match int2s36(lbl2) => id ->
+    {'\t%c',*id,'=icmp ne ',*intsize(op-OpCompareNotEqualBranch),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2),'\n\tbr i1 %c',*id,',label %L',*int2s36(lbl),',label %L',*id};
 ll_emit_instruction(_,{_,_,op,tp,BindReg,dst,flag_src,src,flag_src2,src2}) when op>=OpPlus when op<=OpLessThanEqual ->
     {'\t',*ll_emit_arg(BindReg,dst),'=',*ll_binop(op,tp),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2)};
 ll_emit_instruction(table,{_,_,OpCall,_,_,label,_,_,_,off}) -> match nth(label,table) => {name,_,_,arity} ->
-    {'\t%z',*int_to_string36(off),'=call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)'};
+    {'\t%z',*int2s36(off),'=call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)'};
 ll_emit_instruction(table,{_,_,OpGoto,_,_,label,_,_,_,off}) -> match nth(label,table) => {name,_,_,arity} ->
-    {'\t%z',*int_to_string36(off),'=musttail call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)\n\tret %R8 %z',*int_to_string36(off)};
+    {'\t%z',*int2s36(off),'=musttail call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)\n\tret %R8 %z',*int2s36(off)};
 ll_emit_instruction(_,{_,_,OpError,code,_,line,_,sym}) ->
-    {'\tcall void @__rw__error(ptr %A,i32 ',*int_to_string(code),',i32 ',*int_to_string(line),',i32 ',*int_to_string(sym),',ptr @.fn.syms)\n\tunreachable\n'};
+    {'\tcall void @__rw__error(ptr %A,i32 ',*int2s(code),',i32 ',*int2s(line),',i32 ',*int2s(sym),',ptr @.fn.syms)\n\tunreachable\n'};
 ll_emit_instruction(_,{_,_,OpLLAlloc,_,_,dst}) -> {'\t%x','0'+dst,'=alloca i64'};
 ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) match ll_tp(tp) => "i64" -> {'\tstore i64 %s','0'+dst,',ptr %x','0'+dst};
 ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) -> {'\t%ss','0'+dst,'=trunc i64 %s','0'+dst,' to ',*ll_tp(tp),'\n\tstore ',*ll_tp(tp),' %ss','0'+dst,',ptr %x','0'+dst};
-ll_emit_instruction(_,{_,_,op,*_}) -> {'\tunknown:',*int_to_string(op)};
+ll_emit_instruction(_,{_,_,op,*_}) -> {'\tunknown:',*int2s(op)};
 
 output_lbls(sofar,n,n) -> sofar;
-output_lbls(sofar,i,n) -> output_lbls({*sofar,'i64 %a',*int_to_string36(i),','},i+1,n);
+output_lbls(sofar,i,n) -> output_lbls({*sofar,'i64 %a',*int2s36(i),','},i+1,n);
 
 output_undef(sofar,n,n) -> sofar;
 output_undef(sofar,i,n) -> output_undef({*sofar,'i64 undef,'},i+1,n);
 
 ll_emit_arg(BindArgRet,src) -> {'ptr %x','0'+src};
-ll_emit_arg(BindReg,src) -> {'%t',*int_to_string36(src)};
-ll_emit_arg(BindImm,src) -> int_to_string(src);
+ll_emit_arg(BindReg,src) -> {'%t',*int2s36(src)};
+ll_emit_arg(BindImm,src) -> int2s(src);
 
 ll_binop(OpPlus,tp) -> {'add ',*ll_tp(tp)};
 ll_binop(OpMinus,tp) -> {'sub ',*ll_tp(tp)};
@@ -859,7 +856,7 @@ ll_tp(TypeBool) -> "i1";
 ll_tp(TypeI64) -> "i64";
 
 intsize(0) -> "i1";
-intsize(sz) -> {'i',*int_to_string(4<<sz)};
+intsize(sz) -> {'i',*int2s(4<<sz)};
 
 ///////////////////////////////////////////////////////////
 // C FFI
@@ -897,8 +894,8 @@ create_export_wrappers_vm(target,sofarc,sofarh,fnid,label_id,{{_,_,_,name,_,_,le
             *create_export_vm_code_out(new_lbl,0,{},right),
             {new_lbl,0,OpRet,0}}}},
         {*sofarh,'\nstatic inline int32_t rw_',*name,'(RWInstance* a',*create_export_vm_sigc({},0,"in",left),*create_export_vm_sigc({},0,"*out",right),') {\n',
-            '\tuint64_t inout[',*int_to_string(max(length(left),length(right))),']={',*create_export_vm_in({},0,left),'};\n',
-            '\tint32_t e=RW__vmcall(a,',*int_to_string(new_lbl),',inout);\n\tif(e!=0)return e;\n',
+            '\tuint64_t inout[',*int2s(max(length(left),length(right))),']={',*create_export_vm_in({},0,left),'};\n',
+            '\tint32_t e=RW__vmcall(a,',*int2s(new_lbl),',inout);\n\tif(e!=0)return e;\n',
             *create_export_vm_out({},0,right),
             '\treturn 0;\n}\n'},
         fnid+1,new_lbl,rest);
@@ -914,7 +911,7 @@ create_export_vm_param(new_lbl,n,tp,{{flag,dst}}) -> {{new_lbl,0,OpMove+get_scal
 create_export_vm_ret(new_lbl,n,tp,{{flag,dst}}) -> {{new_lbl,0,OpMove+get_scalar_type_size(tp),0,BindInOut,n,flag,dst}};
 
 create_export_vm_sigc(sofar,_,_,{}) -> sofar;
-create_export_vm_sigc(sofar,n,fill,{{_,tp},*rest}) -> create_export_vm_sigc({*sofar,',',*c_type(tp),' ',*fill,*int_to_string36(n)},n+1,fill,rest);
+create_export_vm_sigc(sofar,n,fill,{{_,tp},*rest}) -> create_export_vm_sigc({*sofar,',',*c_type(tp),' ',*fill,*int2s36(n)},n+1,fill,rest);
 
 c_type(TypeI64) -> "int64_t";
 c_type(TypeBool) -> "bool";
@@ -923,11 +920,11 @@ z_or_s(tp) when is_unsigned(tp) -> 'z';
 z_or_s(_) -> 's';
 
 create_export_vm_in(sofar,_,{}) -> sofar;
-create_export_vm_in(sofar,n,{{_,tp},*rest}) -> create_export_vm_in({*sofar,'(uint64_t)in',*int_to_string36(n),','},n+1,rest);
+create_export_vm_in(sofar,n,{{_,tp},*rest}) -> create_export_vm_in({*sofar,'(uint64_t)in',*int2s36(n),','},n+1,rest);
 
 create_export_vm_out(sofar,_,{}) -> sofar;
 create_export_vm_out(sofar,n,{{_,tp},*rest}) ->
-    create_export_vm_out({*sofar,'\t*out',*int_to_string36(n),'=(',*c_type(tp),')inout[',*int_to_string36(n),'];\n'},n+1,rest);
+    create_export_vm_out({*sofar,'\t*out',*int2s36(n),'=(',*c_type(tp),')inout[',*int2s36(n),'];\n'},n+1,rest);
 
 create_export_wrappers_ll(target,sofarc,sofarh,_,{}) -> sofarc,sofarh;
 create_export_wrappers_ll(target,sofarc,sofarh,fnid,{{false,*_},*rest}) -> create_export_wrappers_ll(target,sofarc,sofarh,fnid+1,rest);
@@ -955,27 +952,27 @@ create_export_wrappers_ll(target,sofarc,sofarh,fnid,{{_,_,_,name,_,_,left,_,_,ri
         fnid+1,rest);
 
 create_export_ll_sigc_in(sofar,regs,_,{}) -> sofar,regs;
-create_export_ll_sigc_in(sofar,regs,n,{{_,tp},*rest}) -> match {'in',*int_to_string36(n)} => reg ->
+create_export_ll_sigc_in(sofar,regs,n,{{_,tp},*rest}) -> match {'in',*int2s36(n)} => reg ->
     create_export_ll_sigc_in({*sofar,',',*ll_tp(tp),' %',*reg},{*regs,{reg,tp}},n+1,rest);
 
 create_export_ll_sigc_out(sofar,n,n) -> sofar;
-create_export_ll_sigc_out(sofar,i,n) -> create_export_ll_sigc_out({*sofar,',ptr %out',*int_to_string36(i)},i+1,n);
+create_export_ll_sigc_out(sofar,i,n) -> create_export_ll_sigc_out({*sofar,',ptr %out',*int2s36(i)},i+1,n);
 
 create_export_ll_pre_call(code,reglist,{}) -> code,reglist;
 create_export_ll_pre_call(code,reglist,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,64} -> create_export_ll_pre_call(code,{*reglist,reg},rest);
 create_export_ll_pre_call(code,reglist,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,sz} ->
-    create_export_ll_pre_call({*code,'\t%x',*reg,'=',z_or_s(tp),'ext i',*int_to_string(sz),' %',*reg,' to i64\n'},{*reglist,{'x',*reg}},rest);
+    create_export_ll_pre_call({*code,'\t%x',*reg,'=',z_or_s(tp),'ext i',*int2s(sz),' %',*reg,' to i64\n'},{*reglist,{'x',*reg}},rest);
 
 create_export_ll_params(sofar,{}) -> sofar;
 create_export_ll_params(sofar,{reg,*rest}) -> create_export_ll_params({*sofar,'i64 %',*reg,','},rest);
 
 create_export_ll_post_call(code,_,{}) -> code;
 create_export_ll_post_call(code,n,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,64} ->
-    match int_to_string36(n) => ni ->
-    create_export_ll_post_call({*code,'\t%eo',*ni,'=extractvalue %R8 %z,',*int_to_string(n),'\n\tstore i64 %eo',*ni,',ptr %out',*ni,'\n'},n+1,rest);
+    match int2s36(n) => ni ->
+    create_export_ll_post_call({*code,'\t%eo',*ni,'=extractvalue %R8 %z,',*int2s(n),'\n\tstore i64 %eo',*ni,',ptr %out',*ni,'\n'},n+1,rest);
 create_export_ll_post_call(code,n,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,sz} ->
-    match int_to_string36(n) => ni ->
+    match int2s36(n) => ni ->
     create_export_ll_post_call({*code,
-        '\t%eo',*ni,'=extractvalue %R8 %z,',*int_to_string(n),'\n',
-        '\t%et',*ni,'=trunc i64 %eo',*ni,' to i',*int_to_string(sz),'\n',
-        '\tstore i',*int_to_string(sz),' %et',*ni,',ptr %out',*ni,'\n'},n+1,rest);
+        '\t%eo',*ni,'=extractvalue %R8 %z,',*int2s(n),'\n',
+        '\t%et',*ni,'=trunc i64 %eo',*ni,' to i',*int2s(sz),'\n',
+        '\tstore i',*int2s(sz),' %et',*ni,',ptr %out',*ni,'\n'},n+1,rest);
