@@ -61,7 +61,6 @@ fib(n) -> fib(n-2)+fib(n-1);
 //nprime.rw
 //nqueens_bitmask.rw
 //nqueens.rw
-//post_arrow_match.rw
 //reverse.rw
 //roman_numerals.rw
 //string_to_int.rw
@@ -85,4 +84,29 @@ wildcard_test1(_,_) -> 3;
 neg(false) -> true;
 neg(true) -> false;
 
-//validate.rw
+:- validate(i64) -> bool,i64;
+validate(x) when x>=0 -> true, x*2;
+validate(_) -> false, 0;
+
+:- allsame(i64,i64,i64,i64) -> bool;
+allsame(n,n,n,n) -> true;
+
+:- export break_rhs(i64) -> i64;
+break_rhs(x) -> when x>=0 -> x*3;
+break_rhs(x) -> x*2;
+
+:- export break_rhs2(i64,i64) -> i64;
+break_rhs2(n,x) -> match x=>n -> x*3;
+break_rhs2(n,x) -> x*2;
+
+:- export process(i64) -> i64;
+process(x) match validate(x) => true,data -> data;
+process(_) -> #error(10);
+
+:- expensive(i64) -> i64;
+expensive(n) -> n+n+n;
+
+
+:- export use_twice(i64) -> i64;
+use_twice(n) -> match expensive(n) => result -> result*result;
+

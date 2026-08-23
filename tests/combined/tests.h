@@ -104,3 +104,64 @@
     printf("neg:");
     ret_code=rw_neg(exe,false,&resultb);
     if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,(int)resultb); };
+
+    printf("process:");
+    ret_code=rw_process(exe,4,&result0);
+    if(!ret_code && result0==8) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("process:");
+    ret_code=rw_process(exe,-4,&result0);
+    if(!ret_code) {
+        printf("fail\n");
+    } else {
+        const char* function;
+        uint32_t line;
+        rw_instance_get_error(exe,&line,&function);
+        if(ret_code==10 && strcmp(function,"process")==0) {
+            printf("success line:%d\n",line);
+        } else {
+            printf("fail:%d %s\n",ret_code,function);
+        }
+    };
+
+    printf("use_twice:");
+    ret_code=rw_use_twice(exe,10,&result0);
+    if(!ret_code && result0==900) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("break_rhs:");
+    ret_code=rw_break_rhs(exe,4,&result0);
+    if(!ret_code && result0==12) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("break_rhs:");
+    ret_code=rw_break_rhs(exe,-4,&result0);
+    if(!ret_code) {
+        printf("fail\n");
+    } else {
+        const char* function;
+        uint32_t line;
+        rw_instance_get_error(exe,&line,&function);
+        if(ret_code==4 && strcmp(function,"break_rhs")==0) {
+            printf("success line:%d\n",line);
+        } else {
+            printf("fail:%d %s\n",ret_code,function);
+        }
+    };
+
+    printf("break_rhs2:");
+    ret_code=rw_break_rhs2(exe,4,4,&result0);
+    if(!ret_code && result0==12) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("break_rhs2:");
+    ret_code=rw_break_rhs2(exe,4,-4,&result0);
+    if(!ret_code) {
+        printf("fail\n");
+    } else {
+        const char* function;
+        uint32_t line;
+        rw_instance_get_error(exe,&line,&function);
+        if(ret_code==4 && strcmp(function,"break_rhs2")==0) {
+            printf("success line:%d\n",line);
+        } else {
+            printf("fail:%d %s\n",ret_code,function);
+        }
+    };
