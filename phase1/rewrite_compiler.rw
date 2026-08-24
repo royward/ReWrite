@@ -198,6 +198,7 @@ const ParamSplat=5;
 const ParamSplatWild=6;
 const ExprId=2;
 const ExprList=4;
+const ExprSplat=5;
 const ExprCall=7;
 const ExprCallInternal=8;
 const ExprCallLibrary=9;
@@ -250,7 +251,8 @@ parse_aux(target,rules,fnnames,symtext,symsz,consts,{{linerule,_,Identifier,name
     update parse_params(consts,{},{},rest) => bindings,params,{{_,_,RParen,_},*rest}
     update parse_function_match_clauses(consts,{},fnnames,bindings,Arrow,rest) => pre_arrow_clauses,fnnames,bindings,rest
     update parse_match_after_arrow(consts,{},fnnames,bindings,rest) => post_arrow_clauses,fnnames,bindings,rest
-    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,exprs,{{_,_,Semicolon,_},*rest} ->
+    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,exprs,{{_,_,Semicolon,_},*rest}
+    update calc_counts(bindings,params,pre_arrow_clauses,post_arrow_clauses,exprs) => params,pre_arrow_clauses,post_arrow_clauses,exprs ->
     parse_aux(target,add_rule({},rules,fn_id,{linerule+1,bindings,params,pre_arrow_clauses,post_arrow_clauses,exprs}),fnnames,symtext,symsz,consts,rest);
 parse_aux(target,rules,fnnames,symtext,symsz,consts,{{fnlineno,_,TypeFn,_},{_,_,Identifier,name},{_,_,LParen,_},*rest}) ->
     update parse_types({},RParen,rest) => types_lhs,rest
@@ -330,7 +332,7 @@ parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Identifier,id},*rest}) match
     parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeI64,val}},pri,rest);
 parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Identifier,id},*rest}) ->
     update get_noadd_symbol_list(0,{},bindings,id) => bindings,bindnum ->
-    parse_exprs1(consts,fnnames,bindings,sofar,{ExprId,{bindnum}},pri,rest);
+    parse_exprs1(consts,fnnames,bindings,sofar,{ExprId,{bindnum,0}},pri,rest);
 parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,tok,_},*rest}) match prefix_binding_power(tok) => pre_pri when pre_pri>0 ->
     update parse_exprs(consts,fnnames,bindings,{},pre_pri,rest) => fnnames,bindings,{arg},rest ->
     parse_exprs1(consts,fnnames,bindings,sofar,{tok,arg},pri,rest);
@@ -339,7 +341,7 @@ parse_exprs(consts,fnnames,bindings,sofar,_,rest) -> fnnames,bindings,sofar,rest
 parse_exprs1(consts,fnnames,bindings,sofar,this,1,{{_,_,Comma,_},*rest}) -> parse_exprs(consts,fnnames,bindings,{*sofar,this},1,rest);
 parse_exprs1(consts,fnnames,bindings,sofar,this,pri,{{r,c,tok,val},*rest}) match infix_binding_power(tok) => p1,p2 when p1>=pri ->
     update parse_exprs(consts,fnnames,bindings,{},p2,rest) => fnnames,bindings,second,rest ->
-    parse_exprs1(consts,fnnames,bindings,sofar,{ExprCallInternal,{tok,this,*second}},pri,rest);
+    parse_exprs1(consts,fnnames,bindings,sofar,{ExprCallInternal,tok,{this,*second}},pri,rest);
 parse_exprs1(consts,fnnames,bindings,sofar,this,_,rest) -> fnnames,bindings,{*sofar,this},rest;
 
 parse_exprs1nothis(consts,fnnames,bindings,sofar,1,{{_,_,Comma,_},*rest}) -> parse_exprs(consts,fnnames,bindings,sofar,1,rest);
@@ -380,7 +382,7 @@ parse_params(consts,bindings,params,{{_,_,Minus,_},{_,_,Integer,val},*rest}) -> 
 parse_params(consts,bindings,params,{{_,_,Wildcard,_},*rest}) -> parse_params1(consts,bindings,{*params,{ParamWild,{}}},rest);
 parse_params(consts,bindings,params,{{_,_,Star,_},{_,_,Wildcard,_},*rest}) -> parse_params1(consts,bindings,{*params,{ParamSplatWild,{}}},rest);
 parse_params(consts,bindings,params,{{_,_,Identifier,name},*rest}) match lookup_symbol_table(consts,name) => ok,val when ok -> parse_params1(consts,bindings,{*params,{Const,{TypeI64,val}}},rest);
-parse_params(consts,bindings,params,{{_,_,Identifier,name},*rest}) -> match get_add_symbol_list(0,{},bindings,name) => newbindings,id -> parse_params1(consts,newbindings,{*params,{ParamId,{id}}},rest);
+parse_params(consts,bindings,params,{{_,_,Identifier,name},*rest}) -> match get_add_symbol_list(0,{},bindings,name) => newbindings,id -> parse_params1(consts,newbindings,{*params,{ParamId,{id,0}}},rest);
 parse_params(consts,bindings,params,{{_,_,Star,_},{_,_,Identifier,name},*rest}) -> update get_add_symbol_list(0,{},bindings,name) => bindings,id ->
     parse_params1(consts,bindings,{*params,{ParamSplat,{id}}},rest);
 parse_params(consts,bindings,params,{{_,_,LBrace,_},*rest}) -> update parse_params(consts,bindings,{},rest) => bindings,list_params,{{_,_,RBrace,_},*rest} ->
@@ -391,6 +393,50 @@ parse_params(consts,bindings,params,rest) -> bindings,params,rest;
 
 parse_params1(consts,bindings,params,{{_,_,Comma,_},*rest}) -> parse_params(consts,bindings,params,rest);
 parse_params1(consts,bindings,params,rest) -> bindings,params,rest; // deal with no trailing comma
+
+calc_counts(bindings,params,pre_arrow_clauses,post_arrow_clauses,exprs) ->
+    match calc_counts_setup_bind(0,length(bindings),{}) => counts
+    update calc_counts_expr_map_rev(counts,exprs) => counts,exprs
+    update calc_counts_clause_map_rev(counts,post_arrow_clauses) => counts,post_arrow_clauses
+    update calc_counts_clause_map_rev(counts,pre_arrow_clauses) => counts,pre_arrow_clauses
+    update calc_counts_param_map_rev(counts,params) => _,params ->
+    params,pre_arrow_clauses,post_arrow_clauses,exprs;
+
+calc_counts_setup_bind(n,n,sofar) -> sofar;
+calc_counts_setup_bind(i,n,sofar) -> calc_counts_setup_bind(i+1,n,{*sofar,{0,false}});
+
+calc_counts_clear_touched(false,_,counts) -> counts;
+calc_counts_clear_touched(_,sofar,{}) -> sofar;
+calc_counts_clear_touched(_,sofar,{{count,false},*rest}) -> calc_counts_clear_touched(true,{*sofar,{count,false}},rest);
+calc_counts_clear_touched(_,sofar,{_,*rest}) -> calc_counts_clear_touched(true,{*sofar,{0,false}},rest);
+
+calc_counts_expr(counts,{ExprId,{n,_}}) -> match split3_nth(n,{},counts) => bind1,{count,touched},bind2 -> {*bind1,{count+1,touched},*bind2},{ExprId,{n,count}};
+calc_counts_expr(counts,{ExprCallInternal,op,args}) -> update calc_counts_expr_map_rev(counts,args) => counts,args2 -> counts,{ExprCallInternal,op,args2};
+calc_counts_expr(counts,{ExprCall,op,args}) -> update calc_counts_expr_map_rev(counts,args) => counts,args2 -> counts,{ExprCall,op,args2};
+calc_counts_expr(counts,{ExprList,args}) -> update calc_counts_expr_map_rev(counts,args) => counts,args2 -> counts,{ExprList,args2};
+calc_counts_expr(counts,{ExprSplat,arg}) -> update calc_counts_expr(counts,arg) => counts,arg2 -> counts,{ExprSplat,arg2};
+calc_counts_expr(counts,x) -> counts,x;
+
+calc_counts_expr_map_rev(counts,{}) -> counts,{};
+calc_counts_expr_map_rev(counts,{expr,*rest}) ->
+    update calc_counts_expr_map_rev(counts,rest) => counts,rest2 update calc_counts_expr(counts,expr) => counts,expr2 -> counts,{expr2,*rest2};
+
+calc_counts_param(counts,{ParamId,{n,_}}) -> match split3_nth(n,{},counts) => bind1,{count,_},bind2 -> {*bind1,{count+1,true},*bind2},{ParamId,{n,count}};
+calc_counts_param(counts,{ParamList,args}) -> update calc_counts_param_map_rev(counts,args) => counts,args2 -> counts,{ParamList,args2};
+calc_counts_param(counts,{ParamSplat,arg}) -> update calc_counts_param(counts,arg) => counts,arg2 -> counts,{ParamSplat,arg2};
+calc_counts_param(counts,x) -> counts,x;
+
+calc_counts_param_map_rev(counts,{}) -> counts,{};
+calc_counts_param_map_rev(counts,{param,*rest}) ->
+    update calc_counts_param_map_rev(counts,rest) => counts,rest2 update calc_counts_param(counts,param) => counts,param2 -> counts,{param2,*rest2};
+
+calc_counts_clause_map_rev(counts,{}) -> counts,{};
+calc_counts_clause_map_rev(counts,{{upd_flag,params,exprs},*rest}) ->
+    update calc_counts_clause_map_rev(counts,rest) => counts,rest
+    update calc_counts_param_map_rev(counts,params) => counts,params
+    update calc_counts_clear_touched(upd_flag,{},counts) => counts
+    update calc_counts_expr_map_rev(counts,exprs) => counts,exprs ->
+    counts,{{upd_flag,params,exprs},*rest};
 
 ///////////////////////////////////////////////////////////
 // Compiler
@@ -603,10 +649,11 @@ generate_param_code(false,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src}},tp},*ty
 generate_param_code(true,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
     update generate_conditional_rhs(ctx,sofar0,tp,src_flag,src,BindImm,val) => ctx,code ->
     generate_param_code(true,bindlevel,ctx,code,sofar1,type_left,rest);
-generate_param_code(post_arrow,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src}},tp},*type_left},{{ParamId,{id}},*rest}) ->
+//generate_param_code(post_arrow,bindlevel,ctx,sofar0,sofar1,{_,*type_left},{{ParamId,{_,0}},*rest}) -> generate_param_code(post_arrow,bindlevel,ctx,sofar0,sofar1,type_left,rest);
+generate_param_code(post_arrow,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src}},tp},*type_left},{{ParamId,{id,count}},*rest}) ->
     update ctx_bindings(ctx) => bindings
     update split3_nth(id,{},bindings) => prebind,bind,postbind
-    update generate_bind_variable(post_arrow,bindlevel,ctx,src_flag,src,tp,bind) => ctx,newbind,code
+    update generate_bind_variable(count,post_arrow,bindlevel,ctx,src_flag,src,tp,bind) => ctx,newbind,code
     update ctx_newbindings(ctx,{*prebind,newbind,*postbind}) => ctx ->
     generate_param_code(post_arrow,bindlevel,ctx,sofar0,{*sofar1,*code},type_left,rest);
 generate_param_code(post_arrow,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src}},tp},*type_left},{{ParamWild,{}},*rest}) -> generate_param_code(post_arrow,bindlevel,ctx,sofar0,sofar1,type_left,rest);
@@ -619,14 +666,16 @@ generate_conditional_rhs(ctx,code,tp,src_flag,src,src_flag2,src2) ->
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_} ->
     ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id}};
 
-generate_bind_variable(post_arrow,bindlevel,ctx,src_flag,src,tp,{level,_,_,name}) when level<bindlevel ->
+generate_bind_variable(0,post_arrow,bindlevel,ctx,src_flag,src,tp,{level,_,_,name}) when level<bindlevel ->
+    ctx,{bindlevel,tp,{BindImm,0},name},{};
+generate_bind_variable(count,post_arrow,bindlevel,ctx,src_flag,src,tp,{level,_,_,name}) when level<bindlevel ->
     update ctx_newreg(ctx,1<<get_scalar_type_size(tp)) => ctx,newreg ->
     ctx,{bindlevel,tp,{BindReg,newreg},name},{{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,BindReg,newreg,src_flag,src}};
-generate_bind_variable(false,bindlevel,ctx,src_flag,src,tp,{refs,tp,{src_flag2,src2},name}) ->
+generate_bind_variable(count,false,bindlevel,ctx,src_flag,src,tp,{refs,tp,{src_flag2,src2},name}) ->
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,src_flag,src,src_flag2,src2) => lblnext,ctx,code
     update ctx_set_lblnext(ctx,lblnext) => ctx ->
     ctx,{bindlevel,tp,{src_flag2,src2},name},code;
-generate_bind_variable(true,bindlevel,ctx,src_flag,src,tp,{refs,tp,{src_flag2,src2},name}) ->
+generate_bind_variable(count,true,bindlevel,ctx,src_flag,src,tp,{refs,tp,{src_flag2,src2},name}) ->
     update generate_conditional_rhs(ctx,{},tp,src_flag,src,src_flag2,src2) => ctx,code ->
     ctx,{bindlevel,tp,{src_flag2,src2},name},code;
 
@@ -683,8 +732,8 @@ generate_expr_code(callctr,ctx,sofar1,sofar2,type_left,{expr,*rest}) ->
 //     generate_expr_code(redirect,ctx,{*sofar,*newcode,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src}},type_left,rest);
 
 generate_expr_code_aux(ctx,{Const,{tp,val}}) -> ctx,{},{{{{BindImm,val}},tp}};
-generate_expr_code_aux(ctx,{ExprId,{id}}) -> update use_binding(ctx,id) => ctx,tp,src_flag,src -> ctx,{},{{{{src_flag,src}},tp}};
-generate_expr_code_aux(ctx,{ExprCallInternal,{op,*args}}) -> update generate_expr_code_aux_map(ctx,{},args) => ctx,args_code -> generate_expr_code_infix(ctx,op,args_code);
+generate_expr_code_aux(ctx,{ExprId,{id,count}}) -> update use_binding(ctx,id) => ctx,tp,src_flag,src -> ctx,{},{{{{src_flag,src}},tp}};
+generate_expr_code_aux(ctx,{ExprCallInternal,op,args}) -> update generate_expr_code_aux_map(ctx,{},args) => ctx,args_code -> generate_expr_code_infix(ctx,op,args_code);
 generate_expr_code_aux(ctx,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,regright,maskright,type_right} ->
     update ctx_update_get_callctr(ctx,max(length(params_left),1)) => ctx,callctr
     update generate_expr_code(callctr,ctx,{},{},params_left,args) => ctx,args_code
