@@ -165,3 +165,8 @@
             printf("fail:%d %s\n",ret_code,function);
         }
     };
+
+    printf("noparam:");
+    ret_code=rw_noparam(exe,&result0);
+    if(!ret_code && result0==3) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+

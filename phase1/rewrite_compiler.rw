@@ -491,8 +491,8 @@ const BindOverflow=2;
 const BindArgRet=3;
 const BindInOut=4;
 
-annotate_type_list_reg(pri,max_reg,reg_count,sofar,{}) -> annotate_type_list_reg(pri+1,max_reg,reg_count,{},sofar);
-annotate_type_list_reg(pri,max_reg,reg_count,sofar,todo) when pri==3 || max_reg==MaxParamRegs -> reg_count,annotate_type_list_stack({},{},{*sofar,*todo});
+annotate_type_list_reg(pri,max_reg,reg_count,sofar,{}) -> reg_count,{},sofar;
+annotate_type_list_reg(pri,max_reg,reg_count,sofar,todo) when max_reg==MaxParamRegs -> reg_count,annotate_type_list_stack({},{},{*sofar,*todo});
 annotate_type_list_reg(pri,max_reg,reg_count,sofar,{{{{}},t},*rest}) match get_type_size_pri(t) => {p,sz} when p<=pri ->
     annotate_type_list_reg(pri,max_reg+1,{*reg_count,sz},{*sofar,{{{BindArgRet,max_reg}},t}},rest);
 annotate_type_list_reg(pri,max_reg,reg_count,sofar,{{{{},r},t},*rest}) match get_type_size_pri(t) => {p,sz,_,_} when p<=pri ->
@@ -500,6 +500,7 @@ annotate_type_list_reg(pri,max_reg,reg_count,sofar,{{{{},r},t},*rest}) match get
 annotate_type_list_reg(pri,max_reg,reg_count,sofar,{{{r,{}},t},*rest}) match get_type_size_pri(t) => {_,_,p,sz} when p<=pri ->
     annotate_type_list_reg(pri,max_reg+1,{*reg_count,sz},{*sofar,{{r,{BindArgRet,max_reg}},t}},rest);
 annotate_type_list_reg(pri,max_reg,reg_count,sofar,{t,*rest}) -> annotate_type_list_reg(pri,max_reg,reg_count,{*sofar,t},rest);
+annotate_type_list_reg(pri,max_reg,reg_count,sofar,todo) -> annotate_type_list_reg(pri+1,max_reg,reg_count,sofar,todo);
 
 annotate_type_list_stack(stack,sofar,{}) -> stack,sofar;
 annotate_type_list_stack(stack,sofar,{{{{}},t},*rest}) match get_type_size_pri(t) => {p,sz} update get_aligned_bitmask(0,{},stack,min(sz>>3,1)) => stack,offset ->
@@ -649,7 +650,6 @@ generate_param_code(false,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src}},tp},*ty
 generate_param_code(true,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
     update generate_conditional_rhs(ctx,sofar0,tp,src_flag,src,BindImm,val) => ctx,code ->
     generate_param_code(true,bindlevel,ctx,code,sofar1,type_left,rest);
-//generate_param_code(post_arrow,bindlevel,ctx,sofar0,sofar1,{_,*type_left},{{ParamId,{_,0}},*rest}) -> generate_param_code(post_arrow,bindlevel,ctx,sofar0,sofar1,type_left,rest);
 generate_param_code(post_arrow,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src}},tp},*type_left},{{ParamId,{id,count}},*rest}) ->
     update ctx_bindings(ctx) => bindings
     update split3_nth(id,{},bindings) => prebind,bind,postbind

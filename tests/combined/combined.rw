@@ -109,3 +109,5 @@ expensive(n) -> n+n+n;
 :- export use_twice(i64) -> i64;
 use_twice(n) -> match expensive(n) => result -> result*result;
 
+:- export noparam() -> i64;
+noparam() -> 3;
