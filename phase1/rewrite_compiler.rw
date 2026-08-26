@@ -533,7 +533,7 @@ const OpCall=255;
 compile1(TargetVM,types,outfile,label_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVM,outfile,label_id,table,symtext,sofar);
 compile1(TargetVMLL,types,outfile,label_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVMLL,outfile,label_id,table,symtext,sofar);
 compile1(target,types,outfile,label_id,_,table,symtext,symsz,sofar,{}) ->
-    match create_export_wrappers_ll(target,{},{},label_id,table) => wrapper_code,wrapperh ->
+    match create_export_wrappers_ll(target,types,{},{},label_id,table) => wrapper_code,wrapperh ->
     save_text_file({*outfile,'.ll'},{*convert_to_llvm(target,minify_table({},table),table,symtext,symsz,{},sofar),*wrapper_code,*ll_boilerplate_end()}),
     save_c_header(target,outfile,wrapperh);
 compile1(target,types,outfile,label_id,n,table,symtext,symsz,sofar,{rules,*rest}) ->
@@ -999,12 +999,12 @@ create_export_vm_out(sofar,_,{}) -> sofar;
 create_export_vm_out(sofar,n,{{_,tp},*rest}) ->
     create_export_vm_out({*sofar,'\t*out',*int2s36(n),'=(',*c_type(tp),')inout[',*int2s36(n),'];\n'},n+1,rest);
 
-create_export_wrappers_ll(target,sofarc,sofarh,_,{}) -> sofarc,sofarh;
-create_export_wrappers_ll(target,sofarc,sofarh,fnid,{{false,*_},*rest}) -> create_export_wrappers_ll(target,sofarc,sofarh,fnid+1,rest);
-create_export_wrappers_ll(target,sofarc,sofarh,fnid,{{_,_,_,name,_,_,left,_,_,right},*rest}) ->
+create_export_wrappers_ll(target,types,sofarc,sofarh,_,{}) -> sofarc,sofarh;
+create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{false,*_},*rest}) -> create_export_wrappers_ll(target,types,sofarc,sofarh,fnid+1,rest);
+create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{_,_,_,name,_,_,left,_,_,right},*rest}) ->
     match create_export_ll_sigc_in({},{},0,left) => inparams,inregs
-    match create_export_ll_pre_call({},{},inregs) => pre,inregs2 ->
-    create_export_wrappers_ll(target,
+    match create_export_ll_pre_call(types,{},{},inregs) => pre,inregs2 ->
+    create_export_wrappers_ll(target,types,
         {*sofarc,
         '\ndefine i32 @rw_',*name,'(ptr %A',*inparams,*create_export_ll_sigc_out({},0,length(right)),') {\n',
         'entry:\n',
@@ -1016,7 +1016,7 @@ create_export_wrappers_ll(target,sofarc,sofarh,fnid,{{_,_,_,name,_,_,left,_,_,ri
         '\tbr i1 %is_initial, label %body, label %fail\n',
         'body:\n',
         '\t%z=call x86_regcallcc %R8 @__rw.',*name,'(',*create_export_ll_params({},inregs2),*output_undef({},length(left),8),'ptr %A)\n',
-        *create_export_ll_post_call({},0,right),
+        *create_export_ll_post_call(types,{},0,right),
         '\tret i32 0\n',
         'fail:\n',
         '\tret i32 %status\n',
@@ -1031,21 +1031,21 @@ create_export_ll_sigc_in(sofar,regs,n,{{_,tp},*rest}) -> match {'in',*int2s36(n)
 create_export_ll_sigc_out(sofar,n,n) -> sofar;
 create_export_ll_sigc_out(sofar,i,n) -> create_export_ll_sigc_out({*sofar,',ptr %out',*int2s36(i)},i+1,n);
 
-create_export_ll_pre_call(code,reglist,{}) -> code,reglist;
-create_export_ll_pre_call(code,reglist,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,64} -> create_export_ll_pre_call(code,{*reglist,reg},rest);
-create_export_ll_pre_call(code,reglist,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,sz} ->
-    create_export_ll_pre_call({*code,'\t%x',*reg,'=',z_or_s(tp),'ext i',*int2s(sz),' %',*reg,' to i64\n'},{*reglist,{'x',*reg}},rest);
+create_export_ll_pre_call(types,code,reglist,{}) -> code,reglist;
+create_export_ll_pre_call(types,code,reglist,{{reg,tp},*rest}) match nth(tp,types) => {_,_,_,{_,64}} -> create_export_ll_pre_call(types,code,{*reglist,reg},rest);
+create_export_ll_pre_call(types,code,reglist,{{reg,tp},*rest}) match nth(tp,types) => {_,_,_,{_,sz}} ->
+    create_export_ll_pre_call(types,{*code,'\t%x',*reg,'=',z_or_s(tp),'ext i',*int2s(sz),' %',*reg,' to i64\n'},{*reglist,{'x',*reg}},rest);
 
 create_export_ll_params(sofar,{}) -> sofar;
 create_export_ll_params(sofar,{reg,*rest}) -> create_export_ll_params({*sofar,'i64 %',*reg,','},rest);
 
-create_export_ll_post_call(code,_,{}) -> code;
-create_export_ll_post_call(code,n,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,64} ->
+create_export_ll_post_call(types,code,_,{}) -> code;
+create_export_ll_post_call(types,code,n,{{reg,tp},*rest}) match nth(tp,types) => {_,_,_,{_,64}} ->
     match int2s36(n) => ni ->
-    create_export_ll_post_call({*code,'\t%eo',*ni,'=extractvalue %R8 %z,',*int2s(n),'\n\tstore i64 %eo',*ni,',ptr %out',*ni,'\n'},n+1,rest);
-create_export_ll_post_call(code,n,{{reg,tp},*rest}) match get_type_size_pri(tp) => {_,sz} ->
+    create_export_ll_post_call(types,{*code,'\t%eo',*ni,'=extractvalue %R8 %z,',*int2s(n),'\n\tstore i64 %eo',*ni,',ptr %out',*ni,'\n'},n+1,rest);
+create_export_ll_post_call(types,code,n,{{reg,tp},*rest}) match nth(tp,types) => {_,_,_,{_,sz}} ->
     match int2s36(n) => ni ->
-    create_export_ll_post_call({*code,
+    create_export_ll_post_call(types,{*code,
         '\t%eo',*ni,'=extractvalue %R8 %z,',*int2s(n),'\n',
         '\t%et',*ni,'=trunc i64 %eo',*ni,' to i',*int2s(sz),'\n',
         '\tstore i',*int2s(sz),' %et',*ni,',ptr %out',*ni,'\n'},n+1,rest);
