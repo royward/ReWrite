@@ -696,14 +696,8 @@ generate_llvm_store_code(target,l1,l2,sofar,i,{{_,tp},*rest}) -> generate_llvm_s
 if_not_zero(0,_,y) -> y;
 if_not_zero(_,x,_) -> x;
 
-compile_rhs_final_binding(_,sofar,{}) -> sofar;
-compile_rhs_final_binding(ctx,sofar,{{tp,src,dst},*rest}) -> compile_rhs_final_binding(ctx,{*sofar,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,BindReg,dst,BindReg,src}},rest);
-
 code_or_not(false,_) -> {};
 code_or_not(_,code) -> code;
-
-get_scalar_type_size(tp) match get_type_size_pri(tp) => {_,0} -> 0;
-get_scalar_type_size(tp) match get_type_size_pri(tp) => {_,sz} -> 64-count_leading_zeros(sz>>3);
 
 get_size_scale(0) -> 0;
 get_size_scale(sz) -> 64-count_leading_zeros(sz>>3);
