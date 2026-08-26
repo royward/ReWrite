@@ -644,11 +644,11 @@ generate_expr_code_untyped(types,ctx,sofar,etypes,{expr,*rest}) ->
 
 generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,sofar1,{},{}) -> ctx,{*sofar0,*sofar1};
 generate_param_code(types,false,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
-    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,src_flag,src,BindImm,val) => lblnext,ctx,code
+    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,BindImm,val) => lblnext,ctx,code
     update ctx_set_lblnext(ctx,lblnext) => ctx ->
     generate_param_code(types,false,bindlevel,ctx,{*sofar0,*code},sofar1,type_left,rest);
 generate_param_code(types,true,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
-    update generate_conditional_rhs(ctx,sofar0,tp,src_flag,src,BindImm,val) => ctx,code ->
+    update generate_conditional_rhs(ctx,sofar0,tp,sz,src_flag,src,BindImm,val) => ctx,code ->
     generate_param_code(types,true,bindlevel,ctx,code,sofar1,type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{ParamId,{id,count}},*rest}) ->
     update ctx_bindings(ctx) => bindings
@@ -659,10 +659,10 @@ generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,sr
 generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{ParamWild,{}},*rest}) ->
     generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,sofar1,type_left,rest);
 
-generate_conditional_rhs(ctx,code,tp,src_flag,src,src_flag2,src2) ->
+generate_conditional_rhs(ctx,code,tp,sz,src_flag,src,src_flag2,src2) ->
     update ctx_update_label_id(ctx) => ctx
     match ctx_get_lbl_stuff(ctx) => target,active,lblnext,label_id
-    update generate_conditional(ctx,target,active,label_id,label_id,OpCompareEqualBranch,tp,src_flag,src,src_flag2,src2) => _,ctx,newcode
+    update generate_conditional(ctx,target,active,label_id,label_id,OpCompareEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => _,ctx,newcode
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_} ->
     ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id}};
@@ -670,14 +670,17 @@ generate_conditional_rhs(ctx,code,tp,src_flag,src,src_flag2,src2) ->
 generate_bind_variable(types,0,post_arrow,bindlevel,ctx,src_flag,src,tp,{level,_,_,name}) when level<bindlevel ->
     ctx,{bindlevel,tp,{BindImm,0,DefaultSize},name},{};
 generate_bind_variable(types,count,post_arrow,bindlevel,ctx,src_flag,src,tp,{level,_,_,name}) when level<bindlevel ->
-    update ctx_newreg(ctx,1<<get_scalar_type_size(tp)) => ctx,newreg ->
-    ctx,{bindlevel,tp,{BindReg,newreg},name},{{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,BindReg,newreg,src_flag,src}};
+    match nth(tp,types) => {_,_,_,{_,sz}}
+    update ctx_newreg(ctx,1<<get_size_scale(sz)) => ctx,newreg ->
+    ctx,{bindlevel,tp,{BindReg,newreg},name},{{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindReg,newreg,src_flag,src}};
 generate_bind_variable(types,count,false,bindlevel,ctx,src_flag,src,tp,{refs,tp,{src_flag2,src2},name}) ->
-    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,src_flag,src,src_flag2,src2) => lblnext,ctx,code
+    match nth(tp,types) => {_,_,_,{_,sz}}
+    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => lblnext,ctx,code
     update ctx_set_lblnext(ctx,lblnext) => ctx ->
     ctx,{bindlevel,tp,{src_flag2,src2},name},code;
 generate_bind_variable(types,count,true,bindlevel,ctx,src_flag,src,tp,{refs,tp,{src_flag2,src2},name}) ->
-    update generate_conditional_rhs(ctx,{},tp,src_flag,src,src_flag2,src2) => ctx,code ->
+    match nth(tp,types) => {_,_,_,{_,sz}}
+    update generate_conditional_rhs(ctx,{},tp,sz,src_flag,src,src_flag2,src2) => ctx,code ->
     ctx,{bindlevel,tp,{src_flag2,src2},name},code;
 
 generate_llvm_alloc_code(TargetVM,_,_,sofar,_,_) -> sofar;
@@ -705,21 +708,21 @@ get_scalar_type_size(tp) match get_type_size_pri(tp) => {_,sz} -> 64-count_leadi
 get_size_scale(0) -> 0;
 get_size_scale(sz) -> 64-count_leading_zeros(sz>>3);
 
-generate_conditional(ctx,target,0,lblnext,label_id,op,tp,src_flag,src,src_flag2,src2) -> lblnext,ctx,{};
-generate_conditional(ctx,TargetVM,_,0,label_id,op,tp,src_flag,src,src_flag2,src2) ->
-    label_id+1,ctx_set_label_id(ctx,label_id+1),{{ctx_fnr(ctx),op+get_scalar_type_size(tp),0,BindLabel,label_id+1,src_flag,src,src_flag2,src2}};
-generate_conditional(ctx,TargetVM,_,lblnext,label_id,op,tp,src_flag,src,src_flag2,src2) -> lblnext,ctx,{{ctx_fnr(ctx),op+get_scalar_type_size(tp),0,BindLabel,lblnext,src_flag,src,src_flag2,src2}};
-generate_conditional(ctx,_,_,0,label_id,op,tp,src_flag,src,src_flag2,src2) ->
-    update generate_conditional_extractx(ctx,tp,src_flag,src) => ctx,newbind,newreg,code ->
-    label_id+1,ctx_set_label_id(ctx,label_id+2),{*code,{ctx_fnr(ctx),op+get_scalar_type_size(tp),0,BindLabel,label_id+1,newbind,newreg,src_flag2,src2,label_id+2},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id+2}};
-generate_conditional(ctx,_,_,lblnext,label_id,op,tp,src_flag,src,src_flag2,src2) ->
-    update generate_conditional_extractx(ctx,tp,src_flag,src) => ctx,newbind,newreg,code ->
-    lblnext,ctx_set_label_id(ctx,label_id+1),{*code,{ctx_fnr(ctx),op+get_scalar_type_size(tp),0,BindLabel,lblnext,newbind,newreg,src_flag2,src2,label_id+1},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id+1}};
+generate_conditional(ctx,target,0,lblnext,label_id,op,tp,sz,src_flag,src,src_flag2,src2) -> lblnext,ctx,{};
+generate_conditional(ctx,TargetVM,_,0,label_id,op,tp,sz,src_flag,src,src_flag2,src2) ->
+    label_id+1,ctx_set_label_id(ctx,label_id+1),{{ctx_fnr(ctx),op+get_size_scale(sz),0,BindLabel,label_id+1,src_flag,src,src_flag2,src2}};
+generate_conditional(ctx,TargetVM,_,lblnext,label_id,op,tp,sz,src_flag,src,src_flag2,src2) -> lblnext,ctx,{{ctx_fnr(ctx),op+get_size_scale(sz),0,BindLabel,lblnext,src_flag,src,src_flag2,src2}};
+generate_conditional(ctx,_,_,0,label_id,op,tp,sz,src_flag,src,src_flag2,src2) ->
+    update generate_conditional_extractx(ctx,tp,sz,src_flag,src) => ctx,newbind,newreg,code ->
+    label_id+1,ctx_set_label_id(ctx,label_id+2),{*code,{ctx_fnr(ctx),op+get_size_scale(sz),0,BindLabel,label_id+1,newbind,newreg,src_flag2,src2,label_id+2},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id+2}};
+generate_conditional(ctx,_,_,lblnext,label_id,op,tp,sz,src_flag,src,src_flag2,src2) ->
+    update generate_conditional_extractx(ctx,tp,sz,src_flag,src) => ctx,newbind,newreg,code ->
+    lblnext,ctx_set_label_id(ctx,label_id+1),{*code,{ctx_fnr(ctx),op+get_size_scale(sz),0,BindLabel,lblnext,newbind,newreg,src_flag2,src2,label_id+1},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id+1}};
 
-generate_conditional_extractx(ctx,tp,BindArgRet,src) ->
-    update ctx_newreg(ctx,1<<get_scalar_type_size(tp)) => ctx,newreg ->
-    ctx,BindReg,newreg,{{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,BindReg,newreg,BindArgRet,src}};
-generate_conditional_extractx(ctx,tp,src_flag,src) -> ctx,src_flag,src,{};
+generate_conditional_extractx(ctx,tp,sz,BindArgRet,src) ->
+    update ctx_newreg(ctx,1<<get_size_scale(sz)) => ctx,newreg ->
+    ctx,BindReg,newreg,{{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindReg,newreg,BindArgRet,src}};
+generate_conditional_extractx(ctx,tp,sz,src_flag,src) -> ctx,src_flag,src,{};
 
 use_binding(ctx,id) ->
     match split3_nth(id,{},ctx_bindings(ctx)) => prebind,{refs,tp,{src_flag,src},name},post_bind ->
@@ -733,7 +736,7 @@ generate_expr_code(types,callctr,ctx,sofar1,sofar2,type_left,{expr,*rest}) ->
     generate_expr_code(types,callctr,ctx,{*sofar1,*newcode},{*sofar2,*code_insert},type_left_rest,rest);
 // generate_expr_code(redirect,ctx,sofar,{{{{dst_flag,dst}},tp},*type_left},{expr,*rest}) ->
 //     match generate_expr_code_aux(ctx,expr) => newcode,tp,src_flag,src ->
-//     generate_expr_code(redirect,ctx,{*sofar,*newcode,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,dst_flag,dst,src_flag,src}},type_left,rest);
+//     generate_expr_code(redirect,ctx,{*sofar,*newcode,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,dst_flag,dst,src_flag,src}},type_left,rest);
 
 generate_expr_code_aux(types,ctx,{Const,{tp,val}}) -> match lookup_type_size_pri(tp,types) => {_,sz} -> ctx,{},{{{{BindImm,val,sz}},tp}};
 generate_expr_code_aux(types,ctx,{ExprId,{id,count}}) -> update use_binding(ctx,id) => ctx,tp,src_flag,src match lookup_type_size_pri(tp,types) => {_,sz} -> ctx,{},{{{{src_flag,src,sz}},tp}};
