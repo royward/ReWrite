@@ -218,10 +218,6 @@ int2s(n) when n<0 -> {'-',*int2s(-n)};
 int2s(n) when n<10 -> {'0'+n};
 int2s(n) -> {*int2s(n/10),*int2s(n%10)};
 
-get_type_size_pri(TypeBool) -> {0,1};
-get_type_size_pri(TypeChar) -> {0,32};
-get_type_size_pri(TypeI64) -> {0,64};
-
 te() -> {"",false,{0},{}};
 
 parse(target,s) -> parse_aux(target,{},{},{},0,{},
