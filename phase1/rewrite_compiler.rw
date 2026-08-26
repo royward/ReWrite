@@ -154,7 +154,6 @@ lexer_two_symbol('<<') -> ShiftLeft;
 lexer_two_symbol('>>') -> ShiftRight;
 lexer_two_symbol(_,_) -> 0;
 
-
 lexer_one_symbol(':') -> Colon;
 lexer_one_symbol(',') -> Comma;
 lexer_one_symbol('/') -> Divide;
@@ -769,6 +768,7 @@ generate_expr_code_infix(types,ctx,op,{{code1,{{{{src_flag1,src1,sz1}},tp1}}},{c
     update ctx_newreg(ctx,1<<sz) => ctx,newreg ->
     ctx,{*code1,*code2,{ctx_fnr(ctx),machine_op,tp1,BindReg,newreg,opt_swap_sources(swap,src_flag1,src1,src_flag2,src2)}},{{{{BindReg,newreg,sz_res}},tp_res}};
 
+opt_swap_sources(false,src_flag1,src1,src_flag2,src2) -> src_flag1,src1,src_flag2,src2;
 opt_swap_sources(_,src_flag1,src1,src_flag2,src2) -> src_flag2,src2,src_flag1,src1;
 
 callout_insert(l1,l2,callctr,sofar,{},type_left_rest) -> sofar,type_left_rest;
