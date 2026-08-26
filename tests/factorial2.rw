@@ -1,5 +1,6 @@
 // Example: simple recursive factorial using guards
 // SPDX-License-Identifier: CC0-1.0
 
+:- export fact(n:i64)->i64;
 fact(n) when n>0 -> n*fact(n-1);
 fact(_) -> 1;
