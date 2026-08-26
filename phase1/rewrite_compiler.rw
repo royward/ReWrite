@@ -281,8 +281,18 @@ add_symtext(_,symtext,symsz,name) -> {*symtext,*name,'\\00'},symsz+length(name)+
 parse_types(sofar,endtok,types,types_lookup,{{_,_,endtok,_},*rest}) -> sofar,rest,types,types_lookup;
 parse_types(sofar,endtok,types,types_lookup,{{_,_,Identifier,_},{_,_,Colon,_},*rest}) -> parse_types(sofar,endtok,types,types_lookup,rest);
 parse_types(sofar,endtok,types,types_lookup,{{_,_,Identifier,tp},*rest}) match lookup_symbol_table(types_lookup,tp) => true,convert -> parse_types1({*sofar,convert},endtok,types,types_lookup,rest);
-parse_types(sofar,endtok,types,types_lookup,{{_,_,LBrace,_},*rest}) -> match parse_types({},RBrace,types,types_lookup,rest) => inside,rest,types,types_lookup ->
-    parse_types1({*sofar,{true,inside}},endtok,types,types_lookup,rest);
+parse_types(sofar,endtok,types,types_lookup,{{_,_,LBracket,_},*rest}) ->
+    update parse_types({},RBracket,types,types_lookup,rest) => {this_type},rest,types,types_lookup
+    update create_type_list(this_type,types,types_lookup) => newtp,types,types_lookup ->
+    parse_types1({*sofar,newtp},endtok,types,types_lookup,rest);
+//parse_types(sofar,endtok,types,types_lookup,{{_,_,LBrace,_},*rest}) -> match parse_types({},RBrace,types,types_lookup,rest) => inside,rest,types,types_lookup ->
+//    parse_types1({*sofar,{true,inside}},endtok,types,types_lookup,rest);
+
+create_type_list(elt_typeid,types,types_lookup) ->
+    match nth(elt_typeid,types) => {elt_name,_,ent_type,_}
+    match {'L_',*elt_name} => name
+    match length(types) => len ->
+    len,{*types,{name,false,{2,elt_typeid},{0,32,0,32,0,32}}},{*types_lookup,{name,len}};
 
 parse_types1(sofar,endtok,types,types_lookup,{{_,_,Comma,_},*rest}) -> parse_types(sofar,endtok,types,types_lookup,rest);
 parse_types1(sofar,endtok,types,types_lookup,{{_,_,endtok,_},*rest}) -> sofar,rest,types,types_lookup; // deal with no trailing comma
