@@ -231,11 +231,11 @@ get_add_symbol_list(n,sofar,{x,*rest},val) -> get_add_symbol_list(n+1,{*sofar,x}
 
 get_noadd_symbol_list(n,sofar,{{val,i},*rest},val) -> {*sofar,{val,i+1},*rest},n;
 get_noadd_symbol_list(n,sofar,{x,*rest},val) -> get_noadd_symbol_list(n+1,{*sofar,x},rest,val);
-get_noadd_symbol_list(*_) -> #error;
+get_noadd_symbol_list(*_) -> #error(10);
 
 // get and add for a list of {string,val}
 add_symbol_table(done,{},name,val) -> {*done,{name,val}};
-add_symbol_table(done,{{name,_},*rest},name,val) -> #error; // already there - should not happen
+add_symbol_table(done,{{name,_},*rest},name,val) -> #error(11); // already there - should not happen
 add_symbol_table(done,{{n,v},*rest},name,val) -> add_symbol_table({*done,{n,v}},rest,name,val);
 
 lookup_symbol_table({},name) -> false,0;
@@ -292,7 +292,7 @@ create_type_list(elt_typeid,types,types_lookup) ->
     match nth(elt_typeid,types) => {elt_name,_,ent_type,_}
     match {'L_',*elt_name} => name
     match length(types) => len ->
-    len,{*types,{name,false,{2,elt_typeid},{0,32,0,32,0,32}}},{*types_lookup,{name,len}};
+    len,{*types,{name,false,{2,elt_typeid},{0,32,0,32}}},{*types_lookup,{name,len}};
 
 parse_types1(sofar,endtok,types,types_lookup,{{_,_,Comma,_},*rest}) -> parse_types(sofar,endtok,types,types_lookup,rest);
 parse_types1(sofar,endtok,types,types_lookup,{{_,_,endtok,_},*rest}) -> sofar,rest,types,types_lookup; // deal with no trailing comma
@@ -486,13 +486,14 @@ const MaxParamRegs=4;
 
 annotate_table(types,sofar,{}) -> sofar;
 annotate_table(types,sofar,{{name,{exportx,fnlineno,symoffset,types_left,types_right}},*rest}) ->
-    annotate_table(types,{*sofar,{exportx,fnlineno,symoffset,name,annotate_type_list_reg(types,0,0,{},{},create_start_annotated_list({},types_left)),
-                                  annotate_type_list_reg(types,0,0,{},{},create_start_annotated_list({},types_right))}},rest);
+    annotate_table(types,{*sofar,{exportx,fnlineno,symoffset,name,annotate_type_list_reg(types,0,0,{},{},create_start_annotated_list(types,{},types_left)),
+                                  annotate_type_list_reg(types,0,0,{},{},create_start_annotated_list(types,{},types_right))}},rest);
 
-create_start_annotated_list(sofar,{}) -> sofar;
-create_start_annotated_list(sofar,{{true,x},*rest}) -> create_start_annotated_list({*sofar,{{{},{}},{true,x}}},rest);
-create_start_annotated_list(sofar,{{false,x},*rest}) -> create_start_annotated_list({*sofar,{{{},{}},{false,x}}},rest);
-create_start_annotated_list(sofar,{n,*rest}) -> create_start_annotated_list({*sofar,{{{}},n}},rest);
+create_start_annotated_list(types,sofar,{}) -> sofar;
+create_start_annotated_list(types,sofar,{t,*rest}) -> match lookup_type_size_pri(t,types) => tps -> create_start_annotated_list(types,{*sofar,{create_empty_types({},tps),t}},rest);
+
+create_empty_types(sofar,{}) -> sofar;
+create_empty_types(sofar,{_,_,*rest}) -> create_empty_types({*sofar,{}},rest);
 
 const BindImm=0;
 const BindLabel=0;

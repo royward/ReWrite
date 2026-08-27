@@ -10,14 +10,14 @@ test_vm: combined.exe
 	./combined.exe
 
 combined.exe: ../../phase1_vm/src/vm.c main.c $(CORE_DEPS)
-	$(REWRITE_CPP) $(COMPILER_RW) 'compile("combined.rw","combined","vm")'
+	$(REWRITE_CPP) --fast $(COMPILER_RW) 'compile("combined.rw","combined","vm")'
 	clang -O3 -ggdb3 -Wall -Wextra -I../../phase1_vm/include/ ../../phase1_vm/src/vm.c main.c -o $@
 
 test_native: combined_native.exe
 	./combined_native.exe
 
 combined_native.exe: ../../native/src/rewrite_base.c main_native.c $(CORE_DEPS)
-	$(REWRITE_CPP) $(COMPILER_RW) 'compile("combined.rw","combined_native","x86-64")'
+	$(REWRITE_CPP) --fast $(COMPILER_RW) 'compile("combined.rw","combined_native","x86-64")'
 	clang -O3 -S combined_native.ll
 	clang -O3 -ggdb3 -Wall -Wextra -I../../native/include/ ../../native/src/rewrite_base.c main_native.c combined_native.ll -o $@
 

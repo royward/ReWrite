@@ -382,9 +382,22 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                 }
                 parser.advance();
             } break;
-            case HashNever:
             case HashError: {
-                return Expression{Never{}};
+                if(parser.current().kind==LParen) {
+                    parser.advance();
+                    Expression errcode=parse_expression(parser,param_id_map,200);
+                    if(parser.current().kind!=RParen) {
+                        throw std::runtime_error(std::format("#Error must have a parameter"));
+                    }
+                    parser.advance();
+                    expr=Expression{Error{std::make_unique<Expression>(std::move(errcode))}};
+
+                } else {
+                    throw std::runtime_error(std::format("#Error must have a parameter"));
+                }
+            } break;
+            case HashNever: {
+                return Expression{Error{std::make_unique<Expression>(Expression{Const{DataElement{DataInt{1}}}})}};
             }
             default : parse_error(t,{"expression"});
         }

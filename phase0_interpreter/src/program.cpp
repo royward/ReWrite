@@ -168,6 +168,9 @@ bool do_match_list(const std::vector<Parameter>& parameters, DataContainer value
                 throw std::runtime_error("failed to get value with '..': parameter list too short");
             }
             // we get just enough stuff in the splat that the rest of the parameters will match up exactly
+            //if(DataVector::data_vectors[values.pool_index].refcount!=2)
+            //std::print("{}:{} ",vi,DataVector::data_vectors[values.pool_index].refcount);
+            //if(pi==plen-1 && (vi==0 || DataVector::data_vectors[values.pool_index].refcount<=2)) {
             if(pi==plen-1) {
                 DataContainer dc=values;
                 dc.offset=values.offset+vi;
@@ -272,7 +275,7 @@ void Program::do_call_single(const Expression& expression, std::vector<DataEleme
             VecDataElement args;
             do_call_multi(alt.args,bindings,args);
             do_call_library(alt.func_id,args,sofar);
-        } else if constexpr (std::is_same_v<T, Never>) {
+        } else if constexpr (std::is_same_v<T, Error>) {
             throw std::runtime_error("error thrown by #error or #never");
         }
     }, expression.value);

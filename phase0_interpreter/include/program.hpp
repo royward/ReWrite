@@ -62,9 +62,9 @@ struct ExprList { std::vector<Expression> items; };
 struct Call { uint32_t func_id; std::vector<Expression> args; };
 struct CallInternal { TokenKind func_id; std::vector<Expression> args; };
 struct CallLibrary { TokenKind func_id; std::vector<Expression> args; };
-struct Never {};
+struct Error { std::unique_ptr<Expression> inner; };
 
-using ExpressionVariant = std::variant <Id, ExprSplat, Const, ExprList, Call, CallInternal, CallLibrary, Never>;
+using ExpressionVariant = std::variant <Id, ExprSplat, Const, ExprList, Call, CallInternal, CallLibrary, Error>;
 
 struct Expression {
     ExpressionVariant value;
