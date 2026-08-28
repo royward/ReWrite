@@ -205,6 +205,8 @@ const ExprCallInternal=8;
 const ExprCallLibrary=9;
 const ExprError=10;
 
+const DerivedTypeArray = 2;
+
 string_to_int_pos({},acc) -> acc;
 string_to_int_pos({c,*rest},acc) -> string_to_int_pos(rest,acc*10+(c-'0'));
 
@@ -292,7 +294,7 @@ create_type_list(elt_typeid,types,types_lookup) ->
     match nth(elt_typeid,types) => {elt_name,_,ent_type,_}
     match {'L_',*elt_name} => name
     match length(types) => len ->
-    len,{*types,{name,false,{2,elt_typeid},{0,32,0,32}}},{*types_lookup,{name,len}};
+    len,{*types,{name,false,{DerivedTypeArray,elt_typeid},{0,32,0,32}}},{*types_lookup,{name,len}};
 
 parse_types1(sofar,endtok,types,types_lookup,{{_,_,Comma,_},*rest}) -> parse_types(sofar,endtok,types,types_lookup,rest);
 parse_types1(sofar,endtok,types,types_lookup,{{_,_,endtok,_},*rest}) -> sofar,rest,types,types_lookup; // deal with no trailing comma
@@ -621,7 +623,7 @@ compile_rule(target,types,linerule,ctx,sofar,params,pre_arrow_clauses,post_arrow
     ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ctx_get_lblnext(ctx),ctx_lbl(ctx),code_or_not(ctx_get_lbl_active(ctx),
         {*code,{ctx_fnr(ctx),OpGoto,0,BindLabel,call_id,0,0,0,callctr}});
 
-extract_types(sofar,{}) -> sofar;
+extract_types(sofar,{}) -> {1,*sofar};
 extract_types(sofar,{{_,tp},*rest}) -> extract_types({*sofar,tp},rest);
 
 generate_params_clauses(target,types,ctx,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) ->
@@ -648,7 +650,7 @@ generate_clause_code_aux(types,bind_level,post_arrow,ctx,code,expr,matchx) ->
 generate_expr_code_untyped(types,ctx,code,etypes,{}) -> ctx,etypes,code;
 // TODO deal with lists and splats first
 generate_expr_code_untyped(types,ctx,sofar,etypes,{expr,*rest}) ->
-    update generate_expr_code_aux(types,ctx,{0},expr) => ctx,newcode,callout_ret ->
+    update generate_expr_code_aux(types,ctx,{0,0},expr) => ctx,newcode,callout_ret ->
     generate_expr_code_untyped(types,ctx,{*sofar,*newcode},{*etypes,*callout_ret},rest);
 
 generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,sofar1,{},{}) -> ctx,{*sofar0,*sofar1};
@@ -735,6 +737,7 @@ generate_expr_code(types,callctr,ctx,sofar1,sofar2,typelist,{expr,*rest}) ->
     match callout_insert(ctx_fnr(ctx),callctr,{},callout_ret,typelist) => code_insert,typelist_rest ->
     generate_expr_code(types,callctr,ctx,{*sofar1,*newcode},{*sofar2,*code_insert},typelist_rest,rest);
 
+//generate_expr_code_aux(types,ctx,stypes,_) -> println_any(stypes),#error(12);
 generate_expr_code_aux(types,ctx,stypes,{Const,{tp,val}}) ->
     match lookup_type_size_pri(tp,types) => {_,sz} ->
     ctx,{},{{{{BindImm,val,sz}},tp}};
@@ -743,7 +746,7 @@ generate_expr_code_aux(types,ctx,stypes,{ExprId,{id,count}}) ->
     match lookup_type_size_pri(tp,types) => {_,sz} ->
     ctx,{},{{{{src_flag,src,sz}},tp}};
 generate_expr_code_aux(types,ctx,stypes,{ExprCallInternal,op,args}) ->
-    match decompose_stypes(stypes) => typex
+    match decompose_stypes(stypes) => typex,_
     match op_infer(op,typex,args) => infer_types
     update generate_expr_code_aux_map(types,ctx,{},infer_types,args) => ctx,args_code
     update generate_expr_code_infix(types,ctx,op,args_code) => ctx,code,x ->
@@ -763,9 +766,11 @@ generate_expr_code_aux(types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}}) ->
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_} ->
     ctx,{{ctx_fnr(ctx),OpError,0,0,err,0,ctx_linerule(ctx),0,symoffset}},{{{{BindImm,err,DefaultSize}},TypeI64}};
+generate_expr_code_aux(types,ctx,stypes,{ExprList,elements}) -> match decompose_stypes(stypes) => stype,_ match nth(stype,types) => {_,_,{DerivedTypeArray,t},storage} -> #error(12);
+    // Array - go get the elements then come back to allocate
 
-decompose_stypes({0}) -> 0;
-decompose_stypes({a,*rest}) -> a;
+decompose_stypes({0,n}) -> 0,{0,n};
+decompose_stypes({1,a,*rest}) -> a,{1,*rest};
 
 match_types({},rest) -> rest;
 match_types({a,*rest2},{0,*rest1}) -> match_types(rest1,{0,*rest2});
@@ -776,9 +781,12 @@ generate_callout_bindings(ctx,sofar,{{{{ret_flags,ret,sz}},tp},*rest}) ->
     update ctx_newreg(ctx,1<<sz) => ctx,newreg ->
     generate_callout_bindings(ctx,{*sofar,{newreg,{{ret_flags,ret,sz}},tp}},rest);
 
-generate_expr_code_aux_map(types,ctx,sofar,{},{}) -> ctx,sofar;
-generate_expr_code_aux_map(types,ctx,sofar,{typex,*trest},{expr,*rest}) ->
-    update generate_expr_code_aux(types,ctx,{typex},expr) => ctx,code,results -> generate_expr_code_aux_map(types,ctx,{*sofar,{code,results}},trest,rest);
+generate_expr_code_aux_map(types,ctx,sofar,{0,0},{}) -> ctx,sofar;
+generate_expr_code_aux_map(types,ctx,sofar,{1},{}) -> ctx,sofar;
+generate_expr_code_aux_map(types,ctx,sofar,stypelist,{expr,*rest}) ->
+    match decompose_stypes(stypelist) => typex,trest
+    update generate_expr_code_aux(types,ctx,{1,typex},expr) => ctx,code,results ->
+    generate_expr_code_aux_map(types,ctx,{*sofar,{code,results}},trest,rest);
 
 generate_expr_code_infix(types,ctx,op,{{code1,{{{{src_flag1,src1,sz1}},tp1}}},{code2,{{{{src_flag2,src2,sz2}},tp2}}}}) match binop(tp1,tp2,op) => true,swap,tp_res,machine_op ->
     match nth(tp_res,types) => {_,_,_,{_,sz_res}}
@@ -819,7 +827,7 @@ binop(t1,t1,Greater) -> true,true,TypeBool,OpLessThan;
 binop(t1,t1,GreaterEqual) -> true,true,TypeBool,OpLessThanEqual;
 binop(_) -> false,false,0,0;
 
-op_infer(op,t,_) match binop(t,t,op) => true,_,_,_ -> {t,t};
+op_infer(op,t,_) match binop(t,t,op) => true,_,_,_ -> {1,t,t};
 
 ///////////////////////////////////////////////////////////
 // VM
