@@ -68,11 +68,11 @@ fib(n) -> fib(n-2)+fib(n-1);
 :- export swap(i64,i64) -> i64,i64;
 swap(x,y) -> y,x;
 
-:- export multiret(i64,i64) -> i64;
-multiret(a,b) -> sub(swap(a,b))+1;
-
 :- sub(i64,i64) -> i64;
 sub(a,b) -> a-b;
+
+:- export multiret(i64,i64) -> i64;
+multiret(a,b) -> sub(swap(a,b))+1;
 
 :- wildcard_test0(i64,i64) -> i64;
 wildcard_test0(a,b) -> 3;

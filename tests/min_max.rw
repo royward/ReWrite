@@ -1,7 +1,9 @@
 // Example: min and max, showing multiple returns
 // SPDX-License-Identifier: CC0-1.0
 
+:- min_max(i64,i64) -> i64,i64;
 min_max(a,b) when a<b -> a,b;
 min_max(a,b) -> b,a;
 
+:- sub(i64,i64) -> i64;
 sub(a,b) -> b-a;

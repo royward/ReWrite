@@ -621,6 +621,9 @@ compile_rule(target,types,linerule,ctx,sofar,params,pre_arrow_clauses,post_arrow
     ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ctx_get_lblnext(ctx),ctx_lbl(ctx),code_or_not(ctx_get_lbl_active(ctx),
         {*code,{ctx_fnr(ctx),OpGoto,0,BindLabel,call_id,0,0,0,callctr}});
 
+extract_types(sofar,{}) -> sofar;
+extract_types(sofar,{{_,tp},*rest}) -> extract_types({*sofar,tp},rest);
+
 generate_params_clauses(target,types,ctx,params,pre_arrow_clauses,post_arrow_clauses,exprs,type_left,type_right) ->
     update generate_llvm_alloc_code(target,ctx_fnr(ctx),{},0,min(max(length(type_left),length(type_right)),8)) => code
     update generate_llvm_store_code(target,ctx_fnr(ctx),code,0,type_left) => code
@@ -645,7 +648,7 @@ generate_clause_code_aux(types,bind_level,post_arrow,ctx,code,expr,matchx) ->
 generate_expr_code_untyped(types,ctx,code,etypes,{}) -> ctx,etypes,code;
 // TODO deal with lists and splats first
 generate_expr_code_untyped(types,ctx,sofar,etypes,{expr,*rest}) ->
-    update generate_expr_code_aux(types,ctx,expr) => ctx,newcode,callout_ret ->
+    update generate_expr_code_aux(types,ctx,{0},expr) => ctx,newcode,_,_,callout_ret ->
     generate_expr_code_untyped(types,ctx,{*sofar,*newcode},{*etypes,*callout_ret},rest);
 
 generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,sofar1,{},{}) -> ctx,{*sofar0,*sofar1};
@@ -727,18 +730,27 @@ use_binding(ctx,id) ->
 
 generate_expr_code(types,_,ctx,code1,code2,{},{}) -> ctx,{*code1,*code2};
 // TODO deal with lists and splats first
-generate_expr_code(types,callctr,ctx,sofar1,sofar2,type_left,{expr,*rest}) ->
-    update generate_expr_code_aux(types,ctx,expr) => ctx,newcode,callout_ret
-    match callout_insert(ctx_fnr(ctx),callctr,{},callout_ret,type_left) => code_insert,type_left_rest ->
-    generate_expr_code(types,callctr,ctx,{*sofar1,*newcode},{*sofar2,*code_insert},type_left_rest,rest);
-// generate_expr_code(redirect,ctx,sofar,{{{{dst_flag,dst}},tp},*type_left},{expr,*rest}) ->
-//     match generate_expr_code_aux(ctx,expr) => newcode,tp,src_flag,src ->
-//     generate_expr_code(redirect,ctx,{*sofar,*newcode,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,dst_flag,dst,src_flag,src}},type_left,rest);
+generate_expr_code(types,callctr,ctx,sofar1,sofar2,typelist,{expr,*rest}) ->
+    update generate_expr_code_aux(types,ctx,extract_types({},typelist),expr) => ctx,newcode,_,_,callout_ret
+    match callout_insert(ctx_fnr(ctx),callctr,{},callout_ret,typelist) => code_insert,typelist_rest ->
+    generate_expr_code(types,callctr,ctx,{*sofar1,*newcode},{*sofar2,*code_insert},typelist_rest,rest);
 
-generate_expr_code_aux(types,ctx,{Const,{tp,val}}) -> match lookup_type_size_pri(tp,types) => {_,sz} -> ctx,{},{{{{BindImm,val,sz}},tp}};
-generate_expr_code_aux(types,ctx,{ExprId,{id,count}}) -> update use_binding(ctx,id) => ctx,tp,src_flag,src match lookup_type_size_pri(tp,types) => {_,sz} -> ctx,{},{{{{src_flag,src,sz}},tp}};
-generate_expr_code_aux(types,ctx,{ExprCallInternal,op,args}) -> update generate_expr_code_aux_map(types,ctx,{},args) => ctx,args_code -> generate_expr_code_infix(types,ctx,op,args_code);
-generate_expr_code_aux(types,ctx,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,regright,maskright,type_right} ->
+generate_expr_code_aux(types,ctx,stypes,{Const,{tp,val}}) ->
+    match decompose_stypes(stypes) => typex,trest
+    match lookup_type_size_pri(tp,types) => {_,sz} ->
+    ctx,{},{typex},trest,{{{{BindImm,val,sz}},tp}};
+generate_expr_code_aux(types,ctx,stypes,{ExprId,{id,count}}) ->
+    match decompose_stypes(stypes) => typex,trest
+    update use_binding(ctx,id) => ctx,tp,src_flag,src
+    match lookup_type_size_pri(tp,types) => {_,sz} ->
+    ctx,{},{typex},trest,{{{{src_flag,src,sz}},tp}};
+generate_expr_code_aux(types,ctx,stypes,{ExprCallInternal,op,args}) ->
+    match decompose_stypes(stypes) => typex,trest
+    match op_infer(op,typex,args) => infer_types
+    update generate_expr_code_aux_map(types,ctx,{},infer_types,args) => ctx,args_code
+    update generate_expr_code_infix(types,ctx,op,args_code) => ctx,code,x ->
+    ctx,code,{},{typex},x;
+generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,regright,maskright,type_right} ->
     update ctx_update_get_callctr(ctx,max(length(params_left),1)) => ctx,callctr
     update generate_expr_code(types,callctr,ctx,{},{},params_left,args) => ctx,args_code
     match ctx_get_reg_count(ctx)+1 => spinc
@@ -748,19 +760,28 @@ generate_expr_code_aux(types,ctx,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx
         {ctx_fnr(ctx),OpAddStack,0,0,0,0,-spinc},
         *callout_extract(ctx_fnr(ctx),callctr,{},callout)
         },
+    type_right,{},
     callout_ret({},callout);
-generate_expr_code_aux(types,ctx,{ExprError,{{Const,{TypeI64,err}}}}) ->
+generate_expr_code_aux(types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}}) ->
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_} ->
-    ctx,{{ctx_fnr(ctx),OpError,0,0,err,0,ctx_linerule(ctx),0,symoffset}},{{{{BindImm,err,DefaultSize}},TypeI64}};
+    ctx,{{ctx_fnr(ctx),OpError,0,0,err,0,ctx_linerule(ctx),0,symoffset}},{},{},{{{{BindImm,err,DefaultSize}},TypeI64}};
+
+decompose_stypes({0}) -> 0,{0};
+decompose_stypes({a,*rest}) -> a,rest;
+
+match_types({},rest) -> rest;
+match_types({a,*rest2},{0,*rest1}) -> match_types(rest1,{0,*rest2});
+match_types({a,*rest1},{a,*rest2}) -> match_types(rest1,rest2);
 
 generate_callout_bindings(ctx,sofar,{}) -> ctx,sofar;
 generate_callout_bindings(ctx,sofar,{{{{ret_flags,ret,sz}},tp},*rest}) ->
     update ctx_newreg(ctx,1<<sz) => ctx,newreg ->
     generate_callout_bindings(ctx,{*sofar,{newreg,{{ret_flags,ret,sz}},tp}},rest);
 
-generate_expr_code_aux_map(types,ctx,sofar,{}) -> ctx,sofar;
-generate_expr_code_aux_map(types,ctx,sofar,{expr,*rest}) -> update generate_expr_code_aux(types,ctx,expr) => ctx,code,results -> generate_expr_code_aux_map(types,ctx,{*sofar,{code,results}},rest);
+generate_expr_code_aux_map(types,ctx,sofar,{},{}) -> ctx,sofar;
+generate_expr_code_aux_map(types,ctx,sofar,{typex,*trest},{expr,*rest}) ->
+    update generate_expr_code_aux(types,ctx,{typex},expr) => ctx,code,_,_,results -> generate_expr_code_aux_map(types,ctx,{*sofar,{code,results}},trest,rest);
 
 generate_expr_code_infix(types,ctx,op,{{code1,{{{{src_flag1,src1,sz1}},tp1}}},{code2,{{{{src_flag2,src2,sz2}},tp2}}}}) match binop(tp1,tp2,op) => true,swap,tp_res,machine_op ->
     match nth(tp_res,types) => {_,_,_,{_,sz_res}}
@@ -800,6 +821,8 @@ binop(t1,t1,LessEqual) -> true,false,TypeBool,OpLessThanEqual;
 binop(t1,t1,Greater) -> true,true,TypeBool,OpLessThan;
 binop(t1,t1,GreaterEqual) -> true,true,TypeBool,OpLessThanEqual;
 binop(_) -> false,false,0,0;
+
+op_infer(op,t,_) match binop(t,t,op) => true,_,_,_ -> {t,t};
 
 ///////////////////////////////////////////////////////////
 // VM
