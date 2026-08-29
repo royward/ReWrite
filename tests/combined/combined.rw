@@ -111,3 +111,7 @@ use_twice(n) -> match expensive(n) => result -> result*result;
 
 :- export noparam() -> i64;
 noparam() -> 3;
+
+:- export to_uppercase(char) -> char;
+to_uppercase(c) when c>='a' when c<='z' -> c-32;
+to_uppercase(c) -> c;

@@ -14,11 +14,12 @@ int main(int argc, char** argv) {
     int64_t result0;
     int64_t result1;
     bool resultb;
+    char* resultc;
     int ret_code;
 
     printf("f:");
-    ret_code=rw_f(exe,&result0);
-    if(!ret_code && result0==3) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+    ret_code=rw_f(exe,&result0,&resultc);
+    if(!ret_code && result0==0) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
     program_unload(&p);
     rw_instance_unload(exe);

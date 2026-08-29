@@ -2,5 +2,8 @@
 // NOTE: this will disappear as the native versions can do anything the VM version can
 // SPDX-License-Identifier: CC0-1.0
 
-:- export f() -> i64,[i64];
-f() -> 0,{1,2};
+:- g() -> char,char;
+g() -> 'cd';
+
+:- export f() -> i64,string;
+f() -> 0,{'ab',g()};

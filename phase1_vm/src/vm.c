@@ -142,11 +142,12 @@ void rw_instance_unload(RWInstance* exe) {
 #define BIND_OVERFLOW 2
 #define BIND_ARGRET 3
 #define BIND_INOUT 4
+#define BIND_MEM 5
 
 #define FLAG_LIFE_START 0x10
 #define FLAG_LIFE_END 0x20
 
-void display_operand(FILE* out, uint8_t flag, int64_t val) {
+void display_operand(FILE* out, Operation* operation, uint8_t flag, int64_t val) {
     uint8_t bind=flag&0xF;
     if(flag&FLAG_LIFE_START) {
         fprintf(out,"+");
@@ -168,6 +169,9 @@ void display_operand(FILE* out, uint8_t flag, int64_t val) {
         } break;
         case BIND_INOUT: {
             fprintf(out,"(r0+%" PRId64 ")",val);
+        } break;
+        case BIND_MEM: {
+            fprintf(out,"(r%" PRId64 "+%d)",val, operation->label2);
         } break;
     }
 }
@@ -271,7 +275,7 @@ void program_disassemble(Program* program, FILE* out) {
             } break;
             case OP_ERROR: {
                 fprintf(out,"error type:");
-                display_operand(out,operation->flags_dst,operation->dst);
+                display_operand(out,operation,operation->flags_dst,operation->dst);
                 fprintf(out," line:%ld sym:%s",operation->src1,program->symbols+operation->src2);
             } break;
             case OP_RET: {
@@ -301,51 +305,51 @@ void program_disassemble(Program* program, FILE* out) {
             case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"let.%d ",sz);
-                display_operand(out,operation->flags_dst,operation->dst);
+                display_operand(out,operation,operation->flags_dst,operation->dst);
                 fprintf(out," = ");
-                display_operand(out,operation->flags_src1,operation->src1);
+                display_operand(out,operation,operation->flags_src1,operation->src1);
             } break;
             case OP_INSERT_LL: case OP_INSERT_LL+1: case OP_INSERT_LL+2: case OP_INSERT_LL+3: case OP_INSERT_LL+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"insert.%d ",sz);
-                display_operand(out,operation->flags_dst,operation->dst);
+                display_operand(out,operation,operation->flags_dst,operation->dst);
                 fprintf(out," = ");
-                display_operand(out,operation->flags_src1,operation->src1);
+                display_operand(out,operation,operation->flags_src1,operation->src1);
                 fprintf(out," (o=%d)",(uint32_t)operation->src2);
             } break;
             case OP_EXTRACT_LL: case OP_EXTRACT_LL+1: case OP_EXTRACT_LL+2: case OP_EXTRACT_LL+3: case OP_EXTRACT_LL+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"extract.%d ",sz);
-                display_operand(out,operation->flags_dst,operation->dst);
+                display_operand(out,operation,operation->flags_dst,operation->dst);
                 fprintf(out," = ");
-                display_operand(out,operation->flags_src1,operation->src1);
+                display_operand(out,operation,operation->flags_src1,operation->src1);
                 fprintf(out," (o=%d)",(uint32_t)operation->src2);
             } break;
             case OP_CMP_NE_BRANCH: case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"test.%d ",sz);
-                display_operand(out,operation->flags_src1,operation->src1);
+                display_operand(out,operation,operation->flags_src1,operation->src1);
                 fprintf(out," != ");
-                display_operand(out,operation->flags_src2,operation->src2);
+                display_operand(out,operation,operation->flags_src2,operation->src2);
                 fprintf(out," goto ");
                 program_display_label_both(program,out,operation);
             } break;
             case OP_CMP_EQ_BRANCH: case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"test.%d ",sz);
-                display_operand(out,operation->flags_src1,operation->src1);
+                display_operand(out,operation,operation->flags_src1,operation->src1);
                 fprintf(out," == ");
-                display_operand(out,operation->flags_src2,operation->src2);
+                display_operand(out,operation,operation->flags_src2,operation->src2);
                 fprintf(out," goto ");
                 program_display_label_both(program,out,operation);
             } break;
             case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
                 fprintf(out,"let.%s ",display_type(operation->type));
-                display_operand(out,operation->flags_dst,operation->dst);
+                display_operand(out,operation,operation->flags_dst,operation->dst);
                 fprintf(out," = ");
-                display_operand(out,operation->flags_src1,operation->src1);
+                display_operand(out,operation,operation->flags_src1,operation->src1);
                 fprintf(out," %s ",display_binop(op));
-                display_operand(out,operation->flags_src2,operation->src2);
+                display_operand(out,operation,operation->flags_src2,operation->src2);
             } break;
             default: fprintf(out,"unknown");
         }
@@ -381,6 +385,16 @@ void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32
                 default: fprintf(stderr,"unknown size in operand_store\n"); exit(EXIT_FAILURE);
             }
         } break;
+        case BIND_MEM: {
+            uint8_t* addr=(uint8_t*)(exe->registers[operation->dst+sp]+operation->label2);
+           switch(sz) { // alignment is guaranteed by the compiler
+                case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
+                case 16:*((uint16_t*)addr)=(uint16_t)value; break;
+                case 32:*((uint32_t*)addr)=(uint32_t)value; break;
+                case 64:*((uint64_t*)addr)=(uint64_t)value; break;
+                default: fprintf(stderr,"unknown size in operand_store\n"); exit(EXIT_FAILURE);
+            }
+        } break;
         default: {
             fprintf(stderr,"unknown flag in operand_store\n");
             exit(EXIT_FAILURE);
@@ -388,7 +402,7 @@ void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32
     }
 }
 
-uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t src, uint32_t sp) {
+uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t src, uint32_t sp, uint32_t offset) {
     uint64_t mask=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
     switch(flags_src&0xF) {
         case BIND_IMM: {
@@ -404,7 +418,7 @@ uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t
             return ((uint64_t*)exe->registers[0])[src]&mask;
         } break;
         case BIND_OVERFLOW: {
-            uint8_t* addr=&exe->overflow[src];
+            uint8_t* addr=(uint8_t*)(exe->registers[src]+offset);
             uint64_t value;
             switch(sz) { // alignment is guaranteed by the compiler
                 case 1:case 8: value=*((uint8_t*)addr); break;
@@ -439,7 +453,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 // NOP
             } break;
             case OP_ERROR: {
-                exe->errtype=operand_load(exe, 64, operation->flags_dst, operation->dst, sp);
+                exe->errtype=operand_load(exe, 64, operation->flags_dst, operation->dst, sp, operation->label2);
                 exe->errline=operation->src1;
                 exe->errsym=program->symbols+operation->src2;
                 return exe->errtype;
@@ -463,50 +477,50 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                  sp+=(int32_t)operation->src1;
             } break;
             case OP_MOVE: case OP_INSERT_LL: case OP_EXTRACT_LL: {
-                uint64_t val = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
+                uint64_t val = operand_load(exe, 1, operation->flags_src1, operation->src1, sp, operation->label2);
                 operand_store(exe, operation, val, 1, sp);
             }
             case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4:
             case OP_INSERT_LL+1: case OP_INSERT_LL+2: case OP_INSERT_LL+3: case OP_INSERT_LL+4:
             case OP_EXTRACT_LL+1: case OP_EXTRACT_LL+2: case OP_EXTRACT_LL+3: case OP_EXTRACT_LL+4: {
                 uint32_t sz =8<<(op&7);
-                uint64_t val = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                uint64_t val = operand_load(exe, sz, operation->flags_src1, operation->src1, sp, operation->label2);
                 operand_store(exe, operation, val, sz, sp);
             } break;
             case OP_CMP_NE_BRANCH: {
-                uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
-                uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp);
+                uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp, operation->label2);
+                uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp, operation->label2);
                 if(src1 != src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
                 uint32_t sz =8<<(op&7);
-                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
-                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp, operation->label2);
+                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp, operation->label2);
                 if(src1 != src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_CMP_EQ_BRANCH: {
-                uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
-                uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp);
+                uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp, operation->label2);
+                uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp, operation->label2);
                 if(src1 == src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
                 uint32_t sz =8<<(op&7);
-                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
-                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp, operation->label2);
+                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp, operation->label2);
                 if(src1 == src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
                 uint32_t sz = type_to_size(operation->type);
-                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
-                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp, operation->label2);
+                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp, operation->label2);
                 uint64_t dst;
                 switch(op) {
                     case OP_PLUS: dst = src1+src2; break;

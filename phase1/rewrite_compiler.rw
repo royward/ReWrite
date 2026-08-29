@@ -187,6 +187,7 @@ lexer_one_symbol(_) -> 0;
 // - the function name associative list
 // - the constant associative list
 
+const TypeString=1;
 const TypeBool=2;
 const TypeChar=3;
 const TypeI64=10;
@@ -223,8 +224,8 @@ int2s(n) -> {*int2s(n/10),*int2s(n%10)};
 te() -> {"",false,{0},{}};
 
 parse(target,s) -> parse_aux(target,{},{},{},0,{},
-    {te(),te(),{"bool",false,{1},{0,1}},{"char",false,{1},{0,32}},te(),te(),te(),te(),te(),te(),{"i64",false,{1},{0,64}},te(),te(),te(),te(),te()},
-    {{"bool",TypeBool},{"char",TypeChar},{"i64",TypeI64}},s);
+    {te(),{"string",false,{2,3},{0,32,0,32}},{"bool",false,{1},{0,1}},{"char",false,{1},{0,32}},te(),te(),te(),te(),te(),te(),{"i64",false,{1},{0,64}},te(),te(),te(),te(),te()},
+    {{"string",TypeString},{"bool",TypeBool},{"char",TypeChar},{"i64",TypeI64}},s);
 
 // get and add for a straight list of (string,ref)
 get_add_symbol_list(n,sofar,{},val) -> {*sofar,{val,1}},n;
@@ -503,13 +504,14 @@ const BindReg=1;
 const BindOverflow=2;
 const BindArgRet=3;
 const BindInOut=4;
+const BindMem=5;
 
 annotate_type_list_reg(types,pri,max_reg,reg_count,sofar,{}) -> reg_count,{},sofar;
 annotate_type_list_reg(types,pri,max_reg,reg_count,sofar,todo) when max_reg==MaxParamRegs -> reg_count,annotate_type_list_stack(types,{},{},{*sofar,*todo});
 annotate_type_list_reg(types,pri,max_reg,reg_count,sofar,{{{{}},t},*rest}) match lookup_type_size_pri(t,types) => {p,sz} when p<=pri ->
     annotate_type_list_reg(types,pri,max_reg+1,{*reg_count,sz},{*sofar,{{{BindArgRet,max_reg,sz}},t}},rest);
 annotate_type_list_reg(types,pri,max_reg,reg_count,sofar,{{{{},r},t},*rest}) match lookup_type_size_pri(t,types) => {p,sz,_,_} when p<=pri ->
-    annotate_type_list_reg(types,pri,max_reg+1,{*reg_count,sz},{*sofar,{{{BindArgRet,max_reg,sz},r},t}},rest);
+    annotate_type_list_reg(types,pri,max_reg+1,{*reg_count,sz},sofar,{{{{BindArgRet,max_reg,sz},r},t},*rest});
 annotate_type_list_reg(types,pri,max_reg,reg_count,sofar,{{{r,{}},t},*rest}) match lookup_type_size_pri(t,types) => {_,_,p,sz} when p<=pri ->
     annotate_type_list_reg(types,pri,max_reg+1,{*reg_count,sz},{*sofar,{{r,{BindArgRet,max_reg,sz}},t}},rest);
 annotate_type_list_reg(types,pri,max_reg,reg_count,sofar,todo) -> annotate_type_list_reg(types,pri+1,max_reg,reg_count,sofar,todo);
@@ -518,7 +520,7 @@ annotate_type_list_stack(types,stack,sofar,{}) -> stack,sofar;
 annotate_type_list_stack(types,stack,sofar,{{{{}},t},*rest}) match lookup_type_size_pri(t,types) => {p,sz} update get_aligned_bitmask(0,{},stack,min(sz>>3,1)) => stack,offset ->
     annotate_type_list_stack(types,stack,{*sofar,{{{BindOverflow,offset,sz}},t}},rest);
 annotate_type_list_stack(types,stack,sofar,{{{{},r},t},*rest}) match lookup_type_size_pri(t,types) => {p,sz,_,_} update get_aligned_bitmask(0,{},stack,min(sz>>3,1)) => stack,offset ->
-    annotate_type_list_stack(types,stack,{*sofar,{{{BindOverflow,offset,sz},r},t}},rest);
+    annotate_type_list_stack(types,stack,sofar,{{{{BindOverflow,offset,sz},r},t},*rest});
 annotate_type_list_stack(types,stack,sofar,{{{r,{}},t},*rest}) match lookup_type_size_pri(t,types) => {_,_,p,sz} update get_aligned_bitmask(0,{},stack,min(sz>>3,1)) => stack,offset ->
     annotate_type_list_stack(types,stack,{*sofar,{{r,{BindOverflow,offset,sz}},t}},rest);
 annotate_type_list_stack(types,stack,sofar,{t,*rest}) -> annotate_type_list_stack(types,stack,{*sofar,t},rest);
@@ -539,8 +541,8 @@ const OpCompareEqualBranch=248;
 const OpGoto=254;
 const OpCall=255;
 
-compile1(TargetVM,types,outfile,label_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVM,outfile,label_id,table,symtext,sofar);
-compile1(TargetVMLL,types,outfile,label_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVMLL,outfile,label_id,table,symtext,sofar);
+compile1(TargetVM,types,outfile,label_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVM,types,outfile,label_id,table,symtext,sofar);
+compile1(TargetVMLL,types,outfile,label_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVMLL,types,outfile,label_id,table,symtext,sofar);
 compile1(target,types,outfile,label_id,_,table,symtext,symsz,sofar,{}) ->
     match create_export_wrappers_ll(target,types,{},{},label_id,table) => wrapper_code,wrapperh ->
     save_text_file({*outfile,'.ll'},{*convert_to_llvm(target,minify_table({},table),table,symtext,symsz,{},sofar),*wrapper_code,*ll_boilerplate_end()}),
@@ -550,7 +552,7 @@ compile1(target,types,outfile,label_id,n,table,symtext,symsz,sofar,{rules,*rest}
     update compile_function(types,target,0,true,label_id,n,table,0,{{n,0,OpLabel,0,BindLabel,n}},rules,0,bitmask_or({},bitmask1,bitmask2),type_left,type_right) => label_id,code ->
     compile1(target,types,outfile,label_id,n+1,table,symtext,symsz,{*sofar,{n,code}},rest);
 
-compile1_vm(target,outfile,label_id,table,symtext,sofar) ->
+compile1_vm(target,types,outfile,label_id,table,symtext,sofar) ->
     match create_export_wrappers_vm(target,{},{},0,label_id,table) => wrapper_code,wrapperh
     match {*sofar,*wrapper_code} => vmcode ->
     save_c_header(target,outfile,wrapperh),
@@ -766,8 +768,20 @@ generate_expr_code_aux(types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}}) ->
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_} ->
     ctx,{{ctx_fnr(ctx),OpError,0,0,err,0,ctx_linerule(ctx),0,symoffset}},{{{{BindImm,err,DefaultSize}},TypeI64}};
-generate_expr_code_aux(types,ctx,stypes,{ExprList,elements}) -> match decompose_stypes(stypes) => stype,_ match nth(stype,types) => {_,_,{DerivedTypeArray,t},storage} -> #error(12);
+generate_expr_code_aux(types,ctx,stypes,{ExprList,elements}) match decompose_stypes(stypes) => stype,_ match nth(stype,types) => {_,_,{DerivedTypeArray,t},storage} ->
     // Array - go get the elements then come back to allocate
+    update generate_expr_code_aux_map(types,ctx,{},{0,t},elements) => ctx,args_code
+    update ctx_newreg(ctx,32) => ctx,array
+    update ctx_newreg(ctx,64) => ctx,parray
+    update array_element_assign(ctx,parray,0,{},args_code) => c,csplat,code ->
+    println_any(code),
+    ctx,code,{{{{BindReg,parray,32},{BindImm,0,32}},stype}};
+
+array_element_assign(ctx,mem,c,code,{}) -> c,0,code;
+array_element_assign(ctx,mem,c,code,{{partcode,r},*rest}) -> array_element_assign(ctx,mem,array_element_assign_aux(ctx,mem,c,{*code,*partcode},r),rest);
+
+array_element_assign_aux(ctx,mem,c,code,{}) -> c,code;
+array_element_assign_aux(ctx,mem,c,code,{{{{src_flag,src,sz}},_},*rest}) -> array_element_assign_aux(ctx,mem,c+1,{*code,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindMem,mem,src_flag,src,0,0,16+(c*sz>>3)}},rest);
 
 decompose_stypes({0,n}) -> 0,{0,n};
 decompose_stypes({1,a,*rest}) -> a,{1,*rest};
@@ -781,7 +795,7 @@ generate_callout_bindings(ctx,sofar,{{{{ret_flags,ret,sz}},tp},*rest}) ->
     update ctx_newreg(ctx,1<<sz) => ctx,newreg ->
     generate_callout_bindings(ctx,{*sofar,{newreg,{{ret_flags,ret,sz}},tp}},rest);
 
-generate_expr_code_aux_map(types,ctx,sofar,{0,0},{}) -> ctx,sofar;
+generate_expr_code_aux_map(types,ctx,sofar,{0,_},{}) -> ctx,sofar;
 generate_expr_code_aux_map(types,ctx,sofar,{1},{}) -> ctx,sofar;
 generate_expr_code_aux_map(types,ctx,sofar,stypelist,{expr,*rest}) ->
     match decompose_stypes(stypelist) => typex,trest
@@ -798,8 +812,12 @@ opt_swap_sources(false,src_flag1,src1,src_flag2,src2) -> src_flag1,src1,src_flag
 opt_swap_sources(_,src_flag1,src1,src_flag2,src2) -> src_flag2,src2,src_flag1,src1;
 
 callout_insert(l1,l2,callctr,sofar,{},type_left_rest) -> sofar,type_left_rest;
-callout_insert(l1,l2,callctr,sofar,{{{{src_flag,src,sz}},tp},*rest0},{{{{dst_flag,dst,sz}},tp},*rest1}) ->
-    callout_insert(l1,l2,callctr,{*sofar,{l1,l2,if_not_zero(callctr,OpInsert,OpMove)+get_size_scale(sz),0,dst_flag,dst,src_flag,src,0,callctr}},rest0,rest1);
+callout_insert(l1,l2,callctr,sofar,{{src_triples,tp},*rest0},{{dst_triples,tp},*rest1}) ->
+    callout_insert(l1,l2,callctr,{*sofar,*callout_insert_aux(l1,l2,callctr,{},src_triples,dst_triples)},rest0,rest1);
+
+callout_insert_aux(_,_,_,sofar,{},{}) -> sofar;
+callout_insert_aux(l1,l2,callctr,sofar,{{src_flag,src,sz},*rs},{{dst_flag,dst,sz},*rd}) ->
+    callout_insert_aux(l1,l2,callctr,{*sofar,{l1,l2,if_not_zero(callctr,OpInsert,OpMove)+get_size_scale(sz),0,dst_flag,dst,src_flag,src,0,callctr}},rs,rd);
 
 callout_extract(l1,l2,callctr,sofar,{}) -> sofar;
 callout_extract(l1,l2,callctr,sofar,{{newreg,{{ret_flags,ret,sz}},tp},*rest}) ->
@@ -817,7 +835,9 @@ const OpLessThan=29;
 const OpLessThanEqual=30;
 
 binop(t1,t1,Plus) -> true,false,t1,OpPlus;
+binop(TypeChar,t1,Plus) -> true,false,TypeChar,OpPlus;
 binop(t1,t1,Minus) -> true,false,t1,OpMinus;
+binop(TypeChar,t1,Minus) -> true,false,TypeChar,OpMinus;
 binop(t1,t1,Star) -> true,false,t1,OpTimes;
 binop(t1,t1,Divide) -> true,false,t1,OpDiv;
 binop(t1,t1,Modulus) -> true,false,t1,OpMod;
@@ -961,6 +981,7 @@ ll_binop(OpLessThanEqual,tp) -> {'icmp sle ',*ll_tp(tp)};
 is_unsigned(_) -> false;
 
 ll_tp(TypeBool) -> "i1";
+ll_tp(TypeChar) -> "i32";
 ll_tp(TypeI64) -> "i64";
 
 intsize(0) -> "i1";
@@ -982,6 +1003,7 @@ save_c_header(target,outfile,content) ->
     save_text_file({*outfile,'.h'},
         {'#ifndef RW_',*file_upper,'_H\n#define RW_',*file_upper,'_H\n#include "',*includes(target),'"\n\n',
         '#ifdef __cplusplus\nnamespace ',*outfile,' {\nextern "C" {\n#endif\n',
+        'typedef uint32_t codepoint;\n',
         *content,
         '\n#ifdef __cplusplus\n}\n}\n#endif\n\n#endif\n'});
 
@@ -1001,7 +1023,7 @@ create_export_wrappers_vm(target,sofarc,sofarh,fnid,label_id,{{_,_,_,name,_,_,le
             {new_lbl,0,OpAddStack,0,0,0,0,-2},
             *create_export_vm_code_out(new_lbl,0,{},right),
             {new_lbl,0,OpRet,0}}}},
-        {*sofarh,'\nstatic inline int32_t rw_',*name,'(RWInstance* a',*create_export_vm_sigc({},0,"in",left),*create_export_vm_sigc({},0,"*out",right),') {\n',
+        {*sofarh,'\nstatic inline int32_t rw_',*name,'(RWInstance* a',*create_export_vm_sigc({},0,"const ","in",left),*create_export_vm_sigc({},0,"","*out",right),') {\n',
             '\tuint64_t inout[',*int2s(max(length(left),length(right))),']={',*create_export_vm_in({},0,left),'};\n',
             '\tint32_t e=RW__vmcall(a,',*int2s(new_lbl),',inout);\n\tif(e!=0)return e;\n',
             *create_export_vm_out({},0,right),
@@ -1016,13 +1038,15 @@ create_export_vm_code_out(new_lbl,n,sofar,{{regs,tp},*rest}) -> create_export_vm
 
 create_export_vm_param(new_lbl,n,tp,{{flag,dst,sz}}) -> {{new_lbl,0,OpMove+get_size_scale(sz),0,flag,dst,BindInOut,n}};
 
-create_export_vm_ret(new_lbl,n,tp,{{flag,dst,sz}}) -> {{new_lbl,0,OpMove+get_size_scale(sz),0,BindInOut,n,flag,dst}};
+create_export_vm_ret(new_lbl,n,tp,{{flag,dst,sz},*_}) -> {{new_lbl,0,OpMove+get_size_scale(sz),0,BindInOut,n,flag,dst}}; // FIXME - more types
 
-create_export_vm_sigc(sofar,_,_,{}) -> sofar;
-create_export_vm_sigc(sofar,n,fill,{{_,tp},*rest}) -> create_export_vm_sigc({*sofar,',',*c_type(tp),' ',*fill,*int2s36(n)},n+1,fill,rest);
+create_export_vm_sigc(sofar,_,_,_,{}) -> sofar;
+create_export_vm_sigc(sofar,n,fill0,fill1,{{_,tp},*rest}) -> create_export_vm_sigc({*sofar,',',*fill0,*c_type(tp),' ',*fill1,*int2s36(n)},n+1,fill0,fill1,rest);
 
 c_type(TypeI64) -> "int64_t";
+c_type(TypeChar) -> "codepoint";
 c_type(TypeBool) -> "bool";
+c_type(TypeString) -> "char*";
 
 z_or_s(tp) when is_unsigned(tp) -> 'z';
 z_or_s(_) -> 's';
@@ -1056,7 +1080,7 @@ create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{_,_,_,name,_,_,left,
         'fail:\n',
         '\tret i32 %status\n',
         '}\n'},
-        {*sofarh,'\nint32_t rw_',*name,'(RWInstance* a',*create_export_vm_sigc({},0,"in",left),*create_export_vm_sigc({},0,"*out",right),');\n'},
+        {*sofarh,'\nint32_t rw_',*name,'(RWInstance* a',*create_export_vm_sigc({},0,"const ","in",left),*create_export_vm_sigc({},0,"","*out",right),');\n'},
         fnid+1,rest);
 
 create_export_ll_sigc_in(sofar,regs,_,{}) -> sofar,regs;
