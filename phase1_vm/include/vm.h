@@ -46,7 +46,7 @@ struct ExecutionState {
     uint32_t errline;
     const char* errsym;
     uint64_t argret[ARGREG_NO];
-    uint8_t* heap;
+    uint32_t* heap;
 };
 
 typedef struct ExecutionState RWInstance;

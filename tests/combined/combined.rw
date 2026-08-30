@@ -42,7 +42,7 @@ fact_err(n) when n<0 -> #error(ErrNegUnexpected);
 fact_err(0)->1;
 fact_err(n)->n*fact_err(n-1);
 
-:- export fact_tail(n:i64) -> i64;
+:- export fact_tail(value n:i64) -> value i64;
 fact_tail(n) -> fact_aux(1,n);
 
 :- fact_aux(i64,i64) -> i64;
@@ -65,7 +65,7 @@ fib(n) -> fib(n-2)+fib(n-1);
 //roman_numerals.rw
 //string_to_int.rw
 
-:- export swap(i64,i64) -> i64,i64;
+:- export swap(value i64,i64) -> i64,value i64;
 swap(x,y) -> y,x;
 
 :- sub(i64,i64) -> i64;

@@ -789,7 +789,8 @@ generate_expr_code_aux(types,ctx,stypes,{ExprList,elements}) match decompose_sty
     update ctx_newreg(ctx,64) => ctx,parray
     update generate_expr_code_aux_map(types,ctx,{},{0,t},elements) => ctx,args_code
     update array_element_assign(ctx,parray,0,{},args_code) => c,csplat,code ->
-    ctx,{{ctx_fnr(ctx),OpAlloc,0,BindReg,array,BindImm,sz>>3,BindImm,c},{ctx_fnr(ctx),OpLea,0,BindReg,parray,BindReg,array},*code},{{{{BindReg,parray,32},{BindImm,0,32}},stype}};
+    ctx,{{ctx_fnr(ctx),OpAlloc,0,BindReg,array,BindImm,sz>>3,BindImm,c},{ctx_fnr(ctx),OpLea,0,BindReg,parray,BindReg,array},*code,{ctx_fnr(ctx),OpMove+3,0,BindMem,parray,BindImm,c,0,0,4}},
+    {{{{BindReg,array,32},{BindImm,0,32}},stype}};
 
 array_element_assign(ctx,mem,c,code,{}) -> c,0,code;
 array_element_assign(ctx,mem,c,code,{{partcode,r},*rest}) -> array_element_assign(ctx,mem,array_element_assign_aux(ctx,mem,c,{*code,*partcode},r),rest);
