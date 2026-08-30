@@ -38,6 +38,7 @@ typedef struct Program Program;
 
 struct ExecutionState {
     uint32_t sp;
+    uint32_t end_of_heap;
     uint64_t* registers;
     uint8_t* overflow;
     Program* program;
@@ -45,6 +46,7 @@ struct ExecutionState {
     uint32_t errline;
     const char* errsym;
     uint64_t argret[ARGREG_NO];
+    uint8_t* heap;
 };
 
 typedef struct ExecutionState RWInstance;

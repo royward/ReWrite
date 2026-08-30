@@ -5,6 +5,7 @@
 #define OVERFLOW_SIZE 1000
 #define REGISTERS_SIZE 100000
 #define LABEL_COUNT 100000
+#define HEAP_SIZE 1000000
 
 #define OP_LABEL 0x01
 #define OP_MIN_BRANCH 0xF0
@@ -85,9 +86,12 @@ int rw_instance_init(RWInstance* exe, Program* p) {
     exe->program = p;
     exe->registers = (uint64_t*)malloc(REGISTERS_SIZE*sizeof(uint64_t));
     exe->overflow = (uint8_t*)malloc(OVERFLOW_SIZE*sizeof(uint8_t));
-    if(!exe->registers || !exe->overflow) {
+    exe->heap = (uint8_t*)malloc(HEAP_SIZE*sizeof(uint8_t));
+    exe->end_of_heap = 0;
+    if(!exe->registers || !exe->overflow || !exe->heap) {
         free(exe->registers);
         free(exe->overflow);
+        free(exe->heap);
         fprintf(stderr, "fatal: problem allocating memory\n");
         return EXIT_FAILURE;
     }
@@ -97,6 +101,7 @@ int rw_instance_init(RWInstance* exe, Program* p) {
 void rw_instance_unload(RWInstance* exe) {
     free(exe->registers);
     free(exe->overflow);
+        free(exe->heap);
     free(exe);
 }
 
@@ -104,7 +109,7 @@ void rw_instance_unload(RWInstance* exe) {
 #define OP_ERROR 0x02
 #define OP_RET 0x03
 #define OP_ADD_STACK 0x05
-#define OP_ALLOC 0x0E
+#define OP_LLALLOC 0x0E
 #define OP_STORE 0x0F
 #define OP_MOVE 0x10
 #define OP_PLUS 0x18
@@ -115,7 +120,9 @@ void rw_instance_unload(RWInstance* exe) {
 #define OP_LT 0x1D
 #define OP_LTE 0x1E
 #define OP_INSERT_LL 0x20
+#define OP_LEA 0x28
 #define OP_EXTRACT_LL 0x30
+#define OP_ALLOC 0xC0
 #define OP_CMP_NE_BRANCH 0xF0
 #define OP_CMP_LT_BRANCH 0xF6
 #define OP_CMP_LE_BRANCH 0xF7
@@ -267,7 +274,7 @@ void program_disassemble(Program* program, FILE* out) {
             case OP_LABEL: {
                 fprintf(out,"label %d",operation->dst);
             } break;
-            case OP_ALLOC: {
+            case OP_LLALLOC: {
                 fprintf(out,"ll_alloc %d",operation->dst);
             } break;
             case OP_STORE: {
@@ -301,6 +308,20 @@ void program_disassemble(Program* program, FILE* out) {
                 } else {
                     fprintf(out,"sp-=%d ",-(int32_t)operation->src1);
                 }
+            } break;
+            case OP_LEA: {
+                fprintf(out,"let ");
+                display_operand(out,operation,operation->flags_dst,operation->dst);
+                fprintf(out," = lea ");
+                display_operand(out,operation,operation->flags_src1,operation->src1);
+            } break;
+            case OP_ALLOC: {
+                fprintf(out,"let ");
+                display_operand(out,operation,operation->flags_dst,operation->dst);
+                fprintf(out," = alloc ");
+                display_operand(out,operation,operation->flags_src1,operation->src1);
+                fprintf(out,"*");
+                display_operand(out,operation,operation->flags_src2,operation->src2);
             } break;
             case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
@@ -448,7 +469,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
         uint8_t op=operation->op;
         switch(op) {
             case OP_LABEL:
-            case OP_ALLOC:
+            case OP_LLALLOC:
             case OP_STORE: {
                 // NOP
             } break;

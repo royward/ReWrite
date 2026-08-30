@@ -263,16 +263,16 @@ parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{{linerul
     update calc_counts(bindings,params,pre_arrow_clauses,post_arrow_clauses,exprs) => params,pre_arrow_clauses,post_arrow_clauses,exprs ->
     parse_aux(target,add_rule({},rules,fn_id,{linerule+1,bindings,params,pre_arrow_clauses,post_arrow_clauses,exprs}),fnnames,symtext,symsz,consts,types,types_lookup,rest);
 parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{{fnlineno,_,TypeFn,_},{_,_,Identifier,name},{_,_,LParen,_},*rest}) ->
-    update parse_types({},RParen,types,types_lookup,rest) => types_lhs,rest,types,types_lookup
+    update parse_types(true,false,{},{},RParen,types,types_lookup,rest) => types_lhs,value_lhs,rest,types,types_lookup
     update rest => {{_,_,Arrow,_},*rest}
-    update parse_types({},Semicolon,types,types_lookup,rest) => types_rhs,rest,types,types_lookup
-    update get_add_symbol_table(0,{},fnnames,name,{false,fnlineno+1,symsz,types_lhs,types_rhs}) => fnnames,_ ->
+    update parse_types(true,false,{},{},Semicolon,types,types_lookup,rest) => types_rhs,value_rhs,rest,types,types_lookup
+    update get_add_symbol_table(0,{},fnnames,name,{false,fnlineno+1,symsz,types_lhs,types_rhs,value_lhs,value_rhs}) => fnnames,_ ->
     parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,types_lookup,rest);
 parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{{fnlineno,_,TypeFn,_},{_,_,Export,_},{_,_,Identifier,name},{_,_,LParen,_},*rest}) ->
-    update parse_types({},RParen,types,types_lookup,rest) => types_lhs,rest,types,types_lookup
+    update parse_types(true,false,{},{},RParen,types,types_lookup,rest) => types_lhs,value_lhs,rest,types,types_lookup
     update rest => {{_,_,Arrow,_},*rest}
-    update parse_types({},Semicolon,types,types_lookup,rest) => types_rhs,rest,types,types_lookup
-    update get_add_symbol_table(0,{},fnnames,name,{true,fnlineno+1,symsz,types_lhs,types_rhs}) => fnnames,_ ->
+    update parse_types(true,false,{},{},Semicolon,types,types_lookup,rest) => types_rhs,value_rhs,rest,types,types_lookup
+    update get_add_symbol_table(0,{},fnnames,name,{true,fnlineno+1,symsz,types_lhs,types_rhs,value_lhs,value_rhs}) => fnnames,_ ->
     parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,types_lookup,rest);
 parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{{_,_,ConstToken,_},{_,_,Identifier,name},{_,_,Equal,_},{_,_,Integer,val},{_,_,Semicolon,_},*rest}) ->
     parse_aux(target,rules,fnnames,symtext,symsz,add_symbol_table({},consts,name,string_to_int_pos(val,0)),types,types_lookup,rest);
@@ -281,15 +281,17 @@ add_symtext(TargetVM,symtext,symsz,name) -> {*symtext,*name,'\0'},symsz+length(n
 add_symtext(TargetVMLL,symtext,symsz,name) -> {*symtext,*name,'\0'},symsz+length(name)+1;
 add_symtext(_,symtext,symsz,name) -> {*symtext,*name,'\\00'},symsz+length(name)+1;
 
-parse_types(sofar,endtok,types,types_lookup,{{_,_,endtok,_},*rest}) -> sofar,rest,types,types_lookup;
-parse_types(sofar,endtok,types,types_lookup,{{_,_,Identifier,_},{_,_,Colon,_},*rest}) -> parse_types(sofar,endtok,types,types_lookup,rest);
-parse_types(sofar,endtok,types,types_lookup,{{_,_,Identifier,tp},*rest}) match lookup_symbol_table(types_lookup,tp) => true,convert -> parse_types1({*sofar,convert},endtok,types,types_lookup,rest);
-parse_types(sofar,endtok,types,types_lookup,{{_,_,LBracket,_},*rest}) ->
-    update parse_types({},RBracket,types,types_lookup,rest) => {this_type},rest,types,types_lookup
+parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,{{_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,types_lookup;
+parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,{{_,_,Identifier,_},{_,_,Colon,_},*rest}) -> parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,rest);
+parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,{{_,_,Identifier,"value"},*rest}) -> parse_types(top,true,sofar,sfval,endtok,types,types_lookup,rest);
+parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,{{_,_,Identifier,tp},*rest}) match lookup_symbol_table(types_lookup,tp) => true,convert ->
+    parse_types1(top,{*sofar,convert},{*sfval,isval},endtok,types,types_lookup,rest);
+parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,{{_,_,LBracket,_},*rest}) ->
+    update parse_types(false,false,{},RBracket,types,types_lookup,rest) => {this_type},_,rest,types,types_lookup
     update create_type_list(this_type,types,types_lookup) => newtp,types,types_lookup ->
-    parse_types1({*sofar,newtp},endtok,types,types_lookup,rest);
-//parse_types(sofar,endtok,types,types_lookup,{{_,_,LBrace,_},*rest}) -> match parse_types({},RBrace,types,types_lookup,rest) => inside,rest,types,types_lookup ->
-//    parse_types1({*sofar,{true,inside}},endtok,types,types_lookup,rest);
+    parse_types1(top,{*sofar,newtp},{*sfval,isval},endtok,types,types_lookup,rest);
+//parse_types(top,isval,sofar,endtok,types,types_lookup,{{_,_,LBrace,_},*rest}) -> match parse_types(top,isval,{},RBrace,types,types_lookup,rest) => inside,rest,types,types_lookup ->
+//    parse_types1(top,isval,{*sofar,{true,inside}},endtok,types,types_lookup,rest);
 
 create_type_list(elt_typeid,types,types_lookup) ->
     match nth(elt_typeid,types) => {elt_name,_,ent_type,_}
@@ -297,8 +299,8 @@ create_type_list(elt_typeid,types,types_lookup) ->
     match length(types) => len ->
     len,{*types,{name,false,{DerivedTypeArray,elt_typeid},{0,32,0,32}}},{*types_lookup,{name,len}};
 
-parse_types1(sofar,endtok,types,types_lookup,{{_,_,Comma,_},*rest}) -> parse_types(sofar,endtok,types,types_lookup,rest);
-parse_types1(sofar,endtok,types,types_lookup,{{_,_,endtok,_},*rest}) -> sofar,rest,types,types_lookup; // deal with no trailing comma
+parse_types1(top,sofar,sfval,endtok,types,types_lookup,{{_,_,Comma,_},*rest}) -> parse_types(top,false,sofar,sfval,endtok,types,types_lookup,rest);
+parse_types1(top,sofar,sfval,endtok,types,types_lookup,{{_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,types_lookup; // deal with no trailing comma
 
 add_rule(sofar,{},n,x) -> add_rule(sofar,{{}},n,x);
 add_rule(sofar,{r,*rest},0,x) -> {*sofar,{*r,x},*rest};
@@ -488,9 +490,10 @@ compile_aux(target,outfile,rules,table,symtext,symsz,types) ->
 const MaxParamRegs=4;
 
 annotate_table(types,sofar,{}) -> sofar;
-annotate_table(types,sofar,{{name,{exportx,fnlineno,symoffset,types_left,types_right}},*rest}) ->
-    annotate_table(types,{*sofar,{exportx,fnlineno,symoffset,name,annotate_type_list_reg(types,0,0,{},create_start_annotated_list(types,{},types_left)),
-                                  annotate_type_list_reg(types,0,0,{},create_start_annotated_list(types,{},types_right))}},rest);
+annotate_table(types,sofar,{{name,{exportx,fnlineno,symoffset,types_left,types_right,val_lhs,val_rhs}},*rest}) ->
+    annotate_table(types,{*sofar,{exportx,fnlineno,symoffset,name,
+        annotate_type_list_reg(types,0,0,{},create_start_annotated_list(types,{},types_left)),val_lhs,
+        annotate_type_list_reg(types,0,0,{},create_start_annotated_list(types,{},types_right)),val_rhs}},rest);
 
 create_start_annotated_list(types,sofar,{}) -> sofar;
 create_start_annotated_list(types,sofar,{t,*rest}) -> match lookup_type_size_pri(t,types) => tps -> create_start_annotated_list(types,{*sofar,{create_empty_types({},tps),t}},rest);
@@ -534,8 +537,17 @@ const OpAddStack=5;
 const OpLLAlloc=14;
 const OpLLStore=15;
 const OpMove=16;
+const OpPlus=24;
+const OpMinus=25;
+const OpTimes=26;
+const OpDiv=27;
+const OpMod=28;
+const OpLessThan=29;
+const OpLessThanEqual=30;
 const OpInsert=32;
+const OpLea=40;
 const OpExtract=48;
+const OpAlloc=192;
 const OpCompareNotEqualBranch=240;
 const OpCompareEqualBranch=248;
 const OpGoto=254;
@@ -548,7 +560,7 @@ compile1(target,types,outfile,label_id,_,table,symtext,symsz,sofar,{}) ->
     save_text_file({*outfile,'.ll'},{*convert_to_llvm(target,minify_table({},table),table,symtext,symsz,{},sofar),*wrapper_code,*ll_boilerplate_end()}),
     save_c_header(target,outfile,wrapperh);
 compile1(target,types,outfile,label_id,n,table,symtext,symsz,sofar,{rules,*rest}) ->
-    match nth(n,table) => {_,_,_,_,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right}
+    match nth(n,table) => {_,_,_,_,reg_count1,bitmask1,type_left,_,reg_count2,bitmask2,type_right,_}
     update compile_function(types,target,0,true,label_id,n,table,0,{{n,0,OpLabel,0,BindLabel,n}},rules,0,bitmask_or({},bitmask1,bitmask2),reg_count1,type_left,reg_count2,type_right) => label_id,code ->
     compile1(target,types,outfile,label_id,n+1,table,symtext,symsz,{*sofar,{n,code}},rest);
 
@@ -565,7 +577,7 @@ code_length(n,{}) -> n;
 code_length(n,{{_,a},*rest}) -> code_length(n+length(a),rest);
 
 compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofar,{},_,_,_,_,_,_) ->
-    match nth(fn_id,table) => {_,fnlineno,symoffset,_,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right} ->
+    match nth(fn_id,table) => {_,fnlineno,symoffset,_,reg_count1,bitmask1,type_left,_,reg_count2,bitmask2,type_right,_} ->
     label_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpError,0,BindImm,ErrNoMatch,0,fnlineno,0,symoffset}})};
 compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,regs_left,type_left,regs_right,type_right) ->
     match rule => {linerule,bindings,params,pre_arrow_clauses,post_arrow_clauses,exprs}
@@ -608,7 +620,7 @@ ctx_update_get_callctr({target,callctr,tailcall,active,lblnext,label_id,fn_id,ru
 // deal with tail recursion (error if sigs don't match)
 compile_rule(target,types,linerule,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,{{ExprCall,fn_id,args}},regs_left,type_left,regs_right,type_right)
     match ctx_get_tail(ctx) => 0 ->
-    match ctx_get_fn_sig(ctx,fn_id) => {_,_,_,_,_,regs_left_new,type_left_new,_,_,type_right} ->
+    match ctx_get_fn_sig(ctx,fn_id) => {_,_,_,_,_,regs_left_new,type_left_new,_,_,_,type_right,_} ->
     compile_rule(target,types,linerule,ctx_set_tail(ctx,fn_id+1),sofar,params,pre_arrow_clauses,post_arrow_clauses,args,regs_left,type_left,regs_left_new,type_left_new);
 compile_rule(target,types,linerule,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,regs_left,type_left,regs_right,type_right)
     match ctx_get_tail(ctx) => 0 ->
@@ -618,7 +630,7 @@ compile_rule(target,types,linerule,ctx,sofar,params,pre_arrow_clauses,post_arrow
         {*code,{ctx_fnr(ctx),OpRet,0}});
 compile_rule(target,types,linerule,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,regs_left,type_left,regs_right,type_right) ->
     match ctx_get_tail(ctx)-1 => call_id
-    update ctx_get_fn_sig(ctx,call_id) => {_,_,_,_,regs_right,_,type_right,_,_,_}
+    update ctx_get_fn_sig(ctx,call_id) => {_,_,_,_,regs_right,_,type_right,_,_,_,_,_}
     update generate_params_clauses(target,types,ctx,params,pre_arrow_clauses,post_arrow_clauses,exprs,regs_left,type_left,regs_right) => ctx,code
     update ctx_update_get_callctr(ctx,max(regs_right,1)) => ctx,callctr
     update generate_expr_code(types,callctr,ctx,code,{},type_right,exprs) => ctx,code ->
@@ -679,7 +691,7 @@ generate_conditional_rhs(ctx,code,tp,sz,src_flag,src,src_flag2,src2) ->
     match ctx_get_lbl_stuff(ctx) => target,active,lblnext,label_id
     update generate_conditional(ctx,target,active,label_id,label_id,OpCompareEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => _,ctx,newcode
     match ctx_fnr(ctx) => fn_id,_
-    match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_} ->
+    match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
     ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id}};
 
 generate_bind_variable(types,0,post_arrow,bindlevel,ctx,src_flag,src,tp,sz,{level,_,_,name}) when level<bindlevel ->
@@ -755,7 +767,7 @@ generate_expr_code_aux(types,ctx,stypes,{ExprCallInternal,op,args}) ->
     update generate_expr_code_aux_map(types,ctx,{},infer_types,args) => ctx,args_code
     update generate_expr_code_infix(types,ctx,op,args_code) => ctx,code,x ->
     ctx,code,x;
-generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,regright,maskright,type_right} ->
+generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,_,regright,maskright,type_right,_} ->
     update ctx_update_get_callctr(ctx,max(regleft,1)) => ctx,callctr
     update generate_expr_code(types,callctr,ctx,{},{},params_left,args) => ctx,args_code
     match ctx_get_reg_count(ctx)+1 => spinc
@@ -768,16 +780,16 @@ generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args}) match ctx_get_fn_
     callout_ret({},callout);
 generate_expr_code_aux(types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}}) ->
     match ctx_fnr(ctx) => fn_id,_
-    match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_} ->
+    match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
     ctx,{{ctx_fnr(ctx),OpError,0,0,err,0,ctx_linerule(ctx),0,symoffset}},{{{{BindImm,err,DefaultSize}},TypeI64}};
 generate_expr_code_aux(types,ctx,stypes,{ExprList,elements}) match decompose_stypes(stypes) => stype,_ match nth(stype,types) => {_,_,{DerivedTypeArray,t},storage} ->
     // Array - go get the elements then come back to allocate
-    update generate_expr_code_aux_map(types,ctx,{},{0,t},elements) => ctx,args_code
+    match nth(t,types) => {_,_,_,{_,sz}}
     update ctx_newreg(ctx,32) => ctx,array
     update ctx_newreg(ctx,64) => ctx,parray
+    update generate_expr_code_aux_map(types,ctx,{},{0,t},elements) => ctx,args_code
     update array_element_assign(ctx,parray,0,{},args_code) => c,csplat,code ->
-    println_any(code),
-    ctx,code,{{{{BindReg,parray,32},{BindImm,0,32}},stype}};
+    ctx,{{ctx_fnr(ctx),OpAlloc,0,BindReg,array,BindImm,sz>>3,BindImm,c},{ctx_fnr(ctx),OpLea,0,BindReg,parray,BindReg,array},*code},{{{{BindReg,parray,32},{BindImm,0,32}},stype}};
 
 array_element_assign(ctx,mem,c,code,{}) -> c,0,code;
 array_element_assign(ctx,mem,c,code,{{partcode,r},*rest}) -> array_element_assign(ctx,mem,array_element_assign_aux(ctx,mem,c,{*code,*partcode},r),rest);
@@ -828,14 +840,6 @@ callout_extract(l1,l2,callctr,sofar,{{newreg,{{ret_flags,ret,sz}},tp},*rest}) ->
 callout_ret(sofar,{}) -> sofar;
 callout_ret(sofar,{{newreg,{{ret_flags,ret,sz}},tp},*rest}) -> callout_ret({*sofar,{{{BindReg,newreg,sz}},tp}},rest);
 
-const OpPlus=24;
-const OpMinus=25;
-const OpTimes=26;
-const OpDiv=27;
-const OpMod=28;
-const OpLessThan=29;
-const OpLessThanEqual=30;
-
 binop(t1,t1,Plus) -> true,false,t1,OpPlus;
 binop(TypeChar,t1,Plus) -> true,false,TypeChar,OpPlus;
 binop(t1,t1,Minus) -> true,false,t1,OpMinus;
@@ -877,7 +881,7 @@ emitb(n,sofar,v) -> emitb(n-1,{*sofar,v&255},v>>8);
 ///////////////////////////////////////////////////////////
 
 minify_table(sofar,{}) -> sofar;
-minify_table(sofar,{{_,fnlineno,symoffset,name,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right},*rest}) ->
+minify_table(sofar,{{_,fnlineno,symoffset,name,reg_count1,bitmask1,type_left,_,reg_count2,bitmask2,type_right,_},*rest}) ->
     minify_table({*sofar,{name,fnlineno,symoffset,reg_count1}},rest);
 
 ll_boilerplate() -> {
@@ -898,7 +902,7 @@ convert_to_llvm(target,small_table,table,symtext,symsz,sofar,{{fnid,code},*rest}
     convert_to_llvm(target,small_table,table,symtext,symsz,{*sofar,*convert_to_ll_fn(target,small_table,table,fnid,code)},rest);
 
 convert_to_ll_fn(target,small_table,table,fnid,code) ->
-    match nth(fnid,table) => {_,_,_,name,reg_count1,bitmask1,type_left,reg_count2,bitmask2,type_right} ->
+    match nth(fnid,table) => {_,_,_,name,reg_count1,bitmask1,type_left,_,reg_count2,bitmask2,type_right,_} ->
     {'\ndefine x86_regcallcc %R8 @__rw.',*name,'(i64 %s0,i64 %s1,i64 %s2,i64 %s3,i64 %s4,i64 %s5,i64 %s6,i64 %s7, ptr %A) {\n',
     *ll_emit_instructions(small_table,{},code),
     'exit:\n',
@@ -1015,7 +1019,7 @@ includes(_) -> "rewrite_base.h";
 
 create_export_wrappers_vm(target,sofarc,sofarh,_,_,{}) -> sofarc,sofarh;
 create_export_wrappers_vm(target,sofarc,sofarh,fnid,label_id,{{false,*_},*rest}) -> create_export_wrappers_vm(target,sofarc,sofarh,fnid+1,label_id,rest);
-create_export_wrappers_vm(target,sofarc,sofarh,fnid,label_id,{{_,_,_,name,reg_left,_,left,reg_right,_,right},*rest}) ->
+create_export_wrappers_vm(target,sofarc,sofarh,fnid,label_id,{{_,_,_,name,reg_left,_,left,_,reg_right,_,right,_},*rest}) ->
     match label_id+1 => new_lbl ->
     create_export_wrappers_vm(target,
         {*sofarc,
@@ -1036,11 +1040,12 @@ create_export_vm_code_in(_,_,sofar,{}) -> sofar;
 create_export_vm_code_in(new_lbl,n,sofar,{{regs,tp},*rest}) -> create_export_vm_code_in(new_lbl,n+1,{*sofar,*create_export_vm_param(new_lbl,n,tp,regs)},rest);
 
 create_export_vm_code_out(_,_,sofar,{}) -> sofar;
-create_export_vm_code_out(new_lbl,n,sofar,{{regs,tp},*rest}) -> create_export_vm_code_out(new_lbl,n+1,{*sofar,*create_export_vm_ret(new_lbl,n,tp,regs)},rest);
+create_export_vm_code_out(new_lbl,n,sofar,{{regs,tp},*rest}) -> create_export_vm_code_out(new_lbl,n+1,{*sofar,*create_export_vm_ret(new_lbl,n,tp,{},regs)},rest);
 
 create_export_vm_param(new_lbl,n,tp,{{flag,dst,sz}}) -> {{new_lbl,0,OpMove+get_size_scale(sz),0,flag,dst,BindInOut,n}};
 
-create_export_vm_ret(new_lbl,n,tp,{{flag,dst,sz},*_}) -> {{new_lbl,0,OpMove+get_size_scale(sz),0,BindInOut,n,flag,dst}}; // FIXME - more types
+create_export_vm_ret(_,_,_,sofar,{}) -> sofar;
+create_export_vm_ret(new_lbl,n,tp,sofar,{{flag,dst,sz},*rest}) -> create_export_vm_ret(new_lbl,n,tp,{*sofar,{new_lbl,0,OpMove+get_size_scale(sz),0,BindInOut,n,flag,dst}},rest);
 
 create_export_vm_sigc(sofar,_,_,_,{}) -> sofar;
 create_export_vm_sigc(sofar,n,fill0,fill1,{{_,tp},*rest}) -> create_export_vm_sigc({*sofar,',',*fill0,*c_type(tp),' ',*fill1,*int2s36(n)},n+1,fill0,fill1,rest);
@@ -1062,7 +1067,7 @@ create_export_vm_out(sofar,n,{{_,tp},*rest}) ->
 
 create_export_wrappers_ll(target,types,sofarc,sofarh,_,{}) -> sofarc,sofarh;
 create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{false,*_},*rest}) -> create_export_wrappers_ll(target,types,sofarc,sofarh,fnid+1,rest);
-create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{_,_,_,name,reg_left,_,left,reg_right,_,right},*rest}) ->
+create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{_,_,_,name,reg_left,_,left,_,reg_right,_,right,_},*rest}) ->
     match create_export_ll_sigc_in({},{},0,left) => inparams,inregs
     match create_export_ll_pre_call(types,{},{},inregs) => pre,inregs2 ->
     create_export_wrappers_ll(target,types,
