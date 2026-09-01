@@ -59,6 +59,24 @@ int rw_instance_init(RWInstance* exe, Program* p);
 void rw_instance_unload(RWInstance* exe);
 int rw_instance_get_error(RWInstance* exe, uint32_t* line, const char** function);
 
-#define UTF32_UNBOUNDED ((size_t)-1)
+static inline uint32_t* rwu_get_header(RWInstance* a, uint32_t x) {return a->heap+(x<<1);}
+static inline void* rwu_get_data(uint32_t* header, uint32_t start) {return (void*)(header+4+start);}
+static inline uint32_t rwu_get_len(uint32_t* header, uint32_t start) {return (header[1]-start);}
 
-int utf32_to_string(const uint32_t *src, uint32_t sz, char **dst);
+#define UTF32_UNBOUNDED ((size_t)-1)
+int utf32_to_utf8_calc_size(const uint32_t *src, size_t max_len, size_t *out_bytes);
+int utf32_to_utf8_convert(const uint32_t *src, size_t max_len, char *dst);
+
+static inline int utf32_to_string(const uint32_t *src, uint32_t sz, char **dst) {
+    size_t size_bytes;
+    int err=utf32_to_utf8_calc_size(src,sz,&size_bytes);
+    if(err!=0)return err;
+    *dst=(char*)malloc(size_bytes+1);
+    if(*dst==NULL)return 1;
+    err=utf32_to_utf8_convert(src,sz,*dst);
+    if(err!=0)free (*dst);
+    return err;
+}
+
+#define FREE_AND_NULL(p) do { free(*(p)); (*(p)) = NULL; } while(0)
+

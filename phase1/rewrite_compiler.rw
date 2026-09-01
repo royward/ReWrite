@@ -1022,8 +1022,8 @@ create_export_wrappers_vm(target,types,sofarc,sofarh,_,_,{}) -> sofarc,sofarh;
 create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{false,*_},*rest}) -> create_export_wrappers_vm(target,types,sofarc,sofarh,fnid+1,label_id,rest);
 create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{_,_,_,name,reg_left,_,left,values_left,reg_right,_,right,values_right},*rest}) ->
     match label_id+1 => new_lbl
-    match create_export_vm_sigc({},0,"const ","in",left) => n1,sig1
-    match create_export_vm_sigc({},0,"","*out",right) => n2,sig2 ->
+    match create_export_vm_sigc({},0,0,"const ","in",left) => n1,sig1
+    match create_export_vm_sigc({},0,0,"","*out",right) => n2,sig2 ->
     create_export_wrappers_vm(target,types,
         {*sofarc,
         {new_lbl,{{new_lbl,0,OpLabel,0,BindLabel,new_lbl},
@@ -1037,7 +1037,7 @@ create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{_,_,_,name,
         {*sofarh,'\nstatic inline int32_t rw_',*name,'(RWInstance* a',*sig1,*sig2,') {\n',
             '\tuint64_t inout[',*int2s(max(n1,n2)),']={',*create_export_vm_in({},0,left),'};\n',
             '\tint32_t e=RW__vmcall(a,',*int2s(new_lbl),',inout);\n\tif(e!=0)return e;\n',
-            *create_export_vm_out(types,{},0,right,values_right),
+            *create_export_vm_out(types,{},{},0,0,right,values_right),
             '\treturn 0;\n}\n'},
         fnid+1,new_lbl,rest);
 
@@ -1054,8 +1054,8 @@ create_export_vm_param(types,new_lbl,n,tp,{{flag,dst,sz}}) -> {{new_lbl,0,OpMove
 create_export_vm_ret(types,_,n,_,sofar,{}) -> n,sofar;
 create_export_vm_ret(types,new_lbl,n,tp,sofar,{{flag,dst,sz},*rest}) -> create_export_vm_ret(types,new_lbl,n+1,tp,{*sofar,{new_lbl,0,OpMove+get_size_scale(sz),0,BindInOut,n,flag,dst}},rest);
 
-create_export_vm_sigc(sofar,n,_,_,{}) -> n,sofar;
-create_export_vm_sigc(sofar,n,fill0,fill1,{{vals,tp},*rest}) -> create_export_vm_sigc({*sofar,',',*fill0,*c_type(tp),' ',*fill1,*int2s36(n)},n+length(vals),fill0,fill1,rest);
+create_export_vm_sigc(sofar,labeln,n,_,_,{}) -> n,sofar;
+create_export_vm_sigc(sofar,labeln,n,fill0,fill1,{{vals,tp},*rest}) -> create_export_vm_sigc({*sofar,',',*fill0,*c_type(tp),' ',*fill1,*int2s(labeln)},labeln+1,n+length(vals),fill0,fill1,rest);
 
 c_type(TypeI64) -> "int64_t";
 c_type(TypeChar) -> "codepoint";
@@ -1066,16 +1066,23 @@ z_or_s(tp) when is_unsigned(tp) -> 'z';
 z_or_s(_) -> 's';
 
 create_export_vm_in(sofar,_,{}) -> sofar;
-create_export_vm_in(sofar,n,{{_,tp},*rest}) -> create_export_vm_in({*sofar,'(uint64_t)in',*int2s36(n),','},n+1,rest);
+create_export_vm_in(sofar,n,{{_,tp},*rest}) -> create_export_vm_in({*sofar,'(uint64_t)in',*int2s(n),','},n+1,rest);
 
-create_export_vm_out(types,sofar,_,{},{}) -> sofar;
-create_export_vm_out(types,sofar,n,{{_,TypeString},*rest},{val,*vrest}) -> when val ->
+create_export_vm_out(types,sofar,allocs,_,_,{},{}) -> sofar;
+create_export_vm_out(types,sofar,allocs,labeln,n,{{_,TypeString},*rest},{val,*vrest}) -> when val ->
     create_export_vm_out(types,{*sofar,
-        '\t{\n\t\tuint32_t* src=(uint32_t*)(a->heap+(inout[',*int2s(n),']<<1));\n',
+        '\t{\n\t\tuint32_t* head=rwu_get_header(a,inout[',*int2s(n),']);\n',
         '\t\tuint32_t start=inout[',*int2s(n+1),'];\n',
-        '\t\tint err=utf32_to_string(src+4+start,src[1]-start,out',*int2s36(n),');\n',
-        '\t\tif(err!=0)return err;\n\t}\n'},n+2,rest,vrest);
-create_export_vm_out(types,sofar,n,{{_,tp},*rest},{val_flag,*vrest}) -> create_export_vm_out(types,{*sofar,'\t*out',*int2s36(n),'=(',*c_type(tp),')inout[',*int2s(n),'];\n'},n+1,rest,vrest);
+        '\t\tint err=utf32_to_string((uint32_t*)rwu_get_data(head,start),rwu_get_len(head,start),out',*int2s(labeln),');\n',
+        '\t\tif(err!=0) {\n',
+        *create_export_free_and_null({},"\t\t\tFREE_AND_NULL(",");\n",allocs),
+        '\t\t\treturn err;\n',
+        '\t\t}\n\t}\n'},{*allocs,{'out',*int2s(labeln)}},labeln+1,n+2,rest,vrest);
+create_export_vm_out(types,sofar,allocs,labeln,n,{{_,tp},*rest},{val_flag,*vrest}) ->
+    create_export_vm_out(types,{*sofar,'\t*out',*int2s(n),'=(',*c_type(tp),')inout[',*int2s(n),'];\n'},allocs,labeln+1,n+1,rest,vrest);
+
+create_export_free_and_null(sofar,f1,f2,{}) -> sofar;
+create_export_free_and_null(sofar,f1,f2,{a,*rest}) -> create_export_free_and_null({*sofar,*f1,*a,*f2},f1,f2,rest);
 
 create_export_wrappers_ll(target,types,sofarc,sofarh,_,{}) -> sofarc,sofarh;
 create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{false,*_},*rest}) -> create_export_wrappers_ll(target,types,sofarc,sofarh,fnid+1,rest);

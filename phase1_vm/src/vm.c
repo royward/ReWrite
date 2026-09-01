@@ -693,13 +693,3 @@ int utf32_to_utf8_convert(const uint32_t *src, size_t max_len, char *dst) {
 }
 
 
-int utf32_to_string(const uint32_t *src, uint32_t sz, char **dst) {
-    size_t size_bytes;
-    int err=utf32_to_utf8_calc_size(src,sz,&size_bytes);
-    if(err!=0)return err;
-    *dst=(char*)malloc(size_bytes+1);
-    if(*dst==NULL)return 1;
-    err=utf32_to_utf8_convert(src,sz,*dst);
-    if(err!=0)free (*dst);
-    return err;
-}
