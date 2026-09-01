@@ -364,6 +364,22 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out," goto ");
                 program_display_label_both(program,out,operation);
             } break;
+            case OP_CMP_LT_BRANCH: {
+                fprintf(out,"test.%s ",display_type(operation->type));
+                display_operand(out,operation,operation->flags_src1,operation->src1);
+                fprintf(out," < ");
+                display_operand(out,operation,operation->flags_src2,operation->src2);
+                fprintf(out," goto ");
+                program_display_label_both(program,out,operation);
+            } break;
+            case OP_CMP_LE_BRANCH: {
+                fprintf(out,"test.%s ",display_type(operation->type));
+                display_operand(out,operation,operation->flags_src1,operation->src1);
+                fprintf(out," <= ");
+                display_operand(out,operation,operation->flags_src2,operation->src2);
+                fprintf(out," goto ");
+                program_display_label_both(program,out,operation);
+            } break;
             case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
                 fprintf(out,"let.%s ",display_type(operation->type));
                 display_operand(out,operation,operation->flags_dst,operation->dst);

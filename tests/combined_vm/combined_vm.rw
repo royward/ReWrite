@@ -7,3 +7,6 @@ g() -> 'cd';
 
 :- export f() -> i64,value string, value string;
 f() -> 0,{'ab',g()},"test";
+
+:- export h(value string) -> char;
+h({a,b}) -> 'a';
