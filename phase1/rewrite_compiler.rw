@@ -646,7 +646,7 @@ extract_types(sofar,{{_,tp},*rest}) -> extract_types({*sofar,tp},rest);
 generate_params_clauses(target,types,ctx,params,pre_arrow_clauses,post_arrow_clauses,exprs,regs_left,type_left,regs_right) ->
     update generate_llvm_alloc_code(target,ctx_fnr(ctx),{},0,max(regs_left,regs_right)) => code
     update generate_llvm_store_code(target,ctx_fnr(ctx),code,0,type_left) => code
-    update generate_param_code(types,false,1,ctx,code,{},type_left,params) => ctx,code
+    update generate_param_code(types,false,1,{},ctx,code,{},type_left,params) => ctx,code
     update generate_clause_code(types,2,false,ctx,code,pre_arrow_clauses) => bind_level,ctx,code
     update generate_clause_code(types,bind_level,true,ctx,code,post_arrow_clauses) => _,ctx,code ->
     ctx,code;
@@ -662,7 +662,7 @@ update_bind_level(bind_level,_) -> bind_level+1,bind_level;
 
 generate_clause_code_aux(types,bind_level,post_arrow,ctx,code,expr,matchx) ->
     update generate_expr_code_untyped(types,ctx,code,{},expr) => ctx,etypes,code ->
-    generate_param_code(types,post_arrow,bind_level,ctx,code,{},etypes,matchx);
+    generate_param_code(types,post_arrow,bind_level,{},ctx,code,{},etypes,matchx);
 
 generate_expr_code_untyped(types,ctx,code,etypes,{}) -> ctx,etypes,code;
 // TODO deal with lists and splats first
@@ -670,23 +670,23 @@ generate_expr_code_untyped(types,ctx,sofar,etypes,{expr,*rest}) ->
     update generate_expr_code_aux(types,ctx,{0,0},expr) => ctx,newcode,callout_ret ->
     generate_expr_code_untyped(types,ctx,{*sofar,*newcode},{*etypes,*callout_ret},rest);
 
-generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,sofar1,{},{}) -> ctx,{*sofar0,*sofar1};
-generate_param_code(types,false,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
+generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,{},{}) -> ctx,{*sofar0,*sofar1};
+generate_param_code(types,false,bindlevel,stride,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,BindImm,val) => lblnext,ctx,code
     update ctx_set_lblnext(ctx,lblnext) => ctx ->
-    generate_param_code(types,false,bindlevel,ctx,{*sofar0,*code},sofar1,type_left,rest);
-generate_param_code(types,true,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
+    generate_param_code(types,false,bindlevel,stride,ctx,{*sofar0,*code},sofar1,type_left,rest);
+generate_param_code(types,true,bindlevel,stride,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
     update generate_conditional_rhs(ctx,sofar0,tp,sz,src_flag,src,BindImm,val) => ctx,code ->
-    generate_param_code(types,true,bindlevel,ctx,code,sofar1,type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{ParamId,{id,count}},*rest}) ->
+    generate_param_code(types,true,bindlevel,stride,ctx,code,sofar1,type_left,rest);
+generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{ParamId,{id,count}},*rest}) ->
     update ctx_bindings(ctx) => bindings
     update split3_nth(id,{},bindings) => prebind,bind,postbind
-    update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,src_flag,src,tp,sz,bind) => ctx,newbind,code
+    update generate_bind_variable(types,count,post_arrow,bindlevel,stride,ctx,src_flag,src,tp,sz,bind) => ctx,newbind,code
     update ctx_newbindings(ctx,{*prebind,newbind,*postbind}) => ctx ->
-    generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,{*sofar1,*code},type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,sofar1,{{_,tp},*type_left},{{ParamWild,{}},*rest}) ->
-    generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,sofar1,type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,ctx,sofar0,sofar1,{{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp},*type_left},{{ParamList,elements},*rest})
+    generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,{*sofar1,*code},type_left,rest);
+generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,{{_,tp},*type_left},{{ParamWild,{}},*rest}) ->
+    generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,type_left,rest);
+generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,{{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp},*type_left},{{ParamList,elements},*rest})
     match nth(tp,types) => {_,_,{2,sub_type},{0,32,0,32}} ->
     match nth(sub_type,types) => {_,_,_,sub_alloc}
     match sum_sub_alloc(0,sub_alloc) => stride
