@@ -633,3 +633,73 @@ int rw_instance_get_error(RWInstance* exe, uint32_t* line, const char** function
     }
     return err;
 }
+
+// Returns 0 on success, -1 if an invalid code point / surrogate is found. Output size via out_bytes.
+int utf32_to_utf8_calc_size(const uint32_t *src, size_t max_len, size_t *out_bytes) {
+    size_t bytes = 0;
+    size_t i = 0;
+    while ((max_len == UTF32_UNBOUNDED ? src[i] != 0 : i < max_len)) {
+        uint32_t cp = src[i++];
+        if (cp <= 0x7F) {
+            bytes += 1;
+        } else if(cp <= 0x7FF) {
+            bytes += 2;
+        } else if (cp <= 0xFFFF) {
+            if(cp >= 0xD800 && cp <= 0xDFFF) {
+                return -1; // Reject UTF-16 surrogates
+            }
+            bytes += 3;
+        }
+        else if(cp <= 0x10FFFF) {
+            bytes += 4;
+        }
+        else {
+            return -1; // Out of Unicode bounds
+        }
+    }
+    *out_bytes = bytes;
+    return 0;
+}
+
+// Returns 0 on success, -1 if validation fails.
+int utf32_to_utf8_convert(const uint32_t *src, size_t max_len, char *dst) {
+    uint8_t *d = (uint8_t *)dst;
+    size_t i = 0;
+    while ((max_len == UTF32_UNBOUNDED ? src[i] != 0 : i < max_len)) {
+        uint32_t cp = src[i++];
+        if (cp <= 0x7F) {
+            *d++ = (uint8_t)cp;
+        } else if (cp <= 0x7FF) {
+            *d++ = (uint8_t)(0xC0 | (cp >> 6));
+            *d++ = (uint8_t)(0x80 | (cp & 0x3F));
+        } else if (cp <= 0xFFFF) {
+            if (cp >= 0xD800 && cp <= 0xDFFF) return -1;
+            *d++ = (uint8_t)(0xE0 | (cp >> 12));
+            *d++ = (uint8_t)(0x80 | ((cp >> 6) & 0x3F));
+            *d++ = (uint8_t)(0x80 | (cp & 0x3F));
+        } else if (cp <= 0x10FFFF) {
+            *d++ = (uint8_t)(0xF0 | (cp >> 18));
+            *d++ = (uint8_t)(0x80 | ((cp >> 12) & 0x3F));
+            *d++ = (uint8_t)(0x80 | ((cp >> 6) & 0x3F));
+            *d++ = (uint8_t)(0x80 | (cp & 0x3F));
+        } else {
+            return -1;
+        }
+    }
+    //if (max_len == UTF32_UNBOUNDED || src[i] == 0) {
+        *d = '\0';
+    //}
+    return 0;
+}
+
+
+int utf32_to_string(const uint32_t *src, uint32_t sz, char **dst) {
+    size_t size_bytes;
+    int err=utf32_to_utf8_calc_size(src,sz,&size_bytes);
+    if(err!=0)return err;
+    *dst=(char*)malloc(size_bytes+1);
+    if(*dst==NULL)return 1;
+    err=utf32_to_utf8_convert(src,sz,*dst);
+    if(err!=0)free (*dst);
+    return err;
+}

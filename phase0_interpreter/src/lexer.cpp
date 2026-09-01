@@ -227,7 +227,7 @@ std::vector<Token> lex(std::string_view program) {
                     use_transformed_string=true;
                     transformed_string=lex_string(program,p,'\"');
                 } break;
-                default:throw std::runtime_error(std::format("Unexpected character: {}", c));
+                default:throw std::runtime_error(std::format("Unexpected character: {}, row {}", c, row+1));
             }
         }
         result.push_back(Token{

@@ -59,3 +59,6 @@ int rw_instance_init(RWInstance* exe, Program* p);
 void rw_instance_unload(RWInstance* exe);
 int rw_instance_get_error(RWInstance* exe, uint32_t* line, const char** function);
 
+#define UTF32_UNBOUNDED ((size_t)-1)
+
+int utf32_to_string(const uint32_t *src, uint32_t sz, char **dst);

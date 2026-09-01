@@ -5,5 +5,5 @@
 :- g() -> char,char;
 g() -> 'cd';
 
-:- export f() -> i64,string;
-f() -> 0,{'ab',g()};
+:- export f() -> i64,value string, value string;
+f() -> 0,{'ab',g()},"test";
