@@ -20,9 +20,21 @@ typedef struct {
     uint32_t dst;
     uint32_t label2;
 // 16
-    uint64_t src1;
+    union {
+        uint64_t src1;
+        struct {
+            uint32_t src1a;
+            uint32_t src1b;
+        };
+    };
 // 24
-    uint64_t src2;
+    union {
+        uint64_t src2;
+        struct {
+            uint32_t src2a;
+            uint32_t src2b;
+        };
+    };
 // 32
 } Operation;
 

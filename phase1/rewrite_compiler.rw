@@ -547,6 +547,7 @@ const OpLessThan=29;
 const OpLessThanEqual=30;
 const OpInsert=32;
 const OpLea=40;
+const OpLeaScale=41;
 const OpExtract=48;
 const OpAlloc=192;
 const OpCompareNotEqualBranch=240;
@@ -671,49 +672,58 @@ generate_expr_code_untyped(types,ctx,sofar,etypes,{expr,*rest}) ->
     generate_expr_code_untyped(types,ctx,{*sofar,*newcode},{*etypes,*callout_ret},rest);
 
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,{},{}) -> ctx,{*sofar0,*sofar1};
-generate_param_code(types,false,bindlevel,stride,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
+generate_param_code(types,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest}) ->
+    match gen_param_code_next_type(stride,typex) => {{{src_flag,src,sz}},tp},type_left
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,BindImm,val) => lblnext,ctx,code
     update ctx_set_lblnext(ctx,lblnext) => ctx ->
     generate_param_code(types,false,bindlevel,stride,ctx,{*sofar0,*code},sofar1,type_left,rest);
-generate_param_code(types,true,bindlevel,stride,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{Const,{tp,val}},*rest}) ->
+generate_param_code(types,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest}) ->
+    match gen_param_code_next_type(stride,typex) => {{{src_flag,src,sz}},tp},type_left
     update generate_conditional_rhs(ctx,sofar0,tp,sz,src_flag,src,BindImm,val) => ctx,code ->
     generate_param_code(types,true,bindlevel,stride,ctx,code,sofar1,type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,{{{{src_flag,src,sz}},tp},*type_left},{{ParamId,{id,count}},*rest}) ->
+generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest}) ->
+    match gen_param_code_next_type(stride,typex) => {{{src_flag,src,sz}},tp},type_left
     update ctx_bindings(ctx) => bindings
     update split3_nth(id,{},bindings) => prebind,bind,postbind
-    update generate_bind_variable(types,count,post_arrow,bindlevel,stride,ctx,src_flag,src,tp,sz,bind) => ctx,newbind,code
+    update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,src_flag,src,tp,sz,bind) => ctx,newbind,code
     update ctx_newbindings(ctx,{*prebind,newbind,*postbind}) => ctx ->
     generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,{*sofar1,*code},type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,{{_,tp},*type_left},{{ParamWild,{}},*rest}) ->
+generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest}) ->
+    match gen_param_code_next_type(stride,typex) => _,type_left ->
     generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,{{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp},*type_left},{{ParamList,elements},*rest})
-    match nth(tp,types) => {_,_,{2,sub_type},{0,32,0,32}} ->
+generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,elements},*rest}) ->
+    match gen_param_code_next_type(stride,typex) => {{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp},type_left
+    match nth(tp,types) => {_,_,{2,sub_type},{0,32,0,32}}
     match nth(sub_type,types) => {_,_,_,sub_alloc}
-    match sum_sub_alloc(0,sub_alloc) => stride
+    match sum_sub_alloc(0,sub_alloc) => newstride
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,pend
     update ctx_newreg(ctx,32) => ctx,len
-    update generate_list_min_size(0,elements) => min_size
-    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareLessThanBranch,TypeU32,32,BindReg,len,BindImm,min_size) => lblnext,ctx,code
-    update ctx_set_lblnext(ctx,lblnext) => ctx ->
-    println_any(code),ctx,{*sofar0,{ctx_fnr(ctx),OpLea,0,BindReg,parray,src_flag1,src1},
+    update ctx_newreg(ctx,64) => ctx,pbegin
+    update generate_list_min_size(0,0,elements) => min_size,splatcount
+    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),if_not_zero(splatcount,OpCompareLessThanBranch,OpCompareNotEqualBranch),TypeU32,32,BindReg,len,BindImm,min_size) => lblnext,ctx,code
+    update ctx_set_lblnext(ctx,lblnext) => ctx
+    update generate_param_code(types,post_arrow,bindlevel,{(newstride>>3)<<32,pbegin+(((newstride>>3)*(min_size-1)+16)<<32)},ctx,{},{},{{{{BindMem,pbegin+(16<<32),newstride}},sub_type}},elements) => ctx,code2 ->
+    generate_param_code(types,post_arrow,bindlevel,stride,ctx,{*sofar0,
+    {ctx_fnr(ctx),OpLea,0,BindReg,parray,src_flag1,src1},
     {ctx_fnr(ctx),OpMove+3,0,BindReg,pend,BindMem,parray,0,0,4},
-    //{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindMem,mem,src_flag,src,0,0,16+(c*sz>>3)},
-    {ctx_fnr(ctx),OpMinus,TypeU32,BindReg,len,BindReg,pend,src_flag2,src2},*code,*sofar1};
+    {ctx_fnr(ctx),OpMinus,TypeU32,BindReg,len,BindReg,pend,src_flag2,src2},*code,
+    {ctx_fnr(ctx),OpLeaScale,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,newstride>>3},
+    *code2},sofar1,type_left,rest);
 
+gen_param_code_next_type({},{a,*rest}) -> a,rest;
+gen_param_code_next_type({s,p},{{{{BindMem,p,sz}},t},*rest}) -> {{{BindMem,p,sz}},t},{};
+gen_param_code_next_type({s,_},{{{{BindMem,p,sz}},t},*rest}) -> {{{BindMem,p,sz}},t},{{{{BindMem,p+s,sz}},t},*rest};
 
-//decompose_types({0,n}) -> 0,{0,n};
-//decompose_types({1,a,*rest}) -> a,{1,*rest};
+generate_list_min_size(n,m,{}) -> n,m;
+generate_list_min_size(n,m,{e,*rest}) -> match generate_list_min_size_aux(e) => dn,dm -> generate_list_min_size(n+dn,m+dm,rest);
 
-generate_list_min_size(n,{}) -> n;
-generate_list_min_size(n,{e,*rest}) -> generate_list_min_size(n+generate_list_min_size_aux(e),rest);
-
-generate_list_min_size_aux({Const,_}) -> 1;
-generate_list_min_size_aux({ParamId,_}) -> 1;
-generate_list_min_size_aux({ParamWild,_}) -> 1;
-generate_list_min_size_aux({ParamList,_}) -> 1;
-generate_list_min_size_aux({ParamSplat,_}) -> 0;
-generate_list_min_size_aux({ParamSplatWild,_}) -> 0;
+generate_list_min_size_aux({Const,_}) -> 1,0;
+generate_list_min_size_aux({ParamId,_}) -> 1,0;
+generate_list_min_size_aux({ParamWild,_}) -> 1,0;
+generate_list_min_size_aux({ParamList,_}) -> 1,0;
+generate_list_min_size_aux({ParamSplat,_}) -> 0,1;
+generate_list_min_size_aux({ParamSplatWild,_}) -> 0,1;
 
 sum_sub_alloc(n,{}) -> n;
 sum_sub_alloc(n,{_,sz,*rest}) -> sum_sub_alloc(n+sz,rest);
@@ -811,8 +821,7 @@ generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args}) match ctx_get_fn_
     ctx,{*args_code,
         {ctx_fnr(ctx),OpCall,0,BindLabel,fn_id,0,spinc,0,callctr},
         {ctx_fnr(ctx),OpAddStack,0,0,0,0,-spinc},
-        *callout_extract(ctx_fnr(ctx),callctr,{},callout)
-        },
+        *callout_extract(ctx_fnr(ctx),callctr,{},callout)},
     callout_ret({},callout);
 generate_expr_code_aux(types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}}) ->
     match ctx_fnr(ctx) => fn_id,_

@@ -121,6 +121,7 @@ void rw_instance_unload(RWInstance* exe) {
 #define OP_LTE 0x1E
 #define OP_INSERT_LL 0x20
 #define OP_LEA 0x28
+#define OP_LEA_SCALE 0x29
 #define OP_EXTRACT_LL 0x30
 #define OP_ALLOC 0xC0
 #define OP_CMP_NE_BRANCH 0xF0
@@ -154,7 +155,7 @@ void rw_instance_unload(RWInstance* exe) {
 #define FLAG_LIFE_START 0x10
 #define FLAG_LIFE_END 0x20
 
-void display_operand(FILE* out, Operation* operation, uint8_t flag, int64_t val) {
+void display_operand(FILE* out, uint8_t flag, int64_t val) {
     uint8_t bind=flag&0xF;
     if(flag&FLAG_LIFE_START) {
         fprintf(out,"+");
@@ -178,7 +179,7 @@ void display_operand(FILE* out, Operation* operation, uint8_t flag, int64_t val)
             fprintf(out,"(r0+%" PRId64 ")",val);
         } break;
         case BIND_MEM: {
-            fprintf(out,"(r%" PRId64 "+%d)",val, operation->label2);
+            fprintf(out,"(r%" PRId64 "+%" PRId64 ")",val&0xFFFFFFFF, val>>32);
         } break;
     }
 }
@@ -282,7 +283,7 @@ void program_disassemble(Program* program, FILE* out) {
             } break;
             case OP_ERROR: {
                 fprintf(out,"error type:");
-                display_operand(out,operation,operation->flags_dst,operation->dst);
+                display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out," line:%ld sym:%s",operation->src1,program->symbols+operation->src2);
             } break;
             case OP_RET: {
@@ -310,83 +311,92 @@ void program_disassemble(Program* program, FILE* out) {
                 }
             } break;
             case OP_LEA: {
-                fprintf(out,"let ");
-                display_operand(out,operation,operation->flags_dst,operation->dst);
+                fprintf(out,"let.p ");
+                display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out," = lea ");
-                display_operand(out,operation,operation->flags_src1,operation->src1);
+                display_operand(out,operation->flags_src1,operation->src1);
+            } break;
+           case OP_LEA_SCALE: {
+                fprintf(out,"let.p ");
+                display_operand(out,operation->flags_dst,operation->dst);
+                fprintf(out," = lea_scale ");
+                display_operand(out,operation->flags_src1,operation->src1);
+                fprintf(out,"+");
+                display_operand(out,operation->flags_src2,operation->src2);
+                fprintf(out,"*%d",operation->label2);
             } break;
             case OP_ALLOC: {
                 fprintf(out,"let ");
-                display_operand(out,operation,operation->flags_dst,operation->dst);
+                display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out," = alloc ");
-                display_operand(out,operation,operation->flags_src1,operation->src1);
+                display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out,"*");
-                display_operand(out,operation,operation->flags_src2,operation->src2);
+                display_operand(out,operation->flags_src2,operation->src2);
             } break;
             case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"let.%d ",sz);
-                display_operand(out,operation,operation->flags_dst,operation->dst);
+                display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out," = ");
-                display_operand(out,operation,operation->flags_src1,operation->src1);
+                display_operand(out,operation->flags_src1,operation->src1);
             } break;
             case OP_INSERT_LL: case OP_INSERT_LL+1: case OP_INSERT_LL+2: case OP_INSERT_LL+3: case OP_INSERT_LL+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"insert.%d ",sz);
-                display_operand(out,operation,operation->flags_dst,operation->dst);
+                display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out," = ");
-                display_operand(out,operation,operation->flags_src1,operation->src1);
+                display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," (o=%d)",(uint32_t)operation->src2);
             } break;
             case OP_EXTRACT_LL: case OP_EXTRACT_LL+1: case OP_EXTRACT_LL+2: case OP_EXTRACT_LL+3: case OP_EXTRACT_LL+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"extract.%d ",sz);
-                display_operand(out,operation,operation->flags_dst,operation->dst);
+                display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out," = ");
-                display_operand(out,operation,operation->flags_src1,operation->src1);
+                display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," (o=%d)",(uint32_t)operation->src2);
             } break;
             case OP_CMP_NE_BRANCH: case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"test.%d ",sz);
-                display_operand(out,operation,operation->flags_src1,operation->src1);
+                display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," != ");
-                display_operand(out,operation,operation->flags_src2,operation->src2);
+                display_operand(out,operation->flags_src2,operation->src2);
                 fprintf(out," goto ");
                 program_display_label_both(program,out,operation);
             } break;
             case OP_CMP_EQ_BRANCH: case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"test.%d ",sz);
-                display_operand(out,operation,operation->flags_src1,operation->src1);
+                display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," == ");
-                display_operand(out,operation,operation->flags_src2,operation->src2);
+                display_operand(out,operation->flags_src2,operation->src2);
                 fprintf(out," goto ");
                 program_display_label_both(program,out,operation);
             } break;
             case OP_CMP_LT_BRANCH: {
                 fprintf(out,"test.%s ",display_type(operation->type));
-                display_operand(out,operation,operation->flags_src1,operation->src1);
+                display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," < ");
-                display_operand(out,operation,operation->flags_src2,operation->src2);
+                display_operand(out,operation->flags_src2,operation->src2);
                 fprintf(out," goto ");
                 program_display_label_both(program,out,operation);
             } break;
             case OP_CMP_LE_BRANCH: {
                 fprintf(out,"test.%s ",display_type(operation->type));
-                display_operand(out,operation,operation->flags_src1,operation->src1);
+                display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," <= ");
-                display_operand(out,operation,operation->flags_src2,operation->src2);
+                display_operand(out,operation->flags_src2,operation->src2);
                 fprintf(out," goto ");
                 program_display_label_both(program,out,operation);
             } break;
             case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
                 fprintf(out,"let.%s ",display_type(operation->type));
-                display_operand(out,operation,operation->flags_dst,operation->dst);
+                display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out," = ");
-                display_operand(out,operation,operation->flags_src1,operation->src1);
+                display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out," %s ",display_binop(op));
-                display_operand(out,operation,operation->flags_src2,operation->src2);
+                display_operand(out,operation->flags_src2,operation->src2);
             } break;
             default: fprintf(out,"unknown");
         }
@@ -424,7 +434,7 @@ void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32
         } break;
         case BIND_MEM: {
             uint8_t* addr=(uint8_t*)(exe->registers[operation->dst+sp]+operation->label2);
-           switch(sz) { // alignment is guaranteed by the compiler
+            switch(sz) { // alignment is guaranteed by the compiler
                 case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
                 case 16:*((uint16_t*)addr)=(uint16_t)value; break;
                 case 32:*((uint32_t*)addr)=(uint32_t)value; break;
@@ -456,6 +466,18 @@ uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t
         } break;
         case BIND_OVERFLOW: {
             uint8_t* addr=(uint8_t*)(exe->registers[src]+offset);
+            uint64_t value;
+            switch(sz) { // alignment is guaranteed by the compiler
+                case 1:case 8: value=*((uint8_t*)addr); break;
+                case 16:value=*((uint16_t*)addr); break;
+                case 32:value=*((uint32_t*)addr); break;
+                case 64:value=*((uint64_t*)addr); break;
+                default: fprintf(stderr,"unknown size in operand_load\n"); exit(EXIT_FAILURE);
+            }
+            return value&mask;
+        } break;
+        case BIND_MEM: {
+            uint8_t* addr=(uint8_t*)(exe->registers[src&0xFFFFFFFF]+(src>>32));
             uint64_t value;
             switch(sz) { // alignment is guaranteed by the compiler
                 case 1:case 8: value=*((uint8_t*)addr); break;
