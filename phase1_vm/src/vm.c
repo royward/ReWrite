@@ -705,6 +705,8 @@ int utf32_to_utf8_convert(const uint32_t *src, size_t max_len, char *dst) {
     size_t i = 0;
     while ((max_len == UTF32_UNBOUNDED ? src[i] != 0 : i < max_len)) {
         uint32_t cp = src[i++];
+        if (cp > 0x10FFFF) return UTF8_ERROR_OUT_OF_BOUNDS;
+        if (cp >= 0xD800 && cp <= 0xDFFF) return UTF8_ERROR_SURROGATE;
         if (cp <= 0x7F) {
             *d++ = (uint8_t)cp;
         } else if (cp <= 0x7FF) {
@@ -730,4 +732,59 @@ int utf32_to_utf8_convert(const uint32_t *src, size_t max_len, char *dst) {
     return 0;
 }
 
+size_t vm_utf8_count_elements(const char* str) {
+    const uint8_t* s = (const uint8_t*)str;
+    size_t length = 0;
+    while (*s != '\0') {
+        if ((*s & 0xC0) != 0x80) {
+            length++;
+        }
+        s++;
+    }
+    return length;
+}
 
+int vm_utf8_populate_buffer(const char* str, uint32_t* dest_buffer) {
+    const uint8_t* s = (const uint8_t*)str;
+    size_t index = 0;
+    while (*s != '\0') {
+        uint32_t c = *s;
+        // Case 1: Ultra-fast ASCII Path (1 byte)
+        if (c < 0x80) {
+            dest_buffer[index++] = c;
+            s++;
+            continue;
+        }
+        uint32_t cp;
+        // Case 2: 2-Byte Sequence (110xxxxx 10xxxxxx)
+        if ((c & 0xE0) == 0xC0) {
+            if ((s[1] & 0xC0) != 0x80) return UTF8_ERROR_MALFORMED;
+            cp = ((c & 0x1F) << 6) | (s[1] & 0x3F);
+            if (cp < 0x80) return UTF8_ERROR_OVERLONG; // Overlong check
+            dest_buffer[index++] = cp;
+            s += 2;
+        }
+        // Case 3: 3-Byte Sequence (1110xxxx 10xxxxxx 10xxxxxx)
+        else if ((c & 0xF0) == 0xE0) {
+            if ((s[1] & 0xC0) != 0x80 || (s[2] & 0xC0) != 0x80) return UTF8_ERROR_MALFORMED;
+            cp = ((c & 0x0F) << 12) | ((s[1] & 0x3F) << 6) | (s[2] & 0x3F);
+            if (cp < 0x0800) return UTF8_ERROR_OVERLONG;
+            if (cp >= 0xD800 && cp <= 0xDFFF) return UTF8_ERROR_SURROGATE;
+            dest_buffer[index++] = cp;
+            s += 3;
+        }
+        // Case 4: 4-Byte Sequence (11110xxx 10xxxxxx 10xxxxxx 10xxxxxx)
+        else if ((c & 0xF8) == 0xF0) {
+            if ((s[1] & 0xC0) != 0x80 || (s[2] & 0xC0) != 0x80 || (s[3] & 0xC0) != 0x80) return UTF8_ERROR_MALFORMED;
+            cp = ((c & 0x07) << 18) | ((s[1] & 0x3F) << 12) | ((s[2] & 0x3F) << 6) | (s[3] & 0x3F);
+            if (cp < 0x010000) return UTF8_ERROR_OVERLONG;
+            if (cp > 0x10FFFF) return UTF8_ERROR_OUT_OF_BOUNDS;
+            dest_buffer[index++] = cp;
+            s += 4;
+        }
+        else {
+            return UTF8_ERROR_MALFORMED;
+        }
+    }
+    return 0;
+}

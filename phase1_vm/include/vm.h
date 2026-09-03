@@ -76,6 +76,11 @@ static inline void* rwu_get_data(uint32_t* header, uint32_t start) {return (void
 static inline uint32_t rwu_get_len(uint32_t* header, uint32_t start) {return (header[1]-start);}
 
 #define UTF32_UNBOUNDED ((size_t)-1)
+#define UTF8_ERROR_MALFORMED 8
+#define UTF8_ERROR_OVERLONG 9
+#define UTF8_ERROR_OUT_OF_BOUNDS 10
+#define UTF8_ERROR_SURROGATE 11
+
 int utf32_to_utf8_calc_size(const uint32_t *src, size_t max_len, size_t *out_bytes);
 int utf32_to_utf8_convert(const uint32_t *src, size_t max_len, char *dst);
 

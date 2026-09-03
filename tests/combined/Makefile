@@ -17,7 +17,7 @@ test_native: combined_native.exe
 	./combined_native.exe
 
 combined_native.exe: ../../native/src/rewrite_base.c main_native.c $(CORE_DEPS)
-	$(REWRITE_CPP) --fast $(COMPILER_RW) 'compile("combined.rw","combined_native","x86-64")'
+	$(REWRITE_CPP) $(COMPILER_RW) 'compile("combined.rw","combined_native","x86-64")'
 	clang -O3 -S combined_native.ll
 	clang -O3 -ggdb3 -Wall -Wextra -I../../native/include/ ../../native/src/rewrite_base.c main_native.c combined_native.ll -o $@
 

@@ -949,7 +949,7 @@ convert_to_llvm(target,small_table,table,symtext,symsz,sofar,{{fnid,code},*rest}
 
 convert_to_ll_fn(target,small_table,table,fnid,code) ->
     match nth(fnid,table) => {_,_,_,name,reg_count1,bitmask1,type_left,_,reg_count2,bitmask2,type_right,_} ->
-    {'\ndefine x86_regcallcc %R8 @__rw.',*name,'(i64 %s0,i64 %s1,i64 %s2,i64 %s3,i64 %s4,i64 %s5,i64 %s6,i64 %s7, ptr %A) {\n',
+    {'\ndefine private x86_regcallcc %R8 @__rw.',*name,'(i64 %s0,i64 %s1,i64 %s2,i64 %s3,i64 %s4,i64 %s5,i64 %s6,i64 %s7, ptr %A) {\n',
     *ll_emit_instructions(small_table,{},code),
     'exit:\n',
     *ll_build_epilog1(0,type_right,{}),
@@ -1134,7 +1134,9 @@ create_export_wrappers_ll(target,types,sofarc,sofarh,_,{}) -> sofarc,sofarh;
 create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{false,*_},*rest}) -> create_export_wrappers_ll(target,types,sofarc,sofarh,fnid+1,rest);
 create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{_,_,_,name,reg_left,_,left,_,reg_right,_,right,_},*rest}) ->
     match create_export_ll_sigc_in({},{},0,left) => inparams,inregs
-    match create_export_ll_pre_call(types,{},{},inregs) => pre,inregs2 ->
+    match create_export_ll_pre_call(types,{},{},inregs) => pre,inregs2
+    match create_export_vm_sigc({},0,0,"const ","in",left) => _,sigin
+    match create_export_vm_sigc({},0,0,"","*out",right) => _,sigout ->
     create_export_wrappers_ll(target,types,
         {*sofarc,
         '\ndefine i32 @rw_',*name,'(ptr %A',*inparams,*create_export_ll_sigc_out({},0,reg_right),') {\n',
@@ -1152,7 +1154,7 @@ create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{_,_,_,name,reg_left,
         'fail:\n',
         '\tret i32 %status\n',
         '}\n'},
-        {*sofarh,'\nint32_t rw_',*name,'(RWInstance* a',*create_export_vm_sigc({},0,"const ","in",left),*create_export_vm_sigc({},0,"","*out",right),');\n'},
+        {*sofarh,'\nint32_t rw_',*name,'(RWInstance* a',*sigin,*sigout,');\n'},
         fnid+1,rest);
 
 create_export_ll_sigc_in(sofar,regs,_,{}) -> sofar,regs;
