@@ -495,6 +495,17 @@ uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t
     }
 }
 
+uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
+    uint64_t sz=((uint64_t)count)*size;
+    uint64_t alloc=exe->end_of_heap;
+    uint32_t full_size=(16+sz+7)>>3;
+    exe->heap[alloc+alloc]=full_size;
+    exe->heap[alloc+alloc+2]=1;
+    exe->heap[alloc+alloc+3]=0xDEADBEEF;
+    exe->end_of_heap+=full_size;
+    return alloc;
+}
+
 int program_execute(RWInstance* exe, uint32_t in_lbl) {
     Program* program=exe->program;
     exe->errtype=0;
@@ -540,14 +551,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 operand_store(exe, operation, ((uint64_t)exe->heap)+val*8, 64, sp);
             } break;
             case OP_ALLOC: {
-                uint64_t sz=operand_load(exe,64,operation->flags_src1,operation->src1,sp,0)*operand_load(exe,64,operation->flags_src1,operation->src2,sp,0);
-                uint64_t alloc=exe->end_of_heap;
-                uint32_t full_size=(16+sz+7)>>3;
-                exe->heap[alloc+alloc]=full_size;
-                exe->heap[alloc+alloc+2]=1;
-                exe->heap[alloc+alloc+3]=0xDEADBEEF;
-                operand_store(exe, operation, exe->end_of_heap, 64, sp);
-                exe->end_of_heap+=full_size;
+                uint32_t ret=alloc(exe,operand_load(exe,64,operation->flags_src1,operation->src1,sp,0),operand_load(exe,64,operation->flags_src1,operation->src2,sp,0));
+                operand_store(exe, operation, ret, 64, sp);
             } break;
             case OP_MOVE: case OP_INSERT_LL: case OP_EXTRACT_LL: {
                 uint64_t val = operand_load(exe, 1, operation->flags_src1, operation->src1, sp, operation->label2);
@@ -732,7 +737,7 @@ int utf32_to_utf8_convert(const uint32_t *src, size_t max_len, char *dst) {
     return 0;
 }
 
-size_t vm_utf8_count_elements(const char* str) {
+size_t utf8_count_elements(const char* str) {
     const uint8_t* s = (const uint8_t*)str;
     size_t length = 0;
     while (*s != '\0') {
@@ -744,7 +749,7 @@ size_t vm_utf8_count_elements(const char* str) {
     return length;
 }
 
-int vm_utf8_populate_buffer(const char* str, uint32_t* dest_buffer) {
+int utf8_populate_buffer(const char* str, uint32_t* dest_buffer) {
     const uint8_t* s = (const uint8_t*)str;
     size_t index = 0;
     while (*s != '\0') {
