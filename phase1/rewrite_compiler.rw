@@ -679,13 +679,13 @@ generate_param_code(types,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const
     generate_param_code(types,false,bindlevel,stride,ctx,{*sofar0,*code},sofar1,type_left,rest);
 generate_param_code(types,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest}) ->
     match gen_param_code_next_type(stride,typex) => {{{src_flag,src,sz}},tp},type_left
-    update generate_conditional_rhs(ctx,sofar0,tp,sz,src_flag,src,BindImm,val) => ctx,code ->
+    update generate_conditional_rhs(ctx,sofar0,tp,{{src_flag,src,sz}},{{BindImm,val,sz}}) => ctx,code ->
     generate_param_code(types,true,bindlevel,stride,ctx,code,sofar1,type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest}) ->
     match gen_param_code_next_type(stride,typex) => {{{src_flag,src,sz}},tp},type_left
     update ctx_bindings(ctx) => bindings
     update split3_nth(id,{},bindings) => prebind,bind,postbind
-    update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,{{src_flag,src}},tp,sz,bind) => ctx,newbind,code
+    update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,{{src_flag,src,sz}},tp,bind) => ctx,newbind,code
     update ctx_newbindings(ctx,{*prebind,newbind,*postbind}) => ctx ->
     generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,{*sofar1,*code},type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest}) ->
@@ -728,7 +728,7 @@ generate_list_min_size_aux({ParamSplatWild,_}) -> 0,1;
 sum_sub_alloc(n,{}) -> n;
 sum_sub_alloc(n,{_,sz,*rest}) -> sum_sub_alloc(n+sz,rest);
 
-generate_conditional_rhs(ctx,code,tp,sz,src_flag,src,src_flag2,src2) ->
+generate_conditional_rhs(ctx,code,tp,{{src_flag,src,sz}},{{src_flag2,src2,sz}}) ->
     update ctx_update_label_id(ctx) => ctx
     match ctx_get_lbl_stuff(ctx) => target,active,lblnext,label_id
     update generate_conditional(ctx,target,active,label_id,label_id,OpCompareEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => _,ctx,newcode
@@ -736,17 +736,17 @@ generate_conditional_rhs(ctx,code,tp,sz,src_flag,src,src_flag2,src2) ->
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
     ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id}};
 
-generate_bind_variable(types,0,post_arrow,bindlevel,ctx,{{src_flag,src}},tp,sz,{level,_,_,name}) when level<bindlevel ->
-    ctx,{bindlevel,tp,{{BindImm,0,DefaultSize}},name},{};
-generate_bind_variable(types,count,post_arrow,bindlevel,ctx,{{src_flag,src}},tp,sz,{level,_,_,name}) when level<bindlevel ->
+generate_bind_variable(types,0,post_arrow,bindlevel,ctx,{{src_flag,src,sz}},tp,{level,_,_,name}) when level<bindlevel ->
+    ctx,{bindlevel,tp,{},name},{};
+generate_bind_variable(types,count,post_arrow,bindlevel,ctx,{{src_flag,src,sz}},tp,{level,_,_,name}) when level<bindlevel ->
     update ctx_newreg(ctx,1<<get_size_scale(sz)) => ctx,newreg ->
     ctx,{bindlevel,tp,{{BindReg,newreg,sz}},name},{{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindReg,newreg,src_flag,src}};
-generate_bind_variable(types,count,false,bindlevel,ctx,{{src_flag,src}},tp,sz,{_,tp,{{src_flag2,src2,sz}},name}) ->
+generate_bind_variable(types,count,false,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name}) ->
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => lblnext,ctx,code
     update ctx_set_lblnext(ctx,lblnext) => ctx ->
     ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code;
-generate_bind_variable(types,count,true,bindlevel,ctx,{{src_flag,src}},tp,sz,{_,tp,{{src_flag2,src2,sz}},name}) ->
-    update generate_conditional_rhs(ctx,{},tp,sz,src_flag,src,src_flag2,src2) => ctx,code ->
+generate_bind_variable(types,count,true,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name}) ->
+    update generate_conditional_rhs(ctx,{},tp,{{src_flag,src,sz}},{{src_flag2,src2,sz}}) => ctx,code ->
     ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code;
 
 generate_llvm_alloc_code(TargetVM,_,_,sofar,_,_) -> sofar;
