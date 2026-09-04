@@ -76,6 +76,7 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size);
 static inline uint32_t* rwu_get_header(RWInstance* a, uint32_t x) {return a->heap+(x<<1);}
 static inline void* rwu_get_data(uint32_t* header, uint32_t start) {return (void*)(header+4+start);}
 static inline uint32_t rwu_get_len(uint32_t* header, uint32_t start) {return (header[1]-start);}
+static inline void rwu_set_len(uint32_t* header, uint32_t val) {header[1]=val;}
 
 #define UTF32_UNBOUNDED ((size_t)-1)
 #define UTF8_ERROR_MALFORMED 8

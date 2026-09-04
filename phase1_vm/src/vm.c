@@ -449,7 +449,7 @@ void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32
     }
 }
 
-uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t src, uint32_t sp, uint32_t offset) {
+uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t src, uint32_t sp) {
     uint64_t mask=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
     switch(flags_src&0xF) {
         case BIND_IMM: {
@@ -465,7 +465,7 @@ uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t
             return ((uint64_t*)exe->registers[0])[src]&mask;
         } break;
         case BIND_OVERFLOW: {
-            uint8_t* addr=(uint8_t*)(exe->registers[src]+offset);
+            uint8_t* addr=&exe->overflow[src];
             uint64_t value;
             switch(sz) { // alignment is guaranteed by the compiler
                 case 1:case 8: value=*((uint8_t*)addr); break;
@@ -477,7 +477,7 @@ uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t
             return value&mask;
         } break;
         case BIND_MEM: {
-            uint8_t* addr=(uint8_t*)(exe->registers[src&0xFFFFFFFF]+(src>>32));
+            uint8_t* addr=(uint8_t*)(exe->registers[(src&0xFFFFFFFF)+sp]+(src>>32));
             uint64_t value;
             switch(sz) { // alignment is guaranteed by the compiler
                 case 1:case 8: value=*((uint8_t*)addr); break;
@@ -517,13 +517,14 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
         Operation* operation=&program->code[pc];
         uint8_t op=operation->op;
         switch(op) {
-            case OP_LABEL:
+            case OP_LABEL: {
+            } break;
             case OP_LLALLOC:
             case OP_STORE: {
                 // NOP
             } break;
             case OP_ERROR: {
-                exe->errtype=operand_load(exe, 64, operation->flags_dst, operation->dst, sp, operation->label2);
+                exe->errtype=operand_load(exe, 64, operation->flags_dst, operation->dst, sp);
                 exe->errline=operation->src1;
                 exe->errsym=program->symbols+operation->src2;
                 return exe->errtype;
@@ -547,58 +548,63 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                  sp+=(int32_t)operation->src1;
             } break;
             case OP_LEA: {
-                uint64_t val = operand_load(exe, 64, operation->flags_src1, operation->src1, sp, operation->label2);
+                uint64_t val = operand_load(exe, 64, operation->flags_src1, operation->src1, sp);
                 operand_store(exe, operation, ((uint64_t)exe->heap)+val*8, 64, sp);
             } break;
+            case OP_LEA_SCALE: {
+                uint64_t val = operand_load(exe, 64, operation->flags_src1, operation->src1, sp);
+                uint64_t offset = operand_load(exe, 32, operation->flags_src2, operation->src2, sp);
+                operand_store(exe, operation, val+offset*operation->label2, 64, sp);
+            } break;
             case OP_ALLOC: {
-                uint32_t ret=alloc(exe,operand_load(exe,64,operation->flags_src1,operation->src1,sp,0),operand_load(exe,64,operation->flags_src1,operation->src2,sp,0));
+                uint32_t ret=alloc(exe,operand_load(exe,64,operation->flags_src1,operation->src1,sp),operand_load(exe,64,operation->flags_src1,operation->src2,sp));
                 operand_store(exe, operation, ret, 64, sp);
             } break;
             case OP_MOVE: case OP_INSERT_LL: case OP_EXTRACT_LL: {
-                uint64_t val = operand_load(exe, 1, operation->flags_src1, operation->src1, sp, operation->label2);
+                uint64_t val = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
                 operand_store(exe, operation, val, 1, sp);
             }
             case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4:
             case OP_INSERT_LL+1: case OP_INSERT_LL+2: case OP_INSERT_LL+3: case OP_INSERT_LL+4:
             case OP_EXTRACT_LL+1: case OP_EXTRACT_LL+2: case OP_EXTRACT_LL+3: case OP_EXTRACT_LL+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
-                uint64_t val = operand_load(exe, sz, operation->flags_src1, operation->src1, sp, operation->label2);
+                uint64_t val = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 operand_store(exe, operation, val, sz, sp);
             } break;
             case OP_CMP_NE_BRANCH: {
-                uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp, operation->label2);
-                uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp, operation->label2);
+                uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp);
                 if(src1 != src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
-                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp, operation->label2);
-                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp, operation->label2);
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 if(src1 != src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_CMP_EQ_BRANCH: {
-                uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp, operation->label2);
-                uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp, operation->label2);
+                uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp);
                 if(src1 == src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
-                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp, operation->label2);
-                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp, operation->label2);
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 if(src1 == src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
                 uint32_t sz = type_to_size(operation->type);
-                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp, operation->label2);
-                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp, operation->label2);
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 uint64_t dst;
                 switch(op) {
                     case OP_PLUS: dst = src1+src2; break;
