@@ -1073,7 +1073,8 @@ create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{_,_,_,name,
     match label_id+1 => new_lbl
     match create_export_vm_sigc({},0,0,"const ","in",left) => n1,sig1
     match create_export_vm_sigc({},0,0,"","*out",right) => n2,sig2
-    match create_export_vm_in(types,{},{},0,left,values_left) => incode,inarray ->
+    match create_export_vm_in(types,{},{},0,left,values_left) => incode,inarray
+    match create_export_vm_inout0({},reg_count(0,left),reg_count(0,right)) => outarray ->
     create_export_wrappers_vm(target,types,
         {*sofarc,
         {new_lbl,{{new_lbl,0,OpLabel,0,BindLabel,new_lbl},
@@ -1084,7 +1085,7 @@ create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{_,_,_,name,
             {new_lbl,0,OpRet,0}}}},
         {*sofarh,'\nstatic inline int32_t rw_',*name,'(RWInstance* a',*sig1,*sig2,') {\n',
             *incode,
-            '\tuint64_t inout[',*int2s(max(n1,n2)),']={',*inarray,'};\n',
+            '\tuint64_t inout[',*int2s(max(n1,n2)),']={',*inarray,*outarray,'};\n',
             '\tint32_t e=RW__vmcall(a,',*int2s(new_lbl),',inout);\n\tif(e!=0)return e;\n',
             *create_export_vm_out(types,{},{},0,0,right,values_right),
             '\treturn 0;\n}\n'},
@@ -1099,6 +1100,10 @@ create_export_vm_code_out(types,_,_,sofar,{},{}) -> sofar;
 create_export_vm_code_out(types,new_lbl,n,sofar,{{regs,tp},*rest},{val_flag,*vrest}) ->
     match create_export_vm_ret(types,new_lbl,n,tp,{},regs) => newn,code ->
     create_export_vm_code_out(types,new_lbl,newn,{*sofar,*code},rest,vrest);
+
+reg_count(n,{}) -> n;
+reg_count(n,{{{},_},*rest}) -> reg_count(n,rest);
+reg_count(n,{{{_,*r1},tp},*rest}) -> reg_count(n+1,{{r1,tp},*rest});
 
 create_export_vm_param(types,_,n,_,sofar,{}) -> n,sofar;
 create_export_vm_param(types,new_lbl,n,tp,sofar,{{flag,dst,sz},*rest}) -> create_export_vm_param(types,new_lbl,n+1,tp,{*sofar,{new_lbl,0,OpMove+get_size_scale(sz),0,flag,dst,BindInOut,n}},rest);
@@ -1124,9 +1129,12 @@ create_export_vm_in(types,code,sofar,n,{{_,TypeString},*rest},{val,*vrest}) -> w
         '\tuint32_t dst',*i,'=0,len',*i,';\n',
         '\tint err',*i,'=string_to_utf32(a,in',*i,',&dst',*i,',&len',*i,');\n',
         '\tif(err',*i,'!=0) return err',*i,';\n',
-        '\ta->heap[dst',*i,'+dst',*i,'+1]=len',*i,';\n'},
+        '\trwu_set_len(a,dst',*i,',len',*i,');\n'},
         {*sofar,'(uint64_t)dst',*int2s(n),',0,'},n+1,rest,vrest);
 create_export_vm_in(types,code,sofar,n,{{_,tp},*rest},{_,*vrest}) -> create_export_vm_in(types,code,{*sofar,'(uint64_t)in',*int2s(n),','},n+1,rest,vrest);
+
+create_export_vm_inout0(sofar,l,r) when l<r -> create_export_vm_inout0({*sofar,'0,'},l+1,r);
+create_export_vm_inout0(sofar,_,_) -> sofar;
 
 create_export_vm_out(types,sofar,allocs,_,_,{},{}) -> sofar;
 create_export_vm_out(types,sofar,allocs,labeln,n,{{_,TypeString},*rest},{val,*vrest}) -> when val ->
