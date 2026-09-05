@@ -81,8 +81,7 @@ struct RuleMatch {
 
 struct Rule {
     RuleMatch main;
-    std::vector<RuleMatch> pre_arrow;
-    std::vector<RuleMatch> post_arrow;
+    std::vector<RuleMatch> clauses;
     std::vector<std::string> names; // debugging only, and getting size for bind vector
     void annotate_with_counts();
 };

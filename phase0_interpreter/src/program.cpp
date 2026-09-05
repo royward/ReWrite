@@ -307,7 +307,7 @@ start:
             std::span<DataElement> x0=std::span<DataElement>(args.data.data()+args.offset,args.data.size()-args.offset);
             if(do_match_vec(rule.main.match,x0,bindings,rule.main.match_count)) {
                 bool guard_ok=true;
-                for(const RuleMatch& grule : rule.pre_arrow) {
+                for(const RuleMatch& grule : rule.clauses) {
                     VecDataElement guard_sofar;
                     do_call_multi(grule.expr,bindings,guard_sofar);
                     std::span<DataElement> x0=std::span<DataElement>(guard_sofar.data.data()+guard_sofar.offset,guard_sofar.data.size()-guard_sofar.offset);
@@ -321,19 +321,6 @@ start:
                     }
                 }
                 if(guard_ok) {
-                    for(const RuleMatch& grule : rule.post_arrow) {
-                        VecDataElement guard_sofar;
-                        do_call_multi(grule.expr,bindings,guard_sofar);
-                        std::span<DataElement> x0=std::span<DataElement>(guard_sofar.data.data()+guard_sofar.offset,guard_sofar.data.size()-guard_sofar.offset);
-                        if(!do_match_vec(grule.match,x0,bindings,grule.update?grule.match_count:1)) {
-                            if(grule.decline) {
-                                guard_ok=false;
-                                break;
-                            } else {
-                                throw std::runtime_error(std::format("failure in match({})",i));
-                            }
-                        }
-                    }
                     if(fast) {
                         args.data.clear();
                     }

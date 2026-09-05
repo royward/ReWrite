@@ -456,7 +456,6 @@ std::vector<Expression> Program::parse_expression_list(Parser& parser, std::unor
 void Program::parse_rule(Parser& parser) {
     if(parser.current().kind==Identifier) {
         std::string function=static_cast<std::string>(parser.current().text);
-        //if(function=="parse_aux")__asm__("int3");
         parser.advance();
         if(parser.current().kind==LParen) {
             uint32_t match_counter=1;
@@ -470,7 +469,7 @@ void Program::parse_rule(Parser& parser) {
                 if(parser.current().kind==When) {
                     parser.advance();
                     std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,SixTokenKind{Arrow,Match,Update,MatchDecline,UpdateDecline,When},Comma);
-                    rule.pre_arrow.push_back(RuleMatch{
+                    rule.clauses.push_back(RuleMatch{
                         {Parameter{Const{DataElement{DataBool{true}}}}},
                         std::move(expr_vec),
                         match_counter,
@@ -485,43 +484,13 @@ void Program::parse_rule(Parser& parser) {
                     std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,SixTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
                     parser.advance();
                     std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,SixTokenKind{Arrow,Match,Update,MatchDecline,UpdateDecline,When},Comma);
-                    rule.pre_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update,decline});
+                    rule.clauses.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update,decline});
                 }
             }
             if(parser.current().kind!=Arrow) {
-                parse_error(parser.current(),{"->","when","match","update"});
+                parse_error(parser.current(),{"->","when","match","update","@match","@update"});
             }
             parser.advance();
-            if(parser.current().kind==When || parser.current().kind==Match || parser.current().kind==Update || parser.current().kind==MatchDecline || parser.current().kind==UpdateDecline) {
-                while(true) {
-                    if(parser.current().kind==When) {
-                        parser.advance();
-                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,SixTokenKind{Arrow,Match,Update,MatchDecline,UpdateDecline,When},Comma);
-                        rule.post_arrow.push_back(RuleMatch{
-                            {Parameter{Const{DataElement{DataBool{true}}}}},
-                            std::move(expr_vec),
-                            match_counter,
-                            false,
-                            true
-                        });
-                    } else if(parser.current().kind==Match || parser.current().kind==Update || parser.current().kind==MatchDecline || parser.current().kind==UpdateDecline) { // must be match or update
-                        bool update=parser.current().kind==Update || parser.current().kind==UpdateDecline;
-                        bool decline=parser.current().kind==MatchDecline || parser.current().kind==UpdateDecline;
-                        parser.advance();
-                        match_counter++;
-                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,SixTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
-                        parser.advance();
-                        std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,SixTokenKind{Arrow,Match,Update,MatchDecline,UpdateDecline,When},Comma);
-                        rule.post_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update,decline});
-                    } else if(parser.current().kind==Arrow) {
-                        parser.advance();
-                        break;
-                    } else {
-                        parse_error(parser.current(),{"->","when","match","update"});
-                    }
-                }
-            }
-
             rule.main.expr=parse_expression_list(parser,param_id_map,SixTokenKind{Semicolon,Semicolon,Semicolon,Semicolon,Semicolon,Semicolon},Comma);
             parser.advance();
             rule.names=indices_to_names(param_id_map);
@@ -547,21 +516,7 @@ void Rule::annotate_with_counts() {
     for(Expression& element : main.expr | std::views::reverse) {
         element.annotate_with_counts(counts);
     }
-    for(RuleMatch& rm : post_arrow | std::views::reverse) {
-        for(Parameter& param : rm.match | std::views::reverse) {
-            param.annotate_with_counts(counts,touched);
-        }
-        if(rm.update) {
-            for(uint32_t i : touched) {
-                counts[i]=0;
-            }
-        }
-        touched.clear();
-        for(Expression& element : rm.expr | std::views::reverse) {
-            element.annotate_with_counts(counts);
-        }
-    }
-    for(RuleMatch& rm : pre_arrow | std::views::reverse) {
+    for(RuleMatch& rm : clauses | std::views::reverse) {
         for(Parameter& param : rm.match | std::views::reverse) {
             param.annotate_with_counts(counts,touched);
         }
