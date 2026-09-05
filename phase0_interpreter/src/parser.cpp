@@ -485,7 +485,7 @@ void Program::parse_rule(Parser& parser) {
                     std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,SixTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
                     parser.advance();
                     std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,SixTokenKind{Arrow,Match,Update,MatchDecline,UpdateDecline,When},Comma);
-                    rule.pre_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update,true});
+                    rule.pre_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update,decline});
                 }
             }
             if(parser.current().kind!=Arrow) {
@@ -502,7 +502,7 @@ void Program::parse_rule(Parser& parser) {
                             std::move(expr_vec),
                             match_counter,
                             false,
-                            false
+                            true
                         });
                     } else if(parser.current().kind==Match || parser.current().kind==Update || parser.current().kind==MatchDecline || parser.current().kind==UpdateDecline) { // must be match or update
                         bool update=parser.current().kind==Update || parser.current().kind==UpdateDecline;
@@ -512,7 +512,7 @@ void Program::parse_rule(Parser& parser) {
                         std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,SixTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
                         parser.advance();
                         std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,SixTokenKind{Arrow,Match,Update,MatchDecline,UpdateDecline,When},Comma);
-                        rule.post_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update,false});
+                        rule.post_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update,decline});
                     } else if(parser.current().kind==Arrow) {
                         parser.advance();
                         break;

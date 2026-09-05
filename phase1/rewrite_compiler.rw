@@ -623,11 +623,11 @@ ctx_update_get_callctr({target,callctr,tailcall,active,lblnext,label_id,fn_id,ru
 
 // deal with tail recursion (error if sigs don't match)
 compile_rule(target,types,linerule,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,{{ExprCall,fn_id,args}},regs_left,type_left,regs_right,type_right)
-    match ctx_get_tail(ctx) => 0 ->
+    @match ctx_get_tail(ctx) => 0 ->
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,_,_,_,regs_left_new,type_left_new,_,_,_,type_right,_} ->
     compile_rule(target,types,linerule,ctx_set_tail(ctx,fn_id+1),sofar,params,pre_arrow_clauses,post_arrow_clauses,args,regs_left,type_left,regs_left_new,type_left_new);
 compile_rule(target,types,linerule,ctx,sofar,params,pre_arrow_clauses,post_arrow_clauses,exprs,regs_left,type_left,regs_right,type_right)
-    match ctx_get_tail(ctx) => 0 ->
+    @match ctx_get_tail(ctx) => 0 ->
     update generate_params_clauses(target,types,ctx,params,pre_arrow_clauses,post_arrow_clauses,exprs,regs_left,type_left,regs_right) => ctx,code
     update generate_expr_code(types,0,ctx,code,{},type_right,exprs) => ctx,code ->
     ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ctx_get_lblnext(ctx),ctx_lbl(ctx),code_or_not(ctx_get_lbl_active(ctx),
@@ -965,7 +965,7 @@ ll_build_epilog1(n,{},sofar) -> sofar;
 ll_build_epilog1(i,{{_,tp},*rest},sofar) -> ll_build_epilog1(i+1,rest,{*sofar,'\t%p','0'+i,'=load ',*ll_tp(tp),',ptr %x','0'+i,'\n'});
 
 ll_build_epilog2(n,{},sofar) -> sofar;
-ll_build_epilog2(i,{{_,tp},*rest},sofar) match ll_tp(tp) => "i64" -> ll_build_epilog2(i+1,rest,{*sofar,'\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %p','0'+i,',','0'+i,'\n'});
+ll_build_epilog2(i,{{_,tp},*rest},sofar) @match ll_tp(tp) => "i64" -> ll_build_epilog2(i+1,rest,{*sofar,'\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %p','0'+i,',','0'+i,'\n'});
 ll_build_epilog2(i,{{_,tp},*rest},sofar) -> ll_build_epilog2(i+1,rest,{*sofar,
     '\t%pp','0'+i,'=zext ',*ll_tp(tp),' %p','0'+i,' to i64\n',
     '\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %pp','0'+i,',','0'+i,'\n'});
@@ -1008,7 +1008,7 @@ ll_emit_instruction(table,{_,_,OpGoto,_,_,label,_,_,_,off}) -> match nth(label,t
 ll_emit_instruction(_,{_,_,OpError,_,0,code,_,line,_,sym}) ->
     {'\tcall void @__rw__error(ptr %A,i32 ',*int2s(code),',i32 ',*int2s(line),',i32 ',*int2s(sym),',ptr @.fn.syms)\n\tunreachable'};
 ll_emit_instruction(_,{_,_,OpLLAlloc,_,_,dst}) -> {'\t%x','0'+dst,'=alloca i64'};
-ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) match ll_tp(tp) => "i64" -> {'\tstore i64 %s','0'+dst,',ptr %x','0'+dst};
+ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) @match ll_tp(tp) => "i64" -> {'\tstore i64 %s','0'+dst,',ptr %x','0'+dst};
 ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) -> {'\t%ss','0'+dst,'=trunc i64 %s','0'+dst,' to ',*ll_tp(tp),'\n\tstore ',*ll_tp(tp),' %ss','0'+dst,',ptr %x','0'+dst};
 ll_emit_instruction(_,{_,_,op,*_}) -> {'\tunknown:',*int2s(op)};
 
@@ -1187,7 +1187,7 @@ create_export_ll_sigc_out(sofar,n,n) -> sofar;
 create_export_ll_sigc_out(sofar,i,n) -> create_export_ll_sigc_out({*sofar,',ptr %out',*int2s36(i)},i+1,n);
 
 create_export_ll_pre_call(types,code,reglist,{}) -> code,reglist;
-create_export_ll_pre_call(types,code,reglist,{{reg,tp},*rest}) match nth(tp,types) => {_,_,_,{_,64}} -> create_export_ll_pre_call(types,code,{*reglist,reg},rest);
+create_export_ll_pre_call(types,code,reglist,{{reg,tp},*rest}) @match nth(tp,types) => {_,_,_,{_,64}} -> create_export_ll_pre_call(types,code,{*reglist,reg},rest);
 create_export_ll_pre_call(types,code,reglist,{{reg,tp},*rest}) match nth(tp,types) => {_,_,_,{_,sz}} ->
     create_export_ll_pre_call(types,{*code,'\t%x',*reg,'=',z_or_s(tp),'ext i',*int2s(sz),' %',*reg,' to i64\n'},{*reglist,{'x',*reg}},rest);
 
@@ -1195,7 +1195,7 @@ create_export_ll_params(sofar,{}) -> sofar;
 create_export_ll_params(sofar,{reg,*rest}) -> create_export_ll_params({*sofar,'i64 %',*reg,','},rest);
 
 create_export_ll_post_call(types,code,_,{}) -> code;
-create_export_ll_post_call(types,code,n,{{reg,tp},*rest}) match nth(tp,types) => {_,_,_,{_,64}} ->
+create_export_ll_post_call(types,code,n,{{reg,tp},*rest}) @match nth(tp,types) => {_,_,_,{_,64}} ->
     match int2s36(n) => ni ->
     create_export_ll_post_call(types,{*code,'\t%eo',*ni,'=extractvalue %R8 %z,',*int2s(n),'\n\tstore i64 %eo',*ni,',ptr %out',*ni,'\n'},n+1,rest);
 create_export_ll_post_call(types,code,n,{{reg,tp},*rest}) match nth(tp,types) => {_,_,_,{_,sz}} ->
