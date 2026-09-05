@@ -8,5 +8,5 @@ g() -> 'cd';
 :- export f() -> i64,value string, value string;
 f() -> 0,{'ab',g()},"test";
 
-:- export h(value string, value string, i64) -> char, value string;
-h(s,{_,a,'x'},0) -> a,s;
+:- export h(value string, value string, i64) -> value string, char;
+h(s,{_,a,'x'},0) -> s,a;

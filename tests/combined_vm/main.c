@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
     free(resultc2);
 
     printf("g:");
-    ret_code=rw_h(exe,"test","hex",0,&resultc,&resultc1);
+    ret_code=rw_h(exe,"test","hex",0,&resultc1,&resultc);
     if(!ret_code && result0==0 && strcmp(resultc1,"test")==0 && (char)resultc=='e') { printf("success\n"); } else { printf("fail:%d %ld %c %s\n",ret_code,result0,resultc,resultc1); };
     //free(resultc1);
 

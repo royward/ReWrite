@@ -1147,7 +1147,7 @@ create_export_vm_out(types,sofar,allocs,labeln,n,{{_,TypeString},*rest},{val,*vr
         '\t\t\treturn err;\n',
         '\t\t}\n\t}\n'},{*allocs,{'out',*int2s(labeln)}},labeln+1,n+2,rest,vrest);
 create_export_vm_out(types,sofar,allocs,labeln,n,{{_,tp},*rest},{_,*vrest}) ->
-    create_export_vm_out(types,{*sofar,'\t*out',*int2s(n),'=(',*c_type(tp),')inout[',*int2s(n),'];\n'},allocs,labeln+1,n+1,rest,vrest);
+    create_export_vm_out(types,{*sofar,'\t*out',*int2s(labeln),'=(',*c_type(tp),')inout[',*int2s(n),'];\n'},allocs,labeln+1,n+1,rest,vrest);
 
 create_export_free_and_null(sofar,f1,f2,{}) -> sofar;
 create_export_free_and_null(sofar,f1,f2,{a,*rest}) -> create_export_free_and_null({*sofar,*f1,*a,*f2},f1,f2,rest);
