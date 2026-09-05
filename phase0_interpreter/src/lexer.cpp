@@ -59,8 +59,8 @@ std::vector<Token> lex(std::string_view program) {
         std::string transformed_string;
         std::size_t start_p=p;
         char c=program[p++];
-        if(c=='_' || std::isalpha(static_cast<unsigned char>(c))) {
-            while(p<len && (program[p]=='_' || std::isalpha(static_cast<unsigned char>(program[p])) || std::isdigit(static_cast<unsigned char>(program[p])))) {
+        if(c=='_' || c=='@' || std::isalpha(static_cast<unsigned char>(c))) {
+            while(p<len && (program[p]=='_' || program[p]=='@' || std::isalpha(static_cast<unsigned char>(program[p])) || std::isdigit(static_cast<unsigned char>(program[p])))) {
                 p++;
             }
             if(c=='_' && p==start_p+1) {
@@ -77,6 +77,10 @@ std::vector<Token> lex(std::string_view program) {
                     token_kind=Match;
                 } else if(sub=="update") {
                     token_kind=Update;
+                } else if(sub=="@match") {
+                    token_kind=MatchDecline;
+                } else if(sub=="@update") {
+                    token_kind=UpdateDecline;
                 } else if(sub=="when") {
                     token_kind=When;
                 } else if(sub=="type") {

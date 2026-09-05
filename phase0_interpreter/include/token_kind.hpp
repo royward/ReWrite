@@ -43,6 +43,7 @@ enum TokenKind {
     Less,
     LessEqual,
     Match,
+    MatchDecline,
     Minus,
     Modulus,
     Not,
@@ -63,6 +64,7 @@ enum TokenKind {
     UnsignedInteger,
     Wildcard,
     Update,
+    UpdateDecline,
     Xor,
     // String stuff
     String,

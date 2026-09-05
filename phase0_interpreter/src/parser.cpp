@@ -127,7 +127,7 @@ void Program::parse_const(Parser& parser) {
     }
     parser.advance();
     std::unordered_map<std::string, std::size_t> empty_param_id_map;
-    std::vector<Expression> expr=parse_expression_list(parser, empty_param_id_map, FourTokenKind{Semicolon,Semicolon,Semicolon,Semicolon}, Comma);
+    std::vector<Expression> expr=parse_expression_list(parser, empty_param_id_map, SixTokenKind{Semicolon,Semicolon,Semicolon,Semicolon,Semicolon,Semicolon}, Comma);
     parser.advance();
     if(constants.find(name)!=constants.end()) {
         throw std::runtime_error(std::format("const already declared {}",name));
@@ -194,7 +194,7 @@ Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, s
             } break;
         }
         case LBrace: {
-            std::vector<Parameter> list_internal=parse_param_list(parser, param_id_map, FourTokenKind{RBrace,RBrace,RBrace,RBrace}, Comma);
+            std::vector<Parameter> list_internal=parse_param_list(parser, param_id_map, SixTokenKind{RBrace,RBrace,RBrace,RBrace,RBrace,RBrace}, Comma);
             parser.advance();
             return Parameter{ParamList{std::move(list_internal)}};
         }
@@ -214,7 +214,7 @@ Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, s
     return Parameter{Const{DataElement{DataUnbound{}}}};
 }
 
-std::vector<Parameter> Program::parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, FourTokenKind end, TokenKind sep) {
+std::vector<Parameter> Program::parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, SixTokenKind end, TokenKind sep) {
     std::size_t splat_count=0;
     std::vector<Parameter> param_list;
     if(end.check_token(parser.current().kind)) {
@@ -336,7 +336,7 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                 } else if(parser.current().kind==LParen) {
                     parser.advance();
                     auto built_in=library_map.find(t.text);
-                    std::vector<Expression> expr_list=parse_expression_list(parser, param_id_map, FourTokenKind{RParen,RParen,RParen,RParen}, Comma);
+                    std::vector<Expression> expr_list=parse_expression_list(parser, param_id_map, SixTokenKind{RParen,RParen,RParen,RParen,RParen,RParen}, Comma);
                     parser.advance();
                     if(built_in!=library_map.end()) {
                         expr=Expression{CallLibrary{built_in->second,std::move(expr_list)}};
@@ -361,7 +361,7 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                 expr=Expression{ExprSplat{std::make_unique<Expression>(std::move(splat_expr))}};
             } break;
             case LBrace: {
-                std::vector<Expression> list_internal=parse_expression_list(parser, param_id_map, FourTokenKind{RBrace,RBrace,RBrace,RBrace}, Comma);
+                std::vector<Expression> list_internal=parse_expression_list(parser, param_id_map, SixTokenKind{RBrace,RBrace,RBrace,RBrace,RBrace,RBrace}, Comma);
                 parser.advance();
                 expr=Expression{ExprList{std::move(list_internal)}};
             } break;
@@ -418,7 +418,7 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
     return expr;
 }
 
-std::vector<Expression> Program::parse_expression_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, FourTokenKind end, TokenKind sep) {
+std::vector<Expression> Program::parse_expression_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, SixTokenKind end, TokenKind sep) {
     std::vector<Expression> expr_list;
     if(end.check_token(parser.current().kind)) {
         return expr_list;
@@ -464,51 +464,55 @@ void Program::parse_rule(Parser& parser) {
             rule.main.match_count=match_counter;
             parser.advance();
             std::unordered_map<std::string, std::size_t> param_id_map;
-            rule.main.match=parse_param_list(parser,param_id_map,FourTokenKind{RParen,RParen,RParen,RParen},Comma);
+            rule.main.match=parse_param_list(parser,param_id_map,SixTokenKind{RParen,RParen,RParen,RParen,RParen,RParen},Comma);
             parser.advance();
-            while(parser.current().kind==When || parser.current().kind==Match || parser.current().kind==Update) {
+            while(parser.current().kind==When || parser.current().kind==Match || parser.current().kind==Update || parser.current().kind==MatchDecline || parser.current().kind==UpdateDecline) {
                 if(parser.current().kind==When) {
                     parser.advance();
-                    std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,When},Comma);
+                    std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,SixTokenKind{Arrow,Match,Update,MatchDecline,UpdateDecline,When},Comma);
                     rule.pre_arrow.push_back(RuleMatch{
                         {Parameter{Const{DataElement{DataBool{true}}}}},
                         std::move(expr_vec),
                         match_counter,
                         false,
+                        true,
                     });
                 } else { // must be match or update
-                    bool update=parser.current().kind==Update;
+                    bool update=parser.current().kind==Update || parser.current().kind==UpdateDecline;
+                    bool decline=parser.current().kind==MatchDecline || parser.current().kind==UpdateDecline;
                     parser.advance();
                     match_counter++;
-                    std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
+                    std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,SixTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
                     parser.advance();
-                    std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,When},Comma);
-                    rule.pre_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update});
+                    std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,SixTokenKind{Arrow,Match,Update,MatchDecline,UpdateDecline,When},Comma);
+                    rule.pre_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update,true});
                 }
             }
             if(parser.current().kind!=Arrow) {
                 parse_error(parser.current(),{"->","when","match","update"});
             }
             parser.advance();
-            if(parser.current().kind==When || parser.current().kind==Match || parser.current().kind==Update) {
+            if(parser.current().kind==When || parser.current().kind==Match || parser.current().kind==Update || parser.current().kind==MatchDecline || parser.current().kind==UpdateDecline) {
                 while(true) {
                     if(parser.current().kind==When) {
                         parser.advance();
-                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,When},Comma);
+                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,SixTokenKind{Arrow,Match,Update,MatchDecline,UpdateDecline,When},Comma);
                         rule.post_arrow.push_back(RuleMatch{
                             {Parameter{Const{DataElement{DataBool{true}}}}},
                             std::move(expr_vec),
                             match_counter,
+                            false,
                             false
                         });
-                    } else if(parser.current().kind==Match || parser.current().kind==Update) { // must be match or update
-                        bool update=parser.current().kind==Update;
+                    } else if(parser.current().kind==Match || parser.current().kind==Update || parser.current().kind==MatchDecline || parser.current().kind==UpdateDecline) { // must be match or update
+                        bool update=parser.current().kind==Update || parser.current().kind==UpdateDecline;
+                        bool decline=parser.current().kind==MatchDecline || parser.current().kind==UpdateDecline;
                         parser.advance();
                         match_counter++;
-                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
+                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,SixTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
                         parser.advance();
-                        std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,When},Comma);
-                        rule.post_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update});
+                        std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,SixTokenKind{Arrow,Match,Update,MatchDecline,UpdateDecline,When},Comma);
+                        rule.post_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update,false});
                     } else if(parser.current().kind==Arrow) {
                         parser.advance();
                         break;
@@ -518,7 +522,7 @@ void Program::parse_rule(Parser& parser) {
                 }
             }
 
-            rule.main.expr=parse_expression_list(parser,param_id_map,FourTokenKind{Semicolon,Semicolon,Semicolon,Semicolon},Comma);
+            rule.main.expr=parse_expression_list(parser,param_id_map,SixTokenKind{Semicolon,Semicolon,Semicolon,Semicolon,Semicolon,Semicolon},Comma);
             parser.advance();
             rule.names=indices_to_names(param_id_map);
             function_map.try_emplace(function,function_map.size());

@@ -31,9 +31,9 @@
 struct Parser;
 struct Parameter;
 struct Expression;
-struct FourTokenKind {
-    TokenKind a,b,c,d;
-    inline bool check_token(TokenKind t) {return t==a || t==b || t==c || t==d;};
+struct SixTokenKind {
+    TokenKind a,b,c,d,e,f;
+    inline bool check_token(TokenKind t) {return t==a || t==b || t==c || t==d || t==e || t==f;};
 };
 
 struct Id {
@@ -76,6 +76,7 @@ struct RuleMatch {
     std::vector<Expression> expr;
     uint32_t match_count;
     bool update;
+    bool decline;
 };
 
 struct Rule {
@@ -105,9 +106,9 @@ private:
     void parse_rule(Parser& parser);
     void parse_const(Parser& parser);
     Parameter parse_param(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map);
-    std::vector<Parameter> parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, FourTokenKind end, TokenKind sep);
+    std::vector<Parameter> parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, SixTokenKind end, TokenKind sep);
     Expression parse_expression(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, uint8_t pri);
-    std::vector<Expression> parse_expression_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, FourTokenKind end, TokenKind sep);
+    std::vector<Expression> parse_expression_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, SixTokenKind end, TokenKind sep);
     // data
     std::vector<std::vector<Rule>> program;
     std::vector<std::string> function_names; // debugging only

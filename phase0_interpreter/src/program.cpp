@@ -312,8 +312,12 @@ start:
                     do_call_multi(grule.expr,bindings,guard_sofar);
                     std::span<DataElement> x0=std::span<DataElement>(guard_sofar.data.data()+guard_sofar.offset,guard_sofar.data.size()-guard_sofar.offset);
                     if(!do_match_vec(grule.match,x0,bindings,grule.update?grule.match_count:1)) {
-                        guard_ok=false;
-                        break;
+                        if(grule.decline) {
+                            guard_ok=false;
+                            break;
+                        } else {
+                            throw std::runtime_error(std::format("failure in match({})",i));
+                        }
                     }
                 }
                 if(guard_ok) {
@@ -322,7 +326,12 @@ start:
                         do_call_multi(grule.expr,bindings,guard_sofar);
                         std::span<DataElement> x0=std::span<DataElement>(guard_sofar.data.data()+guard_sofar.offset,guard_sofar.data.size()-guard_sofar.offset);
                         if(!do_match_vec(grule.match,x0,bindings,grule.update?grule.match_count:1)) {
-                            throw std::runtime_error(std::format("failure in post arrow match({})",i));
+                            if(grule.decline) {
+                                guard_ok=false;
+                                break;
+                            } else {
+                                throw std::runtime_error(std::format("failure in match({})",i));
+                            }
                         }
                     }
                     if(fast) {
@@ -395,7 +404,7 @@ std::vector<DataElement> Program::run_string(std::string& call) {
     Parser parser;
     parser.tokens=lex(call);
     std::unordered_map<std::string, std::size_t> param_id_map;
-    std::vector<Expression> expressions=parse_expression_list(parser, param_id_map, FourTokenKind{Eof,Eof,Eof,Eof}, Comma);
+    std::vector<Expression> expressions=parse_expression_list(parser, param_id_map, SixTokenKind{Eof,Eof,Eof,Eof,Eof,Eof}, Comma);
     std::vector<DataElement> empty_bindings;
     VecDataElement result;
     do_call_multi(expressions, empty_bindings, result);
