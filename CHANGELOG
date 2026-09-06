@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.8] - 2026-09-??
+
+### Changed
+- MAJOR syntax change: removed the double `->`, now match and update have `@` forms
+- #error now requires an integer parameter
+- Minimum iterpreter C++ compiler changed from C++23 to C++17
+
+### Added
+- `\0` as a character encoding for null
+
+### Fixed
+- `{a,*mid,*b}` no longer segfaults
+
 ## [0.0.7] - 2026-08-16
 
 ### Changed
