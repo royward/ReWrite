@@ -351,51 +351,29 @@ fact(n)->n*fact(n-1);
 
 This section is a little more advanced - ReWrite can be used without the functionality described here, but will be less readable.
 
-In the section [Guards](#guards) above, a method was introduced of checking a condition before a rule will fire. This section introduces something called a match/update clause that generalizes this, and allows pattern matching and variable binding on the results of expressions. This may also be used to the right of the arrow.
+In the section [Guards](#guards) above, a method was introduced of checking a condition before a rule will fire. This section introduces something called a match/update clause that generalizes this, and allows pattern matching and variable binding on the results of expressions.
 
 The form of a match clause is:
 
 ```
-match|update <expressions> => <pattern>
-```
-
-The form `when <expr>` introduced as guards is simply syntactic sugar for `match <expressions> => true`, so the more complete form of a rule is:
-
-```
 MatchClause =
-    match|update <expressions> => <pattern>
+    match|update|@match|@update <expressions> => <pattern>
   | when <expressions>
 
 Rule = 
-    <name>(<pattern>) MatchClause* -> [MatchClause+ ->] <expressions>
+    <name>(<pattern>) MatchClause* -> <expressions>
 ```
 
-(`*` means 0 or more, `+` means 1 or more, `[ ]` means optional if you are not used to reading grammars).
+(`|` means one of, `*` means 0 or more if you are not used to reading grammars).
 
-Let's see how this works. These examples are somewhat contrived, because match clauses tend to be more useful in larger programs.
+Let's see how this works. There are already examples of `when` in the sections starting with [General Structure](#general-structure). The rest of these examples are somewhat contrived, because match clauses tend to be more useful in larger programs.
 
-Say I have a validation function that also does some processing on a result, and I only want to fire the rule if the validation function succeeds:
-
-```
-// only validate non-negative integers, multiply by 2
-validate(x) when x>=0 -> true, x*2;
-validate(_) -> false, 0;
-
-process(x) match validate(x) => true,data -> data;
-process(_) -> #error(10);
-```
-
-The `match validate(x) => true,data` will evaluate `validate(x)` which returns two values, will match the first one with `true` (failing to fire if it doesn't match), and binding `data` to the second value, so:
-
-`process(2)` returns `4`
-`process(-3)` fires a `#error(10)`.
-
-Here is an example of using it on the right hand side. Imagine that we have an expensive function that we want to use twice:
+Imagine that we have an expensive function that we want to use twice:
 
 ```
 expensive(n) -> n+n+n; // Imagine this is expensive
 
-// Use match after the arrow to bind it to result, then use result twice
+// Use match to bind it to result, then use result twice
 use_twice(n) match expensive(n) => result -> result*result;
 ```
 
@@ -419,7 +397,7 @@ In this case, having to have the `lo2`, `hi2`, `x2`, `x3` add extra complexity t
 For this reason, a variation of match called `update` is provided. `update` is the same as match, except that values on the right are re-bound (can change values), so the above example becomes:
 
 ```
-clamp(x,lo,hi) ->
+clamp(x,lo,hi)
     update min_max(lo,hi) => lo,hi
     update min_max(x,lo) => _,x
     update min_max(x,hi) => x,_ ->
@@ -431,6 +409,28 @@ With the `update min_max(lo,hi) => lo,hi`, the `lo` and `hi` get rebound and don
 Note that when update rebinds a variable, it must be the same type as the original binding, which will be enforced by the type checker in later versions.
 
 When the pattern introduces only new variable names, `match` and `update` are equivalent.
+
+A match or update that fails to match generates an error, as a pattern that doesn't fit means there is an error in the program. Most clauses are like this: you are destructuring a shape you already know. Where a clause is genuinely a test, prefix it with `@` (`@match` or `@update`) and a failure declines the rule and tries the next one instead.
+
+A when guard is exactly this: `when <expressions>` is syntactic sugar for `@match <expressions> => true`.
+
+In practice, `@match` and `@update` should not need to be used very often, as most rule selection can be handled by patterns in the rule head or `when` clauses. The compiler in progress is currently around 1200 lines of code, and uses six `@match` and zero `@update`.
+
+For example, say I have a validation function that also does some processing on a result, and I only want to fire the rule if the validation function succeeds:
+
+```
+// only validate non-negative integers, multiply by 2
+validate(x) when x>=0 -> true, x*2;
+validate(_) -> false, 0;
+
+process(x) @match validate(x) => true,data -> data;
+process(_) -> #error(10);
+```
+
+The `@match validate(x) => true,data` will evaluate `validate(x)` which returns two values, will match the first one with `true` (failing to fire if it doesn't match), and binding `data` to the second value, so:
+
+`process(2)` returns `4`
+`process(-3)` fires `#error(10)`.
 
 Note that in all cases, each match and update clause could be avoided by using a one line helper function:
 

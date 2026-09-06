@@ -7,13 +7,13 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - MAJOR syntax change: removed the double `->`, now match and update have `@` forms
 - #error now requires an integer parameter
-- Minimum iterpreter C++ compiler changed from C++23 to C++17
+- Minimum interpreter C++ standard lowered from C++23 to C++17 for wider compiler coverage
 
 ### Added
 - `\0` as a character encoding for null
 
 ### Fixed
-- `{a,*mid,*b}` no longer segfaults
+- `{a,*mid,b}` no longer segfaults
 
 ## [0.0.7] - 2026-08-16
 
