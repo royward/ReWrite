@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <sstream>
+#include <iostream>
 
 const std::unordered_map<std::string, TokenKind> library_map = {
     {"count_trailing_zeros", CountTrailingZeros},
@@ -175,6 +176,13 @@ Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, s
                     throw std::runtime_error(msg.str());
                 }
                 return Parameter{Const{const_val[0]}};
+            } else if(parser.current().kind==LParen) {
+                // HACK discard <name>() on left as a hack for compatibility with sum types in the compiler
+                parser.advance();
+                Parameter new_param=parse_param(parser,param_id_map);
+                if(parser.current().kind!=RParen) throw std::runtime_error("sum type left must be single value");
+                parser.advance();
+                return new_param;
             } else {
                 std::string s=static_cast<std::string>(t.text);
                 param_id_map.try_emplace(s,param_id_map.size());
@@ -278,8 +286,8 @@ std::tuple<uint8_t, TokenKind> prefix_binding_power(TokenKind op) {
 std::tuple<uint8_t, uint8_t, TokenKind> infix_binding_power(TokenKind op) {
     switch(op) {
         // logical
-        case OrOr:           return {10, 11, OrOr};
-        case AndAnd:          return {30, 31, AndAnd};
+        case OrOr:         return {10, 11, OrOr};
+        case AndAnd:       return {30, 31, AndAnd};
 
         // comparison - now binds looser than bitwise, unlike C
         case EqualEqual:   return {50, 51, EqualEqual};
@@ -356,6 +364,17 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                         uint32_t id=static_cast<uint32_t>(function_map[s]);
                         expr=Expression{Call{id,std::move(expr_list)}};
                     }
+                } else if(parser.current().kind==Colon) {
+                    // HACK discard <name>:<name>() on right as a hack for compatibility with sum types in the compiler
+                    parser.advance();
+                    if(parser.current().kind!=Identifier) throw std::runtime_error("malformed sum type on right");
+                    parser.advance();
+                    if(parser.current().kind!=LParen) throw std::runtime_error("malformed sum type on right");
+                    parser.advance();
+                    Expression new_expr=parse_expression(parser,param_id_map,0);
+                    if(parser.current().kind!=RParen) throw std::runtime_error("malformed sum type on right");
+                    parser.advance();
+                    return new_expr;
                 } else {
                     std::string s=static_cast<std::string>(t.text);
                     auto search=param_id_map.find(s);
