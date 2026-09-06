@@ -15,9 +15,9 @@ A rule-based language for expressing recursive computation through pattern match
   - [Multiple Return Values](#multiple-return-values)
   - [Lists and Splat](#lists-and-splat)
   - [Chars and Strings](#chars-and-strings)
+  - [Errors](#errors)
   - [Match/Update Clauses](#matchupdate-clauses)
   - [Constants](#constants)
-  - [Errors](#errors)
   - [Tail Recursion](#tail-recursion)
 - [More Complex Examples](#more-complex-examples)
   - [First n Prime Numbers](#first-n-prime-numbers)
@@ -317,6 +317,35 @@ roman_to_int({a,b,*rest}) when roman_to_int_convert_case(a)<roman_to_int_convert
     roman_to_int_convert_case(b)-roman_to_int_convert_case(a)+roman_to_int(rest);
 roman_to_int({a,*rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
 ```
+#### Errors
+
+There are situations where it is useful to report a runtime error, or note that a particular match should not happen. For instance, the first factorial example (repeated from [General Structure](#general-structure)) will go into a loop until it overflows the stack if a negative number is passed in.
+
+```
+fact(0)->1;
+fact(n)->n*fact(n-1);
+```
+
+Two expressions are provided for this purpose:
+
+* `#never` is a promise that a particular rule will never be matched (meant for the compiler)
+* `#error(N)` indicates to return a run-time error, where N is a literal number or a constant (expressions are not allowed). The N is for compiler use - the interpreter discards it.
+
+For the moment (phase 0), they both perform identically to produce runtime errors.
+
+To use either of those, put them on the right hand side of a rule. They can appear anywhere in an expression, though typically they are the sole expression on the right-hand side.
+
+For example:
+
+```
+fact(n) when n<0 -> #error(10);
+fact(0)->1;
+fact(n)->n*fact(n-1);
+```
+
+`fact(-2)` returns:
+
+`Error: error thrown by #error or #never (in fact(-2))`
 
 #### Match/Update Clauses
 
@@ -353,13 +382,13 @@ validate(x) when x>=0 -> true, x*2;
 validate(_) -> false, 0;
 
 process(x) match validate(x) => true,data -> data;
-process(_) -> #error;
+process(_) -> #error(10);
 ```
 
 The `match validate(x) => true,data` will evaluate `validate(x)` which returns two values, will match the first one with `true` (failing to fire if it doesn't match), and binding `data` to the second value, so:
 
 `process(2)` returns `4`
-`process(-3)` fires a `#error`.
+`process(-3)` fires a `#error(10)`.
 
 Here is an example of using it on the right hand side. Imagine that we have an expensive function that we want to use twice:
 
@@ -367,7 +396,7 @@ Here is an example of using it on the right hand side. Imagine that we have an e
 expensive(n) -> n+n+n; // Imagine this is expensive
 
 // Use match after the arrow to bind it to result, then use result twice
-use_twice(n) -> match expensive(n) => result -> result*result;
+use_twice(n) match expensive(n) => result -> result*result;
 ```
 
 In this case, result will be bound with the results of `expensive(x)`, and can now be used repeatedly in expressions.
@@ -378,7 +407,7 @@ Another case where match is useful is tying multiple calls together and having d
 min_max(a,b) when a<b -> a,b;
 min_max(a,b) -> b,a;
 
-clamp(x,lo,hi) ->
+clamp(x,lo,hi)
     match min_max(lo,hi) => lo2,hi2
     match min_max(x,lo2) => _,x2
     match min_max(x2,hi2) => x3,_ ->
@@ -409,7 +438,7 @@ Note that in all cases, each match and update clause could be avoided by using a
 process(x) -> process_helper(validate(x));
 
 process_helper(true,data) -> data;
-process_helper(_,_) -> #error;
+process_helper(_,_) -> #error(10);
 ```
 
 ```
@@ -448,36 +477,6 @@ hello() -> {'Hello ', name ,'!'};
 ```
 
 Calling `hello()` returns "Hello World!".
-
-#### Errors
-
-There are situations where it is useful to report a runtime error, or note that a particular match should not happen. For instance, the first factorial example (repeated from [General Structure](#general-structure)) will go into a loop until it overflows the stack if a negative number is passed in.
-
-```
-fact(0)->1;
-fact(n)->n*fact(n-1);
-```
-
-Two expressions are provided for this purpose:
-
-* `#never` is a promise that a particular rule will never be matched (meant for the compiler)
-* `#error` indicates to return a run-time error.
-
-For the moment (phase 0), they both perform identically to produce runtime errors.
-
-To use either of those, put them on the right hand side of a rule. They can appear anywhere in an expression, though typically they are the sole expression on the right-hand side.
-
-For example:
-
-```
-fact(n) when n<0 -> #error;
-fact(0)->1;
-fact(n)->n*fact(n-1);
-```
-
-`fact(-2)` returns:
-
-`Error: error thrown by #error or #never (in fact(-2))`
 
 #### Tail recursion
 

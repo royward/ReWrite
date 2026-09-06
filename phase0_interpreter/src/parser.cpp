@@ -20,10 +20,11 @@
 #include "program.hpp"
 #include "parser.hpp"
 #include "util.hpp"
-#include <print>
-#include <ranges>
 #include <charconv>
 #include <unordered_set>
+#include <algorithm>
+#include <stdexcept>
+#include <sstream>
 
 const std::unordered_map<std::string, TokenKind> library_map = {
     {"count_trailing_zeros", CountTrailingZeros},
@@ -53,12 +54,15 @@ std::vector<std::string_view> disambiguate(std::vector<std::string_view> v) {
 void parse_error(const Token& token, std::vector<std::string_view> expected) {
     std::string message;
     if (expected.size() == 1) {
-        message = std::format("found {}, expected {}", token.text, expected[0]);
+        message = "found " + token.text + " expected " + std::string(expected[0]);
     } else {
         std::vector<std::string_view> expected_nodup=disambiguate(expected);
-        message = std::format("found {}, expected one of {}", token.text, expected_nodup[0]);
-        for (const auto& elem : expected_nodup | std::views::drop(1)) {
-            message += std::format(", {}", elem);
+        message = "found " + token.text + ", expected one of ";
+        for (size_t i = 0; i < expected_nodup.size(); ++i) {
+            if(i != 0) {
+                message += ", ";
+            }
+            message += std::string(expected_nodup[i]);
         }
     }
     throw std::runtime_error(message);
@@ -130,7 +134,7 @@ void Program::parse_const(Parser& parser) {
     std::vector<Expression> expr=parse_expression_list(parser, empty_param_id_map, SixTokenKind{Semicolon,Semicolon,Semicolon,Semicolon,Semicolon,Semicolon}, Comma);
     parser.advance();
     if(constants.find(name)!=constants.end()) {
-        throw std::runtime_error(std::format("const already declared {}",name));
+        throw std::runtime_error("const already declared " + name);
     }
     std::vector<DataElement> empty_bindings;
     VecDataElement values;
@@ -166,7 +170,9 @@ Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, s
             if(find_constant != constants.end()) {
                 std::vector<DataElement>& const_val=find_constant->second;
                 if(const_val.size()!=1) {
-                    throw std::runtime_error(std::format("const expression is expected to be of size 1, found {}",const_val.size()));
+                    std::stringstream msg;
+                    msg << "const expression is expected to be of size 1, found " << const_val.size();
+                    throw std::runtime_error(msg.str());
                 }
                 return Parameter{Const{const_val[0]}};
             } else {
@@ -204,7 +210,9 @@ Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, s
         case Chars: {
             std::vector<Parameter> chars=string_to_paramlist(t.text);
             if(chars.size()!=1) {
-                throw std::runtime_error(std::format("char expression is expected to be of size 1, found {}",chars.size()));
+                std::stringstream msg;
+                msg << "char expression is expected to be of size 1, found " << chars.size();
+                throw std::runtime_error(msg.str());
             }
             return std::move(chars[0]);
         }
@@ -330,7 +338,9 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                 if(find_constant != constants.end()) {
                     std::vector<DataElement>& const_val=find_constant->second;
                     if(const_val.size()!=1) {
-                        throw std::runtime_error(std::format("const expression is expected to be of size 1, found {}",const_val.size()));
+                        std::stringstream msg;
+                        msg << "const expression is expected to be of size 1, found " << const_val.size();
+                        throw std::runtime_error(msg.str());
                     }
                     expr=Expression{Const{const_val[0]}};
                 } else if(parser.current().kind==LParen) {
@@ -350,7 +360,7 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                     std::string s=static_cast<std::string>(t.text);
                     auto search=param_id_map.find(s);
                     if(search==param_id_map.end()) {
-                        throw std::runtime_error(std::format("parameter not bound on right hand size: {}",s));
+                        throw std::runtime_error("parameter not bound on right hand size: " + s);
                     }
                     uint32_t id=static_cast<uint32_t>(search->second);
                     expr=Expression{Id{id,0}};
@@ -371,7 +381,9 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
             case Chars: {
                 std::vector<Expression> chars=string_to_exprlist(t.text);
                 if(chars.size()!=1) {
-                    throw std::runtime_error(std::format("char expression is expected to be of size 1, found {}",chars.size()));
+                    std::stringstream msg;
+                    msg << "char expression is expected to be of size 1, found " << chars.size();
+                    throw std::runtime_error(msg.str());
                 }
                 return std::move(chars[0]);
             }
@@ -387,13 +399,13 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                     parser.advance();
                     Expression errcode=parse_expression(parser,param_id_map,200);
                     if(parser.current().kind!=RParen) {
-                        throw std::runtime_error(std::format("#Error must have a parameter"));
+                        throw std::runtime_error("#Error must have a parameter");
                     }
                     parser.advance();
                     expr=Expression{Error{std::make_unique<Expression>(std::move(errcode))}};
 
                 } else {
-                    throw std::runtime_error(std::format("#Error must have a parameter"));
+                    throw std::runtime_error("#Error must have a parameter");
                 }
             } break;
             case HashNever: {
@@ -513,11 +525,15 @@ void Rule::annotate_with_counts() {
     // go backward through all the rules, annotating each identifer with the access index
     std::vector<uint32_t> counts=std::vector<uint32_t>(names.size());
     std::vector<uint32_t> touched;
-    for(Expression& element : main.expr | std::views::reverse) {
+    //for(Expression& element : main.expr | std::views::reverse) {
+    for(auto it = main.expr.rbegin(); it != main.expr.rend(); ++it) {
+        Expression& element = *it;
         element.annotate_with_counts(counts);
     }
-    for(RuleMatch& rm : clauses | std::views::reverse) {
-        for(Parameter& param : rm.match | std::views::reverse) {
+    for(auto it = clauses.rbegin(); it != clauses.rend(); ++it) {
+        RuleMatch& rm = *it;
+        for(auto it2 = rm.match.rbegin(); it2 != rm.match.rend(); ++it2) {
+            Parameter& param = *it2;
             param.annotate_with_counts(counts,touched);
         }
         if(rm.update) {
@@ -526,11 +542,13 @@ void Rule::annotate_with_counts() {
             }
         }
         touched.clear();
-        for(Expression& element : rm.expr | std::views::reverse) {
+        for(auto it2 = rm.expr.rbegin(); it2 != rm.expr.rend(); ++it2) {
+            Expression& element = *it2;
             element.annotate_with_counts(counts);
         }
     }
-    for(Parameter& param : main.match | std::views::reverse) {
+    for(auto it = main.match.rbegin(); it != main.match.rend(); ++it) {
+        Parameter& param = *it;
         param.annotate_with_counts(counts,touched);
     }
 }
@@ -547,7 +565,8 @@ void Parameter::annotate_with_counts(std::vector<uint32_t>& counts, std::vector<
             counts[alt.value]++;
             touched.push_back(alt.value);
         } else if constexpr (std::is_same_v<T, ParamList>) {
-            for(Parameter& x : alt.items | std::views::reverse) {
+            for(auto it = alt.items.rbegin(); it != alt.items.rend(); ++it) {
+                Parameter& x = *it;
                 x.annotate_with_counts(counts,touched);
             }
         }
@@ -563,19 +582,23 @@ void Expression::annotate_with_counts(std::vector<uint32_t>& counts) {
         } else if constexpr (std::is_same_v<T, ExprSplat>) {
             alt.inner.get()->annotate_with_counts(counts);
         } else if constexpr (std::is_same_v<T, ExprList>) {
-            for(Expression& x : alt.items | std::views::reverse) {
+            for(auto it2 = alt.items.rbegin(); it2 != alt.items.rend(); ++it2) {
+                Expression& x = *it2;
                 x.annotate_with_counts(counts);
             }
         } else if constexpr (std::is_same_v<T, Call>) {
-            for(Expression& x : alt.args | std::views::reverse) {
+            for(auto it2 = alt.args.rbegin(); it2 != alt.args.rend(); ++it2) {
+                Expression& x = *it2;
                 x.annotate_with_counts(counts);
             }
         } else if constexpr (std::is_same_v<T, CallInternal>) {
-            for(Expression& x : alt.args | std::views::reverse) {
+            for(auto it2 = alt.args.rbegin(); it2 != alt.args.rend(); ++it2) {
+                Expression& x = *it2;
                 x.annotate_with_counts(counts);
             }
         } else if constexpr (std::is_same_v<T, CallLibrary>) {
-            for(Expression& x : alt.args | std::views::reverse) {
+            for(auto it2 = alt.args.rbegin(); it2 != alt.args.rend(); ++it2) {
+                Expression& x = *it2;
                 x.annotate_with_counts(counts);
             }
         }

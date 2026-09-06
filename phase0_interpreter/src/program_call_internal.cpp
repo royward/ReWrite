@@ -19,14 +19,36 @@
 #include "program.hpp"
 #include <fstream>
 #include <iterator>
-#include <print>
+#include <iostream>
+#include <sstream>
+
+#ifdef _MSC_VER
+#include <intrin.h>
+inline int ctz64(uint64_t x) {
+    unsigned long i;
+    return _BitScanForward64(&i, x) ? (int)i : 64;
+}
+inline int clz64(uint64_t x) {
+    unsigned long i;
+    return _BitScanReverse64(&i, x) ? (int)(63 - i) : 64; // _BitScanReverse64 returns an index rather than count
+}
+inline int popcount64(uint64_t x) { return (int)__popcnt64(x); }
+#elif defined(__GNUC__) || defined(__clang__)
+inline int ctz64(uint64_t x) { return x ? __builtin_ctzll(x) : 64; }
+inline int clz64(uint64_t x) { return x ? __builtin_clzll(x) : 64; }
+inline int popcount64(uint64_t x) { return __builtin_popcountll(x); }
+#else
+#error Need to define ctz64/clz64/popcount for your compiler
+#endif
 
 // https://en.cppreference.com/cpp/utility/functional for all the cool types stuff
 
 template<typename InType, typename OutType, typename Op>
 DataElement binary_op(const char* op_name, const DataElement& a, const DataElement& b, Op op) {
     if (!std::holds_alternative<InType>(a.value) || !std::holds_alternative<InType>(b.value)) {
-        throw std::runtime_error(std::format("wrong types binary {}: {},{}", op_name, a.value.index(), b.value.index()));
+        std::stringstream msg;
+        msg << "wrong types binary " << op_name << ": " << a.value.index() << ',' << b.value.index();
+        throw std::runtime_error(msg.str());
     }
     return DataElement{OutType{op(std::get<InType>(a.value).value, std::get<InType>(b.value).value)}};
 }
@@ -38,19 +60,25 @@ DataElement compare_op(const char* op_name, const DataElement& a, const DataElem
     } else if (std::holds_alternative<DataChar>(a.value) && std::holds_alternative<DataChar>(b.value)) {
         return DataElement{DataBool{op(std::get<DataChar>(a.value).value, std::get<DataChar>(b.value).value)}};
     } else {
-        throw std::runtime_error(std::format("wrong types binary {}: {},{}", op_name, a.value.index(), b.value.index()));
+        std::stringstream msg;
+        msg << "wrong types binary " << op_name << ": " << a.value.index() << ',' << b.value.index();
+        throw std::runtime_error(msg.str());
     }
 }
 
 void check_arg_count(std::string_view function, const VecDataElement& args, std::size_t count) {
     if(args.data.size()-args.offset!=count) {
-        throw std::runtime_error(std::format("wrong arg count for {}: Found {}, expected {}",function,args.data.size()-args.offset,count));
+        std::stringstream msg;
+        msg << "wrong arg count for " << function << ": Found " << args.data.size()-args.offset << ", expected " << count;
+        throw std::runtime_error(msg.str());
     }
 }
 
 template<typename Type> void check_type(std::string_view function, const DataElement&a) {
     if(!std::holds_alternative<Type>(a.value)) {
-        throw std::runtime_error(std::format("wrong type for {}: {}",function,a.value.index()));
+        std::stringstream msg;
+        msg << "wrong type for " << function << ": " << a.value.index();
+        throw std::runtime_error(msg.str());
     }
 }
 
@@ -59,17 +87,17 @@ void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& s
         case CountTrailingZeros: {
             check_arg_count("count_trailing_zeros",args,1);
             check_type<DataInt>("count_trailing_zeros",args.data[args.offset]);
-            sofar.data.push_back(DataElement{DataInt{std::countr_zero(static_cast<uint64_t>(std::get<DataInt>(args.data[args.offset].value).value))}});
+            sofar.data.push_back(DataElement{DataInt{ctz64(static_cast<uint64_t>(std::get<DataInt>(args.data[args.offset].value).value))}});
         } break;
         case CountLeadingZeros: {
             check_arg_count("count_leading_zeros",args,1);
             check_type<DataInt>("count_leading_zeros",args.data[args.offset]);
-            sofar.data.push_back(DataElement{DataInt{std::countl_zero(static_cast<uint64_t>(std::get<DataInt>(args.data[args.offset].value).value))}});
+            sofar.data.push_back(DataElement{DataInt{clz64(static_cast<uint64_t>(std::get<DataInt>(args.data[args.offset].value).value))}});
         } break;
         case PopCount: {
             check_arg_count("pop_count",args,1);
             check_type<DataInt>("pop_count",args.data[args.offset]);
-            sofar.data.push_back(DataElement{DataInt{std::popcount(static_cast<uint64_t>(std::get<DataInt>(args.data[args.offset].value).value))}});
+            sofar.data.push_back(DataElement{DataInt{popcount64(static_cast<uint64_t>(std::get<DataInt>(args.data[args.offset].value).value))}});
          } break;
         case CharToInt: {
             check_arg_count("char_to_int",args,1);
@@ -100,26 +128,26 @@ void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& s
             for(uint32_t i=d0.offset;i<x0.size();i++) {
                 const DataElement& e=x0[i];
                 check_type<DataChar>("println",e);
-                putchar(std::get<DataChar>(e.value).value);
+                std::cout << std::get<DataChar>(e.value).value;
             }
-            putchar('\n');
+            std::cout << std::endl;
         } break;
         case PrintLnDebug: {
-            std::print("Debug:");
+            std::cout << "Debug:";
             // prints all args and returns them unchanged - can be inserted anywhere for debugging
             for(std::size_t i=args.offset;i<args.data.size();i++) {
                 if(i!=0)putchar(',');
-                std::print("{}",args.data[i].to_string());
+                std::cout << args.data[i].to_string();
                 sofar.data.push_back(args.data[i]);
             }
-            putchar('\n');
+            std::cout << std::endl;
         } break;
        case PrintLnAny: {
             for(std::size_t i=args.offset;i<args.data.size();i++) {
                 if(i!=0)putchar(',');
-                std::print("{}",args.data[i].to_string());
+                std::cout << args.data[i].to_string();
             }
-            putchar('\n');
+            std::cout << std::endl;
         } break;
         case LoadTextFile: {
             check_arg_count("load_text_file",args,1);
@@ -135,7 +163,7 @@ void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& s
             }
             std::ifstream file(filename, std::ios::in | std::ios::binary);
             if(!file.is_open()) {
-                throw std::runtime_error(std::format("load_text_file: could not open file: {}", filename));
+                throw std::runtime_error("load_text_file: could not open file: " + filename);
             }
             std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
             std::vector<DataElement> chars;
@@ -162,7 +190,7 @@ void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& s
             }
             std::ifstream file(filename, std::ios::in | std::ios::binary);
             if(!file.is_open()) {
-                throw std::runtime_error(std::format("load_text_file: could not open file: {}", filename));
+                throw std::runtime_error("load_text_file: could not open file: " + filename);
             }
             std::vector<DataElement> lines;
             std::string line;
@@ -200,7 +228,7 @@ void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& s
             const std::vector<DataElement>& content_listv=DataVector::data_vectors[content_list.pool_index].list;
             std::ofstream file(filename, std::ios::out | std::ios::binary);
             if(!file.is_open()) {
-                throw std::runtime_error(std::format("save_text_file: could not open file: {}", filename));
+                throw std::runtime_error("save_text_file: could not open file: " + filename);
             }
             for(uint32_t i=content_list.offset;i<content_listv.size();i++) {
                 const DataElement& e=content_listv[i];
@@ -224,7 +252,7 @@ void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& s
             const std::vector<DataElement>& contentv=DataVector::data_vectors[content.pool_index].list;
             std::ofstream file(filename, std::ios::out | std::ios::binary);
             if(!file.is_open()) {
-                throw std::runtime_error(std::format("save_binary_file: could not open file: {}", filename));
+                throw std::runtime_error("save_binary_file: could not open file: " + filename);
             }
             for(uint32_t i=content.offset;i<contentv.size();i++) {
                 const DataElement& e=contentv[i];
@@ -234,7 +262,9 @@ void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& s
             }
         } break;
         default: {
-            throw std::runtime_error(std::format("unknown library function: {}",static_cast<int>(op)));
+            std::stringstream msg;
+            msg << "unknown library function: " << static_cast<int>(op);
+            throw std::runtime_error(msg.str());
         }
     }
 }
@@ -249,24 +279,34 @@ DataElement do_call_internal(TokenKind op, const VecDataElement& args) {
                     if(argtype==TYPE_I64) {
                         return DataElement{DataInt{-std::get<DataInt>(arg.value).value}};
                     } else {
-                        throw std::runtime_error(std::format("wrong type unary minus: {}",argtype));
+                        std::stringstream msg;
+                        msg << "wrong type unary minus: " << argtype;
+                        throw std::runtime_error(msg.str());
                     }
                 }
                  case Not: {
                     if(argtype==TYPE_BOOL) {
                         return DataElement{DataBool{!std::get<DataBool>(arg.value).value}};
                     } else {
-                        throw std::runtime_error(std::format("wrong type not: {}",argtype));
+                        std::stringstream msg;
+                        msg << "wrong type not: " << argtype;
+                        throw std::runtime_error(msg.str());
                     }
                 }
                  case Tilda: {
                     if(argtype==TYPE_I64) {
                         return DataElement{DataInt{~std::get<DataInt>(arg.value).value}};
                     } else {
-                        throw std::runtime_error(std::format("wrong type not: {}",argtype));
+                        std::stringstream msg;
+                        msg << "wrong type bitnot: " << argtype;
+                        throw std::runtime_error(msg.str());
                     }
                 }
-                default: throw std::runtime_error(std::format("unknown unary op: {}",(int)op));
+                default: {
+                    std::stringstream msg;
+                    msg << "unknown unary op: " << (int)op;
+                    throw std::runtime_error(msg.str());
+                }
             }
         } break;
         case 2: {
@@ -287,7 +327,9 @@ DataElement do_call_internal(TokenKind op, const VecDataElement& args) {
                     } else if(argtype0==TYPE_CHAR && argtype1==TYPE_I64) {
                         return DataElement{DataChar{static_cast<char>(std::get<DataChar>(arg0.value).value+std::get<DataInt>(arg1.value).value)}};
                    } else {
-                        throw std::runtime_error(std::format("wrong types plus: {},{}",argtype0,argtype1));
+                        std::stringstream msg;
+                        msg << "wrong types plus:" << argtype0 << ',' << argtype1;
+                        throw std::runtime_error(msg.str());
                     }
                 }
                case Minus: {
@@ -298,7 +340,9 @@ DataElement do_call_internal(TokenKind op, const VecDataElement& args) {
                    } else if(argtype0==TYPE_CHAR&& argtype1==TYPE_CHAR) {
                         return DataElement{DataInt{static_cast<int>(std::get<DataChar>(arg0.value).value-std::get<DataChar>(arg1.value).value)}};
                     } else {
-                        throw std::runtime_error(std::format("wrong types minus: {},{}",argtype0,argtype1));
+                        std::stringstream msg;
+                        msg << "wrong types minus:" << argtype0 << ',' << argtype1;
+                        throw std::runtime_error(msg.str());
                     }
                 }
                 case Star: return binary_op<DataInt, DataInt>("times", arg0, arg1, std::multiplies<>{});
@@ -318,7 +362,9 @@ DataElement do_call_internal(TokenKind op, const VecDataElement& args) {
                         }
                         return DataElement{DataInt{std::get<DataInt>(arg0.value).value<<std::get<DataInt>(arg1.value).value}};
                     } else {
-                        throw std::runtime_error(std::format("wrong types left shift: {},{}",argtype0,argtype1));
+                        std::stringstream msg;
+                        msg << "wrong types left shift:" << argtype0 << ',' << argtype1;
+                        throw std::runtime_error(msg.str());
                     }
                 }
                  case ShiftRight: {
@@ -328,7 +374,9 @@ DataElement do_call_internal(TokenKind op, const VecDataElement& args) {
                         }
                         return DataElement{DataInt{std::get<DataInt>(arg0.value).value>>std::get<DataInt>(arg1.value).value}};
                     } else {
-                        throw std::runtime_error(std::format("wrong types right shift: {},{}",argtype0,argtype1));
+                        std::stringstream msg;
+                        throw std::runtime_error(msg.str());
+                        msg << "wrong types right shift:" << argtype0 << ',' << argtype1;
                     }
                 }
                  case Divide: {
@@ -338,7 +386,9 @@ DataElement do_call_internal(TokenKind op, const VecDataElement& args) {
                         }
                         return DataElement{DataInt{std::get<DataInt>(arg0.value).value/std::get<DataInt>(arg1.value).value}};
                     } else {
-                        throw std::runtime_error(std::format("wrong types binary divide: {},{}",argtype0,argtype1));
+                        std::stringstream msg;
+                        msg << "wrong types divide:" << argtype0 << ',' << argtype1;
+                        throw std::runtime_error(msg.str());
                     }
                 }
                 case Modulus: {
@@ -348,13 +398,23 @@ DataElement do_call_internal(TokenKind op, const VecDataElement& args) {
                         }
                         return DataElement{DataInt{std::get<DataInt>(arg0.value).value%std::get<DataInt>(arg1.value).value}};
                     } else {
-                        throw std::runtime_error(std::format("wrong types binary modulus: {},{}",argtype0,argtype1));
+                        std::stringstream msg;
+                        throw std::runtime_error(msg.str());
+                        msg << "wrong types modulus:" << argtype0 << ',' << argtype1;
                     }
                 }
-                default: throw std::runtime_error(std::format("unknown binary op: {}",(int)op));
+                default: {
+                    std::stringstream msg;
+                    msg << "unknown binary op: " << (int)op;
+                    throw std::runtime_error(msg.str());
+                }
             }
         } break;
-        default: throw std::runtime_error(std::format("do_call_internal only works with 1 or 2 args, found {}",args.data.size()-args.offset));
+        default: {
+            std::stringstream msg;
+            msg << "do_call_internal only works with 1 or 2 args, found " << args.data.size()-args.offset;
+            throw std::runtime_error(msg.str());
+        }
     }
     return DataElement{DataUnbound{}}; // keep compiler happy
 }

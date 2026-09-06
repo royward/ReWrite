@@ -18,8 +18,7 @@
 // limitations under the License.
 
 #include <stdexcept>
-#include <format>
-#include <print>
+#include <sstream>
 #include "token.hpp"
 
 std::string lex_string(std::string_view program, std::size_t& p, char term) {
@@ -44,7 +43,9 @@ std::string lex_string(std::string_view program, std::size_t& p, char term) {
         }
         result+=c;
     }
-    throw std::runtime_error(std::format("Unterminated {} string",term));
+    std::ostringstream msg;
+    msg << "Unterminated " << term << "string";
+    throw std::runtime_error(msg.str());
 }
 
 std::vector<Token> lex(std::string_view program) {
@@ -218,7 +219,9 @@ std::vector<Token> lex(std::string_view program) {
                     } else if(sub=="#error") {
                         token_kind=HashError;
                     } else {
-                        throw std::runtime_error(std::format("Unexpected # term:{}, should be #error or #never",sub));
+                        std::ostringstream msg;
+                        msg << "Unexpected # term:" << sub << ", should be #error or #never";
+                        throw std::runtime_error(msg.str());
                     }
                 } break;
                 case '\'': {
@@ -231,33 +234,28 @@ std::vector<Token> lex(std::string_view program) {
                     use_transformed_string=true;
                     transformed_string=lex_string(program,p,'\"');
                 } break;
-                default:throw std::runtime_error(std::format("Unexpected character: {}, row {}", c, row+1));
+                default: {
+                    std::ostringstream msg;
+                    msg << "Unexpected character: " << c << ", row " << row+1;
+                    throw std::runtime_error(msg.str());
+                }
             }
         }
-        result.push_back(Token{
-            .kind = token_kind,
-            .text = use_transformed_string?transformed_string:static_cast<std::string>(program.substr(start_p, p - start_p)),
-            .row = row,
-            .start_column = static_cast<uint32_t>(start_p - offset_start_of_row),
-            .end_column = static_cast<uint32_t>(p - offset_start_of_row),
+        result.push_back(Token{token_kind,
+            use_transformed_string?transformed_string:static_cast<std::string>(program.substr(start_p, p - start_p)),
+            row,
+            static_cast<uint32_t>(start_p - offset_start_of_row),
+            static_cast<uint32_t>(p - offset_start_of_row),
         });
     }
     // put a sentinel Eof at the end
-    result.push_back(Token{
-        .kind = Eof,
-        .text = "",
-        .row = row,
-        .start_column = static_cast<uint32_t>(p - offset_start_of_row),
-        .end_column = static_cast<uint32_t>(p - offset_start_of_row),
-    });
+    result.push_back(Token{Eof,"",row,static_cast<uint32_t>(p - offset_start_of_row),static_cast<uint32_t>(p - offset_start_of_row)});
     return result;
 }
 
 std::string Token::to_string() const {
-    return std::format("{{{}:{}:{},{}-{}}}",
-        text, static_cast<int>(kind),
-        row+1,
-        start_column+1,
-        end_column+1);
+    std::stringstream ss;
+    ss << '{' << text << ':'<< static_cast<int>(kind) << ':' << row+1 << ',' << start_column+1 << '-' << end_column+1 << '}';
+    return ss.str();
 }
 
