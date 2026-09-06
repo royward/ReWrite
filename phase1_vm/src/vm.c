@@ -500,7 +500,7 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
     uint64_t alloc=exe->end_of_heap;
     uint32_t full_size=(16+sz+7)>>3;
     exe->heap[alloc+alloc]=full_size;
-    exe->heap[alloc+alloc+2]=1;
+    exe->heap[alloc+alloc+1]=1;
     exe->heap[alloc+alloc+3]=0xDEADBEEF;
     exe->end_of_heap+=full_size;
     return alloc;
