@@ -14,7 +14,7 @@ min_max(a,b) when a<b -> a,b;
 min_max(a,b) -> b,a;
 
 :- export clamp(i64,i64,i64) -> i64;
-clamp(x,lo,hi) ->
+clamp(x,lo,hi)
     update min_max(lo,hi) => lo,hi
     update min_max(x,lo) => _,x
     update min_max(x,hi) => x,_ ->
@@ -42,7 +42,7 @@ fact_err(n) when n<0 -> #error(ErrNegUnexpected);
 fact_err(0)->1;
 fact_err(n)->n*fact_err(n-1);
 
-:- export fact_tail(n:i64) -> i64;
+:- export fact_tail(value n:i64) -> value i64;
 fact_tail(n) -> fact_aux(1,n);
 
 :- fact_aux(i64,i64) -> i64;
@@ -65,14 +65,14 @@ fib(n) -> fib(n-2)+fib(n-1);
 //roman_numerals.rw
 //string_to_int.rw
 
-:- export swap(i64,i64) -> i64,i64;
+:- export swap(value i64,i64) -> i64,value i64;
 swap(x,y) -> y,x;
-
-:- export multiret(i64,i64) -> i64;
-multiret(a,b) -> sub(swap(a,b))+1;
 
 :- sub(i64,i64) -> i64;
 sub(a,b) -> a-b;
+
+:- export multiret(i64,i64) -> i64;
+multiret(a,b) -> sub(swap(a,b))+1;
 
 :- wildcard_test0(i64,i64) -> i64;
 wildcard_test0(a,b) -> 3;
@@ -92,22 +92,26 @@ validate(_) -> false, 0;
 allsame(n,n,n,n) -> true;
 
 :- export break_rhs(i64) -> i64;
-break_rhs(x) -> when x>=0 -> x*3;
+break_rhs(x) match x>=0 => true -> x*3;
 break_rhs(x) -> x*2;
 
 :- export break_rhs2(i64,i64) -> i64;
-break_rhs2(n,x) -> match x=>n -> x*3;
+break_rhs2(n,x) match x=>n -> x*3;
 break_rhs2(n,x) -> x*2;
 
 :- export process(i64) -> i64;
-process(x) match validate(x) => true,data -> data;
+process(x) @match validate(x) => true,data -> data;
 process(_) -> #error(10);
 
 :- expensive(i64) -> i64;
 expensive(n) -> n+n+n;
 
 :- export use_twice(i64) -> i64;
-use_twice(n) -> match expensive(n) => result -> result*result;
+use_twice(n) match expensive(n) => result -> result*result;
 
 :- export noparam() -> i64;
 noparam() -> 3;
+
+:- export to_uppercase(char) -> char;
+to_uppercase(c) when c>='a' when c<='z' -> c-32;
+to_uppercase(c) -> c;

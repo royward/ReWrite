@@ -18,7 +18,6 @@
 
 #include "data_element.hpp"
 #include <stdexcept>
-#include <span>
 
 std::vector<DataVector> DataVector::data_vectors=std::vector<DataVector>(1);
 uint32_t DataVector::freelist=0;
@@ -93,33 +92,33 @@ namespace detail {
         return s;
     }
     inline std::string to_string_visit(const DataList& l) {
-        const std::vector<DataElement>& fulllist=DataVector::data_vectors[l.value.pool_index].list;
-        uint32_t offset=l.value.offset;
-        const std::span<const DataElement> list=std::span<const DataElement>(fulllist.data()+offset,fulllist.size()-offset);
-        // first check if the whole list is a string
-        if(list.size()==0) {
+        const std::vector<DataElement>& fulllist = DataVector::data_vectors[l.value.pool_index].list;
+        uint32_t offset = l.value.offset;
+        size_t list_size = fulllist.size() - offset;
+        if (list_size == 0) {
             return "{}";
         }
-        bool is_string=true;
-        for(const DataElement& e:list) {
-            if(!std::holds_alternative<DataChar>(e.value)) {
-                is_string=false;
+        // first check if the whole list is a string
+        bool is_string = true;
+        for (size_t i = offset; i < fulllist.size(); ++i) {
+            if (!std::holds_alternative<DataChar>(fulllist[i].value)) {
+                is_string = false;
                 break;
             }
         }
-        if(is_string) {
+        if (is_string) {
             // whole list is a string, display as such
             std::string out = "\"";
-            for (const DataElement& e:list) {
-                out += display_single_char(std::get<DataChar>(e.value).value,'\"');
+            for (size_t i = offset; i < fulllist.size(); ++i) {
+                out += display_single_char(std::get<DataChar>(fulllist[i].value).value, '\"');
             }
             out += "\"";
             return out;
         } else {
             std::string out = "{";
-            for (std::size_t i = 0; i < list.size(); i++) {
+            for (std::size_t i = 0; i < list_size; i++) {
                 if (i != 0) out += ",";
-                out += list[i].to_string();
+                out += fulllist[offset + i].to_string();
             }
             out += "}";
             return out;

@@ -6,4 +6,4 @@ validate(x) when x>=0 -> true, x*2;
 validate(_) -> false, 0;
 
 process(x) match validate(x) => true,data -> data;
-process(_) -> #error;
+process(_) -> #error(10);

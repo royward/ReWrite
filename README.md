@@ -15,9 +15,9 @@ A rule-based language for expressing recursive computation through pattern match
   - [Multiple Return Values](#multiple-return-values)
   - [Lists and Splat](#lists-and-splat)
   - [Chars and Strings](#chars-and-strings)
+  - [Errors](#errors)
   - [Match/Update Clauses](#matchupdate-clauses)
   - [Constants](#constants)
-  - [Errors](#errors)
   - [Tail Recursion](#tail-recursion)
 - [More Complex Examples](#more-complex-examples)
   - [First n Prime Numbers](#first-n-prime-numbers)
@@ -317,57 +317,64 @@ roman_to_int({a,b,*rest}) when roman_to_int_convert_case(a)<roman_to_int_convert
     roman_to_int_convert_case(b)-roman_to_int_convert_case(a)+roman_to_int(rest);
 roman_to_int({a,*rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
 ```
+#### Errors
+
+There are situations where it is useful to report a runtime error, or note that a particular match should not happen. For instance, the first factorial example (repeated from [General Structure](#general-structure)) will go into a loop until it overflows the stack if a negative number is passed in.
+
+```
+fact(0)->1;
+fact(n)->n*fact(n-1);
+```
+
+Two expressions are provided for this purpose:
+
+* `#never` is a promise that a particular rule will never be matched (meant for the compiler)
+* `#error(N)` indicates to return a run-time error, where N is a literal number or a constant (expressions are not allowed). The N is for compiler use - the interpreter discards it.
+
+For the moment (phase 0), they both perform identically to produce runtime errors.
+
+To use either of those, put them on the right hand side of a rule. They can appear anywhere in an expression, though typically they are the sole expression on the right-hand side.
+
+For example:
+
+```
+fact(n) when n<0 -> #error(10);
+fact(0)->1;
+fact(n)->n*fact(n-1);
+```
+
+`fact(-2)` returns:
+
+`Error: error thrown by #error or #never (in fact(-2))`
 
 #### Match/Update Clauses
 
 This section is a little more advanced - ReWrite can be used without the functionality described here, but will be less readable.
 
-In the section [Guards](#guards) above, a method was introduced of checking a condition before a rule will fire. This section introduces something called a match/update clause that generalizes this, and allows pattern matching and variable binding on the results of expressions. This may also be used to the right of the arrow.
+In the section [Guards](#guards) above, a method was introduced of checking a condition before a rule will fire. This section introduces something called a match/update clause that generalizes this, and allows pattern matching and variable binding on the results of expressions.
 
 The form of a match clause is:
 
 ```
-match|update <expressions> => <pattern>
-```
-
-The form `when <expr>` introduced as guards is simply syntactic sugar for `match <expressions> => true`, so the more complete form of a rule is:
-
-```
 MatchClause =
-    match|update <expressions> => <pattern>
+    match|update|@match|@update <expressions> => <pattern>
   | when <expressions>
 
 Rule = 
-    <name>(<pattern>) MatchClause* -> [MatchClause+ ->] <expressions>
+    <name>(<pattern>) MatchClause* -> <expressions>
 ```
 
-(`*` means 0 or more, `+` means 1 or more, `[ ]` means optional if you are not used to reading grammars).
+(`|` means one of, `*` means 0 or more if you are not used to reading grammars).
 
-Let's see how this works. These examples are somewhat contrived, because match clauses tend to be more useful in larger programs.
+Let's see how this works. There are already examples of `when` in the sections starting with [General Structure](#general-structure). The rest of these examples are somewhat contrived, because match clauses tend to be more useful in larger programs.
 
-Say I have a validation function that also does some processing on a result, and I only want to fire the rule if the validation function succeeds:
-
-```
-// only validate non-negative integers, multiply by 2
-validate(x) when x>=0 -> true, x*2;
-validate(_) -> false, 0;
-
-process(x) match validate(x) => true,data -> data;
-process(_) -> #error;
-```
-
-The `match validate(x) => true,data` will evaluate `validate(x)` which returns two values, will match the first one with `true` (failing to fire if it doesn't match), and binding `data` to the second value, so:
-
-`process(2)` returns `4`
-`process(-3)` fires a `#error`.
-
-Here is an example of using it on the right hand side. Imagine that we have an expensive function that we want to use twice:
+Imagine that we have an expensive function that we want to use twice:
 
 ```
 expensive(n) -> n+n+n; // Imagine this is expensive
 
-// Use match after the arrow to bind it to result, then use result twice
-use_twice(n) -> match expensive(n) => result -> result*result;
+// Use match to bind it to result, then use result twice
+use_twice(n) match expensive(n) => result -> result*result;
 ```
 
 In this case, result will be bound with the results of `expensive(x)`, and can now be used repeatedly in expressions.
@@ -378,7 +385,7 @@ Another case where match is useful is tying multiple calls together and having d
 min_max(a,b) when a<b -> a,b;
 min_max(a,b) -> b,a;
 
-clamp(x,lo,hi) ->
+clamp(x,lo,hi)
     match min_max(lo,hi) => lo2,hi2
     match min_max(x,lo2) => _,x2
     match min_max(x2,hi2) => x3,_ ->
@@ -390,7 +397,7 @@ In this case, having to have the `lo2`, `hi2`, `x2`, `x3` add extra complexity t
 For this reason, a variation of match called `update` is provided. `update` is the same as match, except that values on the right are re-bound (can change values), so the above example becomes:
 
 ```
-clamp(x,lo,hi) ->
+clamp(x,lo,hi)
     update min_max(lo,hi) => lo,hi
     update min_max(x,lo) => _,x
     update min_max(x,hi) => x,_ ->
@@ -403,13 +410,35 @@ Note that when update rebinds a variable, it must be the same type as the origin
 
 When the pattern introduces only new variable names, `match` and `update` are equivalent.
 
+A match or update that fails to match generates an error, as a pattern that doesn't fit means there is an error in the program. Most clauses are like this: you are destructuring a shape you already know. Where a clause is genuinely a test, prefix it with `@` (`@match` or `@update`) and a failure declines the rule and tries the next one instead.
+
+A when guard is exactly this: `when <expressions>` is syntactic sugar for `@match <expressions> => true`.
+
+In practice, `@match` and `@update` should not need to be used very often, as most rule selection can be handled by patterns in the rule head or `when` clauses. The compiler in progress is currently around 1200 lines of code, and uses six `@match` and zero `@update`.
+
+For example, say I have a validation function that also does some processing on a result, and I only want to fire the rule if the validation function succeeds:
+
+```
+// only validate non-negative integers, multiply by 2
+validate(x) when x>=0 -> true, x*2;
+validate(_) -> false, 0;
+
+process(x) @match validate(x) => true,data -> data;
+process(_) -> #error(10);
+```
+
+The `@match validate(x) => true,data` will evaluate `validate(x)` which returns two values, will match the first one with `true` (failing to fire if it doesn't match), and binding `data` to the second value, so:
+
+`process(2)` returns `4`
+`process(-3)` fires `#error(10)`.
+
 Note that in all cases, each match and update clause could be avoided by using a one line helper function:
 
 ```
 process(x) -> process_helper(validate(x));
 
 process_helper(true,data) -> data;
-process_helper(_,_) -> #error;
+process_helper(_,_) -> #error(10);
 ```
 
 ```
@@ -448,36 +477,6 @@ hello() -> {'Hello ', name ,'!'};
 ```
 
 Calling `hello()` returns "Hello World!".
-
-#### Errors
-
-There are situations where it is useful to report a runtime error, or note that a particular match should not happen. For instance, the first factorial example (repeated from [General Structure](#general-structure)) will go into a loop until it overflows the stack if a negative number is passed in.
-
-```
-fact(0)->1;
-fact(n)->n*fact(n-1);
-```
-
-Two expressions are provided for this purpose:
-
-* `#never` is a promise that a particular rule will never be matched (meant for the compiler)
-* `#error` indicates to return a run-time error.
-
-For the moment (phase 0), they both perform identically to produce runtime errors.
-
-To use either of those, put them on the right hand side of a rule. They can appear anywhere in an expression, though typically they are the sole expression on the right-hand side.
-
-For example:
-
-```
-fact(n) when n<0 -> #error;
-fact(0)->1;
-fact(n)->n*fact(n-1);
-```
-
-`fact(-2)` returns:
-
-`Error: error thrown by #error or #never (in fact(-2))`
 
 #### Tail recursion
 

@@ -20,15 +20,10 @@
 #include <CLI/CLI.hpp>
 #include <fstream>
 #include <string>
-#include <filesystem>
 #include <stdexcept>
-#include <format>
-#include <print>
+#include <sstream>
 
 /*
-./rewrite_cpp ../../../tests/clamp.rw "clamp(3,4,10)"
-./rewrite_cpp ../../../tests/constants2.rw "hello()"
-./rewrite_cpp ../../../tests/constants.rw "eval(3,4,5)"
 ./rewrite_cpp ../../../tests/clamp.rw "clamp(3,4,10)"
 ./rewrite_cpp ../../../tests/constants2.rw "hello()"
 ./rewrite_cpp ../../../tests/constants.rw "eval(3,4,5)"
@@ -36,6 +31,8 @@
 ./rewrite_cpp ../../../tests/factorial.rw "fact(10)"
 ./rewrite_cpp ../../../tests/factorial2.rw "fact(10)"
 ./rewrite_cpp ../../../tests/factorial_errcheck.rw "fact(10)"
+./rewrite_cpp ../../../tests/factorial_tail.rw "fact(10)"
+./rewrite_cpp ../../../tests/fibonacci.rw "fib(10)"
 ./rewrite_cpp ../../../tests/listn2.rw "listn2(10)"
 ./rewrite_cpp ../../../tests/listn.rw "listn(10)"
 ./rewrite_cpp ../../../tests/member.rw "member(2,{1,2,3})"
@@ -50,12 +47,17 @@
 ./rewrite_cpp ../../../tests/roman_numerals.rw "int_to_roman(1995)"
 ./rewrite_cpp ../../../tests/roman_numerals.rw 'roman_to_int("mcmxcv")'
 ./rewrite_cpp ../../../tests/string_to_int.rw 'string_to_int("-256")'
+./rewrite_cpp ../../../tests/swap.rw "swap(0,1)"
+./rewrite_cpp ../../../tests/validate.rw "process(10)"
+./rewrite_cpp ../../../tests/validate.rw "process(-10)"
 */
 
 std::string load_file(const std::filesystem::path& path) {
     std::ifstream file(path, std::ios::in | std::ios::binary);
     if (!file.is_open()) {
-        throw std::runtime_error(std::format("Failed to open file: {}", path.string()));
+        std::stringstream msg;
+        msg << "Failed to open file: " << path.string();
+        throw std::runtime_error(msg.str());
     }
     const auto size = std::filesystem::file_size(path);
     std::string content(size, '\0');
@@ -77,15 +79,15 @@ int main(int argc, char** argv) {
         //std::println("{}",s);
         Program prog(s,fast);
         std::vector<DataElement> results=prog.run_string(callexpr);
-        std::println("Results:");
+        std::cout << "Results:" << std::endl;
         for(auto& r : results) {
-            println("{}",r.to_string());
+            std::cout << r.to_string() << std::endl;
         }
         uint32_t free_size=DataVector::count_free();
-        std::println("List use: {}/{} freed",free_size,DataVector::data_vectors.size()-1);
+        std::cout << "List use: " << free_size << '/' << DataVector::data_vectors.size()-1 << " freed" << std::endl;
         return 0;
     } catch(const std::runtime_error& e) {
-        std::println("Error: {}", e.what());
+        std::cout << "Error: " << e.what() << std::endl;
         return 1;
     }
 }

@@ -20,10 +20,12 @@
 #include "program.hpp"
 #include "parser.hpp"
 #include "util.hpp"
-#include <print>
-#include <ranges>
 #include <charconv>
 #include <unordered_set>
+#include <algorithm>
+#include <stdexcept>
+#include <sstream>
+#include <iostream>
 
 const std::unordered_map<std::string, TokenKind> library_map = {
     {"count_trailing_zeros", CountTrailingZeros},
@@ -53,12 +55,15 @@ std::vector<std::string_view> disambiguate(std::vector<std::string_view> v) {
 void parse_error(const Token& token, std::vector<std::string_view> expected) {
     std::string message;
     if (expected.size() == 1) {
-        message = std::format("found {}, expected {}", token.text, expected[0]);
+        message = "found " + token.text + " expected " + std::string(expected[0]);
     } else {
         std::vector<std::string_view> expected_nodup=disambiguate(expected);
-        message = std::format("found {}, expected one of {}", token.text, expected_nodup[0]);
-        for (const auto& elem : expected_nodup | std::views::drop(1)) {
-            message += std::format(", {}", elem);
+        message = "found " + token.text + ", expected one of ";
+        for (size_t i = 0; i < expected_nodup.size(); ++i) {
+            if(i != 0) {
+                message += ", ";
+            }
+            message += std::string(expected_nodup[i]);
         }
     }
     throw std::runtime_error(message);
@@ -127,10 +132,10 @@ void Program::parse_const(Parser& parser) {
     }
     parser.advance();
     std::unordered_map<std::string, std::size_t> empty_param_id_map;
-    std::vector<Expression> expr=parse_expression_list(parser, empty_param_id_map, FourTokenKind{Semicolon,Semicolon,Semicolon,Semicolon}, Comma);
+    std::vector<Expression> expr=parse_expression_list(parser, empty_param_id_map, SixTokenKind{Semicolon,Semicolon,Semicolon,Semicolon,Semicolon,Semicolon}, Comma);
     parser.advance();
     if(constants.find(name)!=constants.end()) {
-        throw std::runtime_error(std::format("const already declared {}",name));
+        throw std::runtime_error("const already declared " + name);
     }
     std::vector<DataElement> empty_bindings;
     VecDataElement values;
@@ -166,9 +171,18 @@ Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, s
             if(find_constant != constants.end()) {
                 std::vector<DataElement>& const_val=find_constant->second;
                 if(const_val.size()!=1) {
-                    throw std::runtime_error(std::format("const expression is expected to be of size 1, found {}",const_val.size()));
+                    std::stringstream msg;
+                    msg << "const expression is expected to be of size 1, found " << const_val.size();
+                    throw std::runtime_error(msg.str());
                 }
                 return Parameter{Const{const_val[0]}};
+            } else if(parser.current().kind==LParen) {
+                // HACK discard <name>() on left as a hack for compatibility with sum types in the compiler
+                parser.advance();
+                Parameter new_param=parse_param(parser,param_id_map);
+                if(parser.current().kind!=RParen) throw std::runtime_error("sum type left must be single value");
+                parser.advance();
+                return new_param;
             } else {
                 std::string s=static_cast<std::string>(t.text);
                 param_id_map.try_emplace(s,param_id_map.size());
@@ -194,7 +208,7 @@ Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, s
             } break;
         }
         case LBrace: {
-            std::vector<Parameter> list_internal=parse_param_list(parser, param_id_map, FourTokenKind{RBrace,RBrace,RBrace,RBrace}, Comma);
+            std::vector<Parameter> list_internal=parse_param_list(parser, param_id_map, SixTokenKind{RBrace,RBrace,RBrace,RBrace,RBrace,RBrace}, Comma);
             parser.advance();
             return Parameter{ParamList{std::move(list_internal)}};
         }
@@ -204,7 +218,9 @@ Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, s
         case Chars: {
             std::vector<Parameter> chars=string_to_paramlist(t.text);
             if(chars.size()!=1) {
-                throw std::runtime_error(std::format("char expression is expected to be of size 1, found {}",chars.size()));
+                std::stringstream msg;
+                msg << "char expression is expected to be of size 1, found " << chars.size();
+                throw std::runtime_error(msg.str());
             }
             return std::move(chars[0]);
         }
@@ -214,7 +230,7 @@ Parameter Program::parse_param(Parser& parser, std::unordered_map<std::string, s
     return Parameter{Const{DataElement{DataUnbound{}}}};
 }
 
-std::vector<Parameter> Program::parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, FourTokenKind end, TokenKind sep) {
+std::vector<Parameter> Program::parse_param_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, SixTokenKind end, TokenKind sep) {
     std::size_t splat_count=0;
     std::vector<Parameter> param_list;
     if(end.check_token(parser.current().kind)) {
@@ -270,8 +286,8 @@ std::tuple<uint8_t, TokenKind> prefix_binding_power(TokenKind op) {
 std::tuple<uint8_t, uint8_t, TokenKind> infix_binding_power(TokenKind op) {
     switch(op) {
         // logical
-        case OrOr:           return {10, 11, OrOr};
-        case AndAnd:          return {30, 31, AndAnd};
+        case OrOr:         return {10, 11, OrOr};
+        case AndAnd:       return {30, 31, AndAnd};
 
         // comparison - now binds looser than bitwise, unlike C
         case EqualEqual:   return {50, 51, EqualEqual};
@@ -330,13 +346,15 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                 if(find_constant != constants.end()) {
                     std::vector<DataElement>& const_val=find_constant->second;
                     if(const_val.size()!=1) {
-                        throw std::runtime_error(std::format("const expression is expected to be of size 1, found {}",const_val.size()));
+                        std::stringstream msg;
+                        msg << "const expression is expected to be of size 1, found " << const_val.size();
+                        throw std::runtime_error(msg.str());
                     }
                     expr=Expression{Const{const_val[0]}};
                 } else if(parser.current().kind==LParen) {
                     parser.advance();
                     auto built_in=library_map.find(t.text);
-                    std::vector<Expression> expr_list=parse_expression_list(parser, param_id_map, FourTokenKind{RParen,RParen,RParen,RParen}, Comma);
+                    std::vector<Expression> expr_list=parse_expression_list(parser, param_id_map, SixTokenKind{RParen,RParen,RParen,RParen,RParen,RParen}, Comma);
                     parser.advance();
                     if(built_in!=library_map.end()) {
                         expr=Expression{CallLibrary{built_in->second,std::move(expr_list)}};
@@ -346,11 +364,22 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                         uint32_t id=static_cast<uint32_t>(function_map[s]);
                         expr=Expression{Call{id,std::move(expr_list)}};
                     }
+                } else if(parser.current().kind==Colon) {
+                    // HACK discard <name>:<name>() on right as a hack for compatibility with sum types in the compiler
+                    parser.advance();
+                    if(parser.current().kind!=Identifier) throw std::runtime_error("malformed sum type on right");
+                    parser.advance();
+                    if(parser.current().kind!=LParen) throw std::runtime_error("malformed sum type on right");
+                    parser.advance();
+                    Expression new_expr=parse_expression(parser,param_id_map,0);
+                    if(parser.current().kind!=RParen) throw std::runtime_error("malformed sum type on right");
+                    parser.advance();
+                    return new_expr;
                 } else {
                     std::string s=static_cast<std::string>(t.text);
                     auto search=param_id_map.find(s);
                     if(search==param_id_map.end()) {
-                        throw std::runtime_error(std::format("parameter not bound on right hand size: {}",s));
+                        throw std::runtime_error("parameter not bound on right hand size: " + s);
                     }
                     uint32_t id=static_cast<uint32_t>(search->second);
                     expr=Expression{Id{id,0}};
@@ -361,7 +390,7 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                 expr=Expression{ExprSplat{std::make_unique<Expression>(std::move(splat_expr))}};
             } break;
             case LBrace: {
-                std::vector<Expression> list_internal=parse_expression_list(parser, param_id_map, FourTokenKind{RBrace,RBrace,RBrace,RBrace}, Comma);
+                std::vector<Expression> list_internal=parse_expression_list(parser, param_id_map, SixTokenKind{RBrace,RBrace,RBrace,RBrace,RBrace,RBrace}, Comma);
                 parser.advance();
                 expr=Expression{ExprList{std::move(list_internal)}};
             } break;
@@ -371,7 +400,9 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
             case Chars: {
                 std::vector<Expression> chars=string_to_exprlist(t.text);
                 if(chars.size()!=1) {
-                    throw std::runtime_error(std::format("char expression is expected to be of size 1, found {}",chars.size()));
+                    std::stringstream msg;
+                    msg << "char expression is expected to be of size 1, found " << chars.size();
+                    throw std::runtime_error(msg.str());
                 }
                 return std::move(chars[0]);
             }
@@ -382,9 +413,22 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
                 }
                 parser.advance();
             } break;
-            case HashNever:
             case HashError: {
-                return Expression{Never{}};
+                if(parser.current().kind==LParen) {
+                    parser.advance();
+                    Expression errcode=parse_expression(parser,param_id_map,200);
+                    if(parser.current().kind!=RParen) {
+                        throw std::runtime_error("#Error must have a parameter");
+                    }
+                    parser.advance();
+                    expr=Expression{Error{std::make_unique<Expression>(std::move(errcode))}};
+
+                } else {
+                    throw std::runtime_error("#Error must have a parameter");
+                }
+            } break;
+            case HashNever: {
+                return Expression{Error{std::make_unique<Expression>(Expression{Const{DataElement{DataInt{1}}}})}};
             }
             default : parse_error(t,{"expression"});
         }
@@ -405,7 +449,7 @@ Expression Program::parse_expression(Parser& parser, std::unordered_map<std::str
     return expr;
 }
 
-std::vector<Expression> Program::parse_expression_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, FourTokenKind end, TokenKind sep) {
+std::vector<Expression> Program::parse_expression_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, SixTokenKind end, TokenKind sep) {
     std::vector<Expression> expr_list;
     if(end.check_token(parser.current().kind)) {
         return expr_list;
@@ -443,7 +487,6 @@ std::vector<Expression> Program::parse_expression_list(Parser& parser, std::unor
 void Program::parse_rule(Parser& parser) {
     if(parser.current().kind==Identifier) {
         std::string function=static_cast<std::string>(parser.current().text);
-        //if(function=="parse_aux")__asm__("int3");
         parser.advance();
         if(parser.current().kind==LParen) {
             uint32_t match_counter=1;
@@ -451,61 +494,35 @@ void Program::parse_rule(Parser& parser) {
             rule.main.match_count=match_counter;
             parser.advance();
             std::unordered_map<std::string, std::size_t> param_id_map;
-            rule.main.match=parse_param_list(parser,param_id_map,FourTokenKind{RParen,RParen,RParen,RParen},Comma);
+            rule.main.match=parse_param_list(parser,param_id_map,SixTokenKind{RParen,RParen,RParen,RParen,RParen,RParen},Comma);
             parser.advance();
-            while(parser.current().kind==When || parser.current().kind==Match || parser.current().kind==Update) {
+            while(parser.current().kind==When || parser.current().kind==Match || parser.current().kind==Update || parser.current().kind==MatchDecline || parser.current().kind==UpdateDecline) {
                 if(parser.current().kind==When) {
                     parser.advance();
-                    std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,When},Comma);
-                    rule.pre_arrow.push_back(RuleMatch{
+                    std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,SixTokenKind{Arrow,Match,Update,MatchDecline,UpdateDecline,When},Comma);
+                    rule.clauses.push_back(RuleMatch{
                         {Parameter{Const{DataElement{DataBool{true}}}}},
                         std::move(expr_vec),
                         match_counter,
                         false,
+                        true,
                     });
                 } else { // must be match or update
-                    bool update=parser.current().kind==Update;
+                    bool update=parser.current().kind==Update || parser.current().kind==UpdateDecline;
+                    bool decline=parser.current().kind==MatchDecline || parser.current().kind==UpdateDecline;
                     parser.advance();
                     match_counter++;
-                    std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
+                    std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,SixTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
                     parser.advance();
-                    std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,When},Comma);
-                    rule.pre_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update});
+                    std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,SixTokenKind{Arrow,Match,Update,MatchDecline,UpdateDecline,When},Comma);
+                    rule.clauses.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update,decline});
                 }
             }
             if(parser.current().kind!=Arrow) {
-                parse_error(parser.current(),{"->","when","match","update"});
+                parse_error(parser.current(),{"->","when","match","update","@match","@update"});
             }
             parser.advance();
-            if(parser.current().kind==When || parser.current().kind==Match || parser.current().kind==Update) {
-                while(true) {
-                    if(parser.current().kind==When) {
-                        parser.advance();
-                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,When},Comma);
-                        rule.post_arrow.push_back(RuleMatch{
-                            {Parameter{Const{DataElement{DataBool{true}}}}},
-                            std::move(expr_vec),
-                            match_counter,
-                            false
-                        });
-                    } else if(parser.current().kind==Match || parser.current().kind==Update) { // must be match or update
-                        bool update=parser.current().kind==Update;
-                        parser.advance();
-                        match_counter++;
-                        std::vector<Expression> expr_vec=parse_expression_list(parser,param_id_map,FourTokenKind{DoubleArrow,DoubleArrow,DoubleArrow,DoubleArrow},Comma);
-                        parser.advance();
-                        std::vector<Parameter> match_params=parse_param_list(parser,param_id_map,FourTokenKind{Arrow,Match,Update,When},Comma);
-                        rule.post_arrow.push_back(RuleMatch{std::move(match_params),std::move(expr_vec),match_counter,update});
-                    } else if(parser.current().kind==Arrow) {
-                        parser.advance();
-                        break;
-                    } else {
-                        parse_error(parser.current(),{"->","when","match","update"});
-                    }
-                }
-            }
-
-            rule.main.expr=parse_expression_list(parser,param_id_map,FourTokenKind{Semicolon,Semicolon,Semicolon,Semicolon},Comma);
+            rule.main.expr=parse_expression_list(parser,param_id_map,SixTokenKind{Semicolon,Semicolon,Semicolon,Semicolon,Semicolon,Semicolon},Comma);
             parser.advance();
             rule.names=indices_to_names(param_id_map);
             function_map.try_emplace(function,function_map.size());
@@ -527,11 +544,15 @@ void Rule::annotate_with_counts() {
     // go backward through all the rules, annotating each identifer with the access index
     std::vector<uint32_t> counts=std::vector<uint32_t>(names.size());
     std::vector<uint32_t> touched;
-    for(Expression& element : main.expr | std::views::reverse) {
+    //for(Expression& element : main.expr | std::views::reverse) {
+    for(auto it = main.expr.rbegin(); it != main.expr.rend(); ++it) {
+        Expression& element = *it;
         element.annotate_with_counts(counts);
     }
-    for(RuleMatch& rm : post_arrow | std::views::reverse) {
-        for(Parameter& param : rm.match | std::views::reverse) {
+    for(auto it = clauses.rbegin(); it != clauses.rend(); ++it) {
+        RuleMatch& rm = *it;
+        for(auto it2 = rm.match.rbegin(); it2 != rm.match.rend(); ++it2) {
+            Parameter& param = *it2;
             param.annotate_with_counts(counts,touched);
         }
         if(rm.update) {
@@ -540,25 +561,13 @@ void Rule::annotate_with_counts() {
             }
         }
         touched.clear();
-        for(Expression& element : rm.expr | std::views::reverse) {
+        for(auto it2 = rm.expr.rbegin(); it2 != rm.expr.rend(); ++it2) {
+            Expression& element = *it2;
             element.annotate_with_counts(counts);
         }
     }
-    for(RuleMatch& rm : pre_arrow | std::views::reverse) {
-        for(Parameter& param : rm.match | std::views::reverse) {
-            param.annotate_with_counts(counts,touched);
-        }
-        if(rm.update) {
-            for(uint32_t i : touched) {
-                counts[i]=0;
-            }
-        }
-        touched.clear();
-        for(Expression& element : rm.expr | std::views::reverse) {
-            element.annotate_with_counts(counts);
-        }
-    }
-    for(Parameter& param : main.match | std::views::reverse) {
+    for(auto it = main.match.rbegin(); it != main.match.rend(); ++it) {
+        Parameter& param = *it;
         param.annotate_with_counts(counts,touched);
     }
 }
@@ -575,7 +584,8 @@ void Parameter::annotate_with_counts(std::vector<uint32_t>& counts, std::vector<
             counts[alt.value]++;
             touched.push_back(alt.value);
         } else if constexpr (std::is_same_v<T, ParamList>) {
-            for(Parameter& x : alt.items | std::views::reverse) {
+            for(auto it = alt.items.rbegin(); it != alt.items.rend(); ++it) {
+                Parameter& x = *it;
                 x.annotate_with_counts(counts,touched);
             }
         }
@@ -591,19 +601,23 @@ void Expression::annotate_with_counts(std::vector<uint32_t>& counts) {
         } else if constexpr (std::is_same_v<T, ExprSplat>) {
             alt.inner.get()->annotate_with_counts(counts);
         } else if constexpr (std::is_same_v<T, ExprList>) {
-            for(Expression& x : alt.items | std::views::reverse) {
+            for(auto it2 = alt.items.rbegin(); it2 != alt.items.rend(); ++it2) {
+                Expression& x = *it2;
                 x.annotate_with_counts(counts);
             }
         } else if constexpr (std::is_same_v<T, Call>) {
-            for(Expression& x : alt.args | std::views::reverse) {
+            for(auto it2 = alt.args.rbegin(); it2 != alt.args.rend(); ++it2) {
+                Expression& x = *it2;
                 x.annotate_with_counts(counts);
             }
         } else if constexpr (std::is_same_v<T, CallInternal>) {
-            for(Expression& x : alt.args | std::views::reverse) {
+            for(auto it2 = alt.args.rbegin(); it2 != alt.args.rend(); ++it2) {
+                Expression& x = *it2;
                 x.annotate_with_counts(counts);
             }
         } else if constexpr (std::is_same_v<T, CallLibrary>) {
-            for(Expression& x : alt.args | std::views::reverse) {
+            for(auto it2 = alt.args.rbegin(); it2 != alt.args.rend(); ++it2) {
+                Expression& x = *it2;
                 x.annotate_with_counts(counts);
             }
         }

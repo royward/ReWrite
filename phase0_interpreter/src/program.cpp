@@ -7,9 +7,23 @@
 #include "parser.hpp"
 #include "util.hpp"
 #include <stdexcept>
-#include <print>
-#include <ranges>
 #include <string>
+#include <sstream>
+
+template<typename T>
+class span {
+    T* ptr_ = nullptr;
+    size_t len_ = 0;
+public:
+    span() = default;
+    span(T* p, size_t n) : ptr_(p), len_(n) {}
+    T* data() const { return ptr_; }
+    size_t size() const { return len_; }
+    bool empty() const { return len_ == 0; }
+    T& operator[](size_t i) const { return ptr_[i]; }
+    T* begin() const { return ptr_; }
+    T* end() const { return ptr_ + len_; }
+};
 
 DataElement do_call_internal(TokenKind op, const VecDataElement& args);
 void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& sofar);
@@ -30,7 +44,9 @@ Program::Program(std::string_view source, bool fast) : fast(fast) {
         }
     } catch (const std::runtime_error& e) {
         Token t=parser.current();
-        throw std::runtime_error(std::format("{} (row={}, col={})", e.what(), t.row+1, t.start_column+1));
+        std::stringstream msg;
+        msg << e.what() << " (row=" << t.row+1 << ", col=" << t.start_column+1 << ')';
+        throw std::runtime_error(msg.str());
     }
     function_names=indices_to_names(function_map);
 }
@@ -54,8 +70,8 @@ bool compare_equal(const DataElement& x, const DataElement& y) {
             const DataContainer& d1=std::get<DataList>(y.value).value;
             const std::vector<DataElement>& x0f=DataVector::data_vectors[d0.pool_index].list;
             const std::vector<DataElement>& x1f=DataVector::data_vectors[d1.pool_index].list;
-            const std::span<const DataElement> x0=std::span<const DataElement>(x0f.data()+d0.offset,x0f.size()-d0.offset);
-            const std::span<const DataElement> x1=std::span<const DataElement>(x1f.data()+d1.offset,x1f.size()-d1.offset);
+            const span<const DataElement> x0=span<const DataElement>(x0f.data()+d0.offset,x0f.size()-d0.offset);
+            const span<const DataElement> x1=span<const DataElement>(x1f.data()+d1.offset,x1f.size()-d1.offset);
             if(x0.size()!=x1.size()) {
                 return false;
             }
@@ -107,7 +123,7 @@ bool do_match_single(const Parameter& parameter, DataElement& x, std::vector<Dat
     }, parameter.value);
 }
 
-bool do_match_vec(const std::vector<Parameter>& parameters, const std::span<DataElement> values, std::vector<DataElement>& bindings, uint32_t bind_level) {
+bool do_match_vec(const std::vector<Parameter>& parameters, const span<DataElement> values, std::vector<DataElement>& bindings, uint32_t bind_level) {
     std::size_t plen=parameters.size();
     std::size_t vlen=values.size();
     std::size_t pi=0;
@@ -125,7 +141,7 @@ bool do_match_vec(const std::vector<Parameter>& parameters, const std::span<Data
             uint32_t newvec=DataVector::allocate();
             DataVector::data_vectors[newvec].list=std::move(sub_vector);
             DataContainer dc(newvec,0);
-            DataElement x=DataElement{DataList(std::move(dc))};
+            DataElement x=DataElement{DataList{std::move(dc)}};
             DataElement& v=bindings[splat.value];
             if(v.last_match<bind_level) {
                 v=x;
@@ -163,15 +179,19 @@ bool do_match_list(const std::vector<Parameter>& parameters, DataContainer value
     while(pi<plen) {
         const Parameter& parameter=parameters[pi];
         if (std::holds_alternative<ParamSplat>(parameter.value)) {
+            const std::vector<DataElement>& x0f=DataVector::data_vectors[values.pool_index].list;
             const ParamSplat& splat = std::get<ParamSplat>(parameter.value);
             if(plen>vlen+1) {
                 throw std::runtime_error("failed to get value with '..': parameter list too short");
             }
             // we get just enough stuff in the splat that the rest of the parameters will match up exactly
+            //if(DataVector::data_vectors[values.pool_index].refcount!=2)
+            //std::print("{}:{} ",vi,DataVector::data_vectors[values.pool_index].refcount);
+            //if(pi==plen-1 && (vi==0 || DataVector::data_vectors[values.pool_index].refcount<=2)) {
             if(pi==plen-1) {
                 DataContainer dc=values;
                 dc.offset=values.offset+vi;
-                DataElement x=DataElement{DataList(std::move(dc))};
+                DataElement x=DataElement{DataList{std::move(dc)}};
                 DataElement& v=bindings[splat.value];
                 if(v.last_match<bind_level) {
                     v=x;
@@ -186,7 +206,7 @@ bool do_match_list(const std::vector<Parameter>& parameters, DataContainer value
                 uint32_t newvec=DataVector::allocate();
                 DataVector::data_vectors[newvec].list=std::move(sub_vector);
                 DataContainer dc(newvec,0);
-                DataElement x=DataElement{DataList(std::move(dc))};
+                DataElement x=DataElement{DataList{std::move(dc)}};
                 DataElement& v=bindings[splat.value];
                 if(v.last_match<bind_level) {
                     v=x;
@@ -204,6 +224,7 @@ bool do_match_list(const std::vector<Parameter>& parameters, DataContainer value
             // we get just enough stuff in the splat that the rest of the parameters will match up exactly
             vi+=vlen-plen+1;
          } else {
+            const std::vector<DataElement>& x0f=DataVector::data_vectors[values.pool_index].list;
             if(vi>=vlen) {
                 return false; // ran out of parameters
             }
@@ -238,7 +259,7 @@ void Program::do_call_single(const Expression& expression, std::vector<DataEleme
             do_call_single(*alt.inner,bindings,splattable);
             for(uint32_t i=splattable.offset;i<splattable.data.size();i++) {
                 DataElement& e=splattable.data[i];
-                if(!holds_alternative<DataList>(e.value)) {
+                if(!std::holds_alternative<DataList>(e.value)) {
                     throw std::runtime_error("splat only works on lists");
                 }
                 DataContainer& d0=std::get<DataList>(e.value).value;
@@ -272,7 +293,7 @@ void Program::do_call_single(const Expression& expression, std::vector<DataEleme
             VecDataElement args;
             do_call_multi(alt.args,bindings,args);
             do_call_library(alt.func_id,args,sofar);
-        } else if constexpr (std::is_same_v<T, Never>) {
+        } else if constexpr (std::is_same_v<T, Error>) {
             throw std::runtime_error("error thrown by #error or #never");
         }
     }, expression.value);
@@ -290,7 +311,7 @@ start:
     if(op>=program.size()) {
         for (const auto& [key, val] : function_map) {
             if (val == op) {
-                throw std::runtime_error(std::format("function not found: {}",key));
+                throw std::runtime_error("function not found:" + key);
             }
         }
         throw std::runtime_error("function not found: <unknown>");
@@ -301,27 +322,26 @@ start:
         for(std::size_t i=0; i<rules.size(); i++) {
           auto& rule=rules[i];
           std::vector<DataElement> bindings(rule.names.size(),DataElement{DataUnbound{}});
-            std::span<DataElement> x0=std::span<DataElement>(args.data.data()+args.offset,args.data.size()-args.offset);
+            span<DataElement> x0=span<DataElement>(args.data.data()+args.offset,args.data.size()-args.offset);
             if(do_match_vec(rule.main.match,x0,bindings,rule.main.match_count)) {
                 bool guard_ok=true;
-                for(const RuleMatch& grule : rule.pre_arrow) {
+                for (std::size_t j=0; j<rule.clauses.size(); j++) {
+                    const RuleMatch& grule = rule.clauses[j];
                     VecDataElement guard_sofar;
                     do_call_multi(grule.expr,bindings,guard_sofar);
-                    std::span<DataElement> x0=std::span<DataElement>(guard_sofar.data.data()+guard_sofar.offset,guard_sofar.data.size()-guard_sofar.offset);
+                    span<DataElement> x0=span<DataElement>(guard_sofar.data.data()+guard_sofar.offset,guard_sofar.data.size()-guard_sofar.offset);
                     if(!do_match_vec(grule.match,x0,bindings,grule.update?grule.match_count:1)) {
-                        guard_ok=false;
-                        break;
+                        if(grule.decline) {
+                            guard_ok=false;
+                            break;
+                        } else {
+                            std::stringstream msg;
+                            msg << "failure in match(" << i << ',' << j << ')';
+                            throw std::runtime_error(msg.str());
+                        }
                     }
                 }
                 if(guard_ok) {
-                    for(const RuleMatch& grule : rule.post_arrow) {
-                        VecDataElement guard_sofar;
-                        do_call_multi(grule.expr,bindings,guard_sofar);
-                        std::span<DataElement> x0=std::span<DataElement>(guard_sofar.data.data()+guard_sofar.offset,guard_sofar.data.size()-guard_sofar.offset);
-                        if(!do_match_vec(grule.match,x0,bindings,grule.update?grule.match_count:1)) {
-                            throw std::runtime_error(std::format("failure in post arrow match({})",i));
-                        }
-                    }
                     if(fast) {
                         args.data.clear();
                     }
@@ -330,7 +350,9 @@ start:
                     if(rule.main.expr.size()>0 && std::holds_alternative<Call>(rule.main.expr[rule.main.expr.size()-1].value)) {
                         process_with_tail=1;
                     }
-                    for (const Expression& expr : rule.main.expr | std::views::take(rule.main.expr.size() - process_with_tail)) {
+                    auto stop = rule.main.expr.begin() + (rule.main.expr.size() - process_with_tail);
+                    for (auto it = rule.main.expr.begin(); it != stop; ++it) {
+                        const Expression& expr = *it;
                         do_call_single(expr,bindings,sofar);
                     }
                     if(process_with_tail==0) {
@@ -366,8 +388,9 @@ start:
                 break;
             }
         }
-
-        throw std::runtime_error(std::format("{} (in {}({}))", e.what(), name, argprint));
+        std::stringstream msg;
+        msg << e.what() << " (in " << name << '(' << argprint << ')';
+        //throw std::runtime_error(std::format("{} (in {}({}))", e.what(), name, argprint));
     }
     std::string name;
     for (const auto& [key, val] : function_map) {
@@ -377,7 +400,7 @@ start:
         }
     }
 
-    std::string error=std::format("rule not matched: {}(",name);
+    std::string error="rule not matched: " + name + '(';
     for(std::size_t i=args.offset;i<args.data.size();i++) {
         if(i!=0) {
             error+=",";
@@ -392,7 +415,7 @@ std::vector<DataElement> Program::run_string(std::string& call) {
     Parser parser;
     parser.tokens=lex(call);
     std::unordered_map<std::string, std::size_t> param_id_map;
-    std::vector<Expression> expressions=parse_expression_list(parser, param_id_map, FourTokenKind{Eof,Eof,Eof,Eof}, Comma);
+    std::vector<Expression> expressions=parse_expression_list(parser, param_id_map, SixTokenKind{Eof,Eof,Eof,Eof,Eof,Eof}, Comma);
     std::vector<DataElement> empty_bindings;
     VecDataElement result;
     do_call_multi(expressions, empty_bindings, result);

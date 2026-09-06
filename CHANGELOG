@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.8] - 2026-09-07
+
+### Changed
+- MAJOR syntax change: removed the double `->`, now match and update have `@` forms
+- #error now requires an integer parameter
+- Minimum interpreter C++ standard lowered from C++23 to C++17 for wider compiler coverage
+
+### Added
+- `\0` as a character encoding for null
+- Interpreter hack to let phase 1 source use sum types the compiler understands and the interpreter ignores: discards `name(..)` wrapper on left, and `name:name(..)` wrapper on right, keeping the single value contents
+
+### Fixed
+- `{a,*mid,b}` no longer segfaults
+
 ## [0.0.7] - 2026-08-16
 
 ### Changed

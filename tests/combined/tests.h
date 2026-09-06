@@ -1,6 +1,7 @@
     int64_t result0;
     int64_t result1;
     bool resultb;
+    codepoint resultc;
     int ret_code;
 
     printf("fact:");
@@ -169,4 +170,8 @@
     printf("noparam:");
     ret_code=rw_noparam(exe,&result0);
     if(!ret_code && result0==3) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("to_uppercase:");
+    ret_code=rw_to_uppercase(exe,'x',&resultc);
+    if(!ret_code && resultc=='X') { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 

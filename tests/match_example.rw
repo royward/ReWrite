@@ -4,5 +4,5 @@
 // Imagine this is some function that is expensive to compute
 expensive(n) -> n+n+n;
 
-// Use match after the arrow to bind it to result, then use result twice
-use_twice(n) -> match expensive(n) => result -> result*result;
+// Use match to bind it to result, then use result twice
+use_twice(n) match expensive(n) => result -> result*result;
