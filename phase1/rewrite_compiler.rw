@@ -676,31 +676,31 @@ generate_expr_code_untyped(types,ctx,sofar,etypes,{expr,*rest})
     generate_expr_code_untyped(types,ctx,{*sofar,*newcode},{*etypes,*callout_ret},rest);
 
 generate_param_code(types,post_arrow,bindlevel,{},ctx,sofar0,sofar1,{},{}) -> ctx,{*sofar0,*sofar1};
-generate_param_code(types,post_arrow,bindlevel,{_,parray,_,_},ctx,sofar0,sofar1,{},{}) -> ctx,{*sofar0,*sofar1,{ctx_fnr(ctx),OpDerefFree,0,0,0,BindReg,parray}};
+generate_param_code(types,post_arrow,bindlevel,{_,parray,_,_,_},ctx,sofar0,sofar1,{},{}) -> ctx,{*sofar0,*sofar1,{ctx_fnr(ctx),OpDerefFree,0,0,0,BindReg,parray}};
 generate_param_code(types,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
-    match gen_param_code_next_type(stride,typex) => {{{src_flag,src,sz}},tp},type_left
+    match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp},type_left
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,BindImm,val) => lblnext,ctx,code
     update ctx_set_lblnext(ctx,lblnext) => ctx ->
-    generate_param_code(types,false,bindlevel,stride,ctx,{*sofar0,*code},sofar1,type_left,rest);
+    generate_param_code(types,false,bindlevel,newstride,ctx,{*sofar0,*code},sofar1,type_left,rest);
 generate_param_code(types,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
-    match gen_param_code_next_type(stride,typex) => {{{src_flag,src,sz}},tp},type_left
+    match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp},type_left
     update generate_conditional_rhs(ctx,sofar0,tp,{{src_flag,src,sz}},{{BindImm,val,sz}}) => ctx,code ->
-    generate_param_code(types,true,bindlevel,stride,ctx,code,sofar1,type_left,rest);
+    generate_param_code(types,true,bindlevel,newstride,ctx,code,sofar1,type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
-    match gen_param_code_next_type(stride,typex) => {storage,tp},type_left
+    match gen_param_code_next_type(stride,typex) => newstride,{storage,tp},type_left
     update ctx_bindings(ctx) => bindings
     update split3_nth(id,{},bindings) => prebind,bind,postbind
     update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,storage,tp,bind) => ctx,newbind,code
     update ctx_newbindings(ctx,{*prebind,newbind,*postbind}) => ctx ->
-    generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,{*sofar1,*code},type_left,rest);
+    generate_param_code(types,post_arrow,bindlevel,newstride,ctx,sofar0,{*sofar1,*code},type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest})
-    match gen_param_code_next_type(stride,typex) => _,type_left ->
-    generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,type_left,rest);
+    match gen_param_code_next_type(stride,typex) => newstride,_,type_left ->
+    generate_param_code(types,post_arrow,bindlevel,newstride,ctx,sofar0,sofar1,type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,elements},*rest})
-    match gen_param_code_next_type(stride,typex) => {{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp},type_left
+    match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp},type_left
     match nth(tp,types) => {_,_,{2,sub_type},{0,32,0,32}}
     match nth(sub_type,types) => {_,_,_,sub_alloc}
-    match sum_sub_alloc(0,sub_alloc) => newstride
+    match sum_sub_alloc(0,sub_alloc) => substride
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,pend
     update ctx_newreg(ctx,32) => ctx,len
@@ -708,12 +708,12 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update generate_list_min_size(0,0,elements) => min_size,splatcount
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),if_not_zero(splatcount,OpCompareLessThanBranch,OpCompareNotEqualBranch),TypeU32,32,BindReg,len,BindImm,min_size) => lblnext,ctx,code
     update ctx_set_lblnext(ctx,lblnext) => ctx
-    update generate_param_code(types,post_arrow,bindlevel,{tp,parray,(newstride>>3)<<32,pbegin+(((newstride>>3)*(min_size-1)+16)<<32)},ctx,{},{},{{{{BindMem,pbegin+(16<<32),newstride}},sub_type}},elements) => ctx,code2 ->
-    generate_param_code(types,post_arrow,bindlevel,stride,ctx,{*sofar0,
+    update generate_param_code(types,post_arrow,bindlevel,{tp,parray,(substride>>3),0,min_size},ctx,{},{},{{{{BindMem,pbegin+(16<<32),substride}},sub_type}},elements) => ctx,code2 ->
+    generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
     {ctx_fnr(ctx),OpLea,0,BindReg,parray,src_flag1,src1},
     {ctx_fnr(ctx),OpMove+3,0,BindReg,pend,BindMem,parray+(8<<32)},
     {ctx_fnr(ctx),OpMinus,TypeU32,BindReg,len,BindReg,pend,src_flag2,src2},*code,
-    {ctx_fnr(ctx),OpLeaScale,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,newstride>>3},
+    {ctx_fnr(ctx),OpLeaScale,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,substride>>3},
     *code2},sofar1,type_left,rest);
 // generate_param_code(types,post_arrow,bindlevel,{tp,startptr,s,p},ctx,sofar0,sofar1,{{{{BindMem,p,sz}},t},{{ParamSplat,id,count}}) -> // note: no rest here
 //     update ctx_bindings(ctx) => bindings
@@ -724,9 +724,9 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
 
 
 
-gen_param_code_next_type({},{a,*rest}) -> a,rest;
-gen_param_code_next_type({_,_,s,p},{{{{BindMem,p,sz}},t},*rest}) -> {{{BindMem,p,sz}},t},{};
-gen_param_code_next_type({_,_,s,_},{{{{BindMem,p,sz}},t},*rest}) -> {{{BindMem,p,sz}},t},{{{{BindMem,p+s,sz}},t},*rest};
+gen_param_code_next_type({},{a,*rest}) -> {},a,rest;
+gen_param_code_next_type({tp,parray,s,pos,len},{{{{BindMem,p,sz}},t},*rest}) when pos==len-1 -> {tp,parray,s,pos,len},{{{BindMem,p,sz}},t},{};
+gen_param_code_next_type({tp,parray,s,pos,len},{{{{BindMem,p,sz}},t},*rest}) -> {tp,parray,s,pos+1,len},{{{BindMem,p,sz}},t},{{{{BindMem,p+(s<<32),sz}},t},*rest};
 
 generate_list_min_size(n,m,{}) -> n,m;
 generate_list_min_size(n,m,{e,*rest}) match generate_list_min_size_aux(e) => dn,dm -> generate_list_min_size(n+dn,m+dm,rest);
