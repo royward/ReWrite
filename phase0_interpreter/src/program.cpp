@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <sstream>
+#include <iostream>
 
 template<typename T>
 class span {
@@ -390,7 +391,7 @@ start:
         }
         std::stringstream msg;
         msg << e.what() << " (in " << name << '(' << argprint << ')';
-        //throw std::runtime_error(std::format("{} (in {}({}))", e.what(), name, argprint));
+        throw std::runtime_error(msg.str());
     }
     std::string name;
     for (const auto& [key, val] : function_map) {

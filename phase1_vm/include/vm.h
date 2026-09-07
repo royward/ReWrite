@@ -72,6 +72,7 @@ void rw_instance_unload(RWInstance* exe);
 int rw_instance_get_error(RWInstance* exe, uint32_t* line, const char** function);
 
 uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size);
+void deref_free(RWInstance* exe, uint32_t* p);
 
 static inline uint32_t* rwu_get_header(RWInstance* a, uint32_t x) {return a->heap+(x<<1);}
 static inline void* rwu_get_data(uint32_t* header, uint32_t start) {return (void*)(header+4+start);}

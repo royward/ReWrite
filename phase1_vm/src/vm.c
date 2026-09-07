@@ -7,8 +7,34 @@
 #define LABEL_COUNT 100000
 #define HEAP_SIZE 1000000
 
-#define OP_LABEL 0x01
 #define OP_MIN_BRANCH 0xF0
+
+#define OP_LABEL 0x01
+#define OP_ERROR 0x02
+#define OP_RET 0x03
+#define OP_ADD_STACK 0x05
+#define OP_LLALLOC 0x0E
+#define OP_STORE 0x0F
+#define OP_MOVE 0x10
+#define OP_PLUS 0x18
+#define OP_MINUS 0x19
+#define OP_TIMES 0x1A
+#define OP_DIVIDE 0x1B
+#define OP_MODULUS 0x1C
+#define OP_LT 0x1D
+#define OP_LTE 0x1E
+#define OP_INSERT_LL 0x20
+#define OP_LEA 0x28
+#define OP_LEA_SCALE 0x29
+#define OP_EXTRACT_LL 0x30
+#define OP_ALLOC 0xC0
+#define OP_DEREF_FREE 0xC1
+#define OP_CMP_NE_BRANCH 0xF0
+#define OP_CMP_LT_BRANCH 0xF6
+#define OP_CMP_LE_BRANCH 0xF7
+#define OP_CMP_EQ_BRANCH 0xF8
+#define OP_GOTO 0xFE
+#define OP_CALL 0xFF
 
 typedef struct {
     uint64_t d0,d1,d2;
@@ -104,32 +130,6 @@ void rw_instance_unload(RWInstance* exe) {
         free(exe->heap);
     free(exe);
 }
-
-#define OP_LABEL 0x01
-#define OP_ERROR 0x02
-#define OP_RET 0x03
-#define OP_ADD_STACK 0x05
-#define OP_LLALLOC 0x0E
-#define OP_STORE 0x0F
-#define OP_MOVE 0x10
-#define OP_PLUS 0x18
-#define OP_MINUS 0x19
-#define OP_TIMES 0x1A
-#define OP_DIVIDE 0x1B
-#define OP_MODULUS 0x1C
-#define OP_LT 0x1D
-#define OP_LTE 0x1E
-#define OP_INSERT_LL 0x20
-#define OP_LEA 0x28
-#define OP_LEA_SCALE 0x29
-#define OP_EXTRACT_LL 0x30
-#define OP_ALLOC 0xC0
-#define OP_CMP_NE_BRANCH 0xF0
-#define OP_CMP_LT_BRANCH 0xF6
-#define OP_CMP_LE_BRANCH 0xF7
-#define OP_CMP_EQ_BRANCH 0xF8
-#define OP_GOTO 0xFE
-#define OP_CALL 0xFF
 
 #define TYPE_LIST 1
 #define TYPE_BOOL 2
@@ -333,6 +333,10 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out,"*");
                 display_operand(out,operation->flags_src2,operation->src2);
             } break;
+            case OP_DEREF_FREE: {
+                fprintf(out,"deref_free ");
+                display_operand(out,operation->flags_src1,operation->src1);
+            } break;
             case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"let.%d ",sz);
@@ -506,6 +510,11 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
     return alloc;
 }
 
+void deref_free(RWInstance* exe, uint32_t* p) {
+    (void)exe;
+    p[1]--;
+}
+
 int program_execute(RWInstance* exe, uint32_t in_lbl) {
     Program* program=exe->program;
     exe->errtype=0;
@@ -559,6 +568,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_ALLOC: {
                 uint32_t ret=alloc(exe,operand_load(exe,64,operation->flags_src1,operation->src1,sp),operand_load(exe,64,operation->flags_src1,operation->src2,sp));
                 operand_store(exe, operation, ret, 64, sp);
+            } break;
+            case OP_DEREF_FREE: {
+                deref_free(exe,(uint32_t*)operand_load(exe, 64, operation->flags_src1, operation->src1, sp));
             } break;
             case OP_MOVE: case OP_INSERT_LL: case OP_EXTRACT_LL: {
                 uint64_t val = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
