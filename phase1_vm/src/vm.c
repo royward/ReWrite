@@ -510,9 +510,8 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
     return alloc;
 }
 
-void deref_free(RWInstance* exe, uint32_t* p) {
-    (void)exe;
-    p[1]--;
+void deref_free(RWInstance* exe, uint64_t v) {
+    exe->heap[v+v+1]--;
 }
 
 int program_execute(RWInstance* exe, uint32_t in_lbl) {
@@ -570,7 +569,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 operand_store(exe, operation, ret, 64, sp);
             } break;
             case OP_DEREF_FREE: {
-                deref_free(exe,(uint32_t*)operand_load(exe, 64, operation->flags_src1, operation->src1, sp));
+                deref_free(exe,operand_load(exe, 64, operation->flags_src1, operation->src1, sp));
             } break;
             case OP_MOVE: case OP_INSERT_LL: case OP_EXTRACT_LL: {
                 uint64_t val = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
@@ -610,6 +609,22 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 if(src1 == src2) {
+                    pc = operation->dst-1; // -1 because pc++ at end of loop
+                }
+            } break;
+             case OP_CMP_LE_BRANCH: {
+                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
+                int64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                int64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
+                if(src1 <= src2) {
+                    pc = operation->dst-1; // -1 because pc++ at end of loop
+                }
+            } break;
+             case OP_CMP_LT_BRANCH: {
+                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
+                int64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                int64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
+                if(src1 < src2) {
                     pc = operation->dst-1; // -1 because pc++ at end of loop
                 }
             } break;
@@ -671,7 +686,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 operand_store(exe, operation, dst, sz, sp);
             } break;
             default: {
-                fprintf(stderr,"Illegal Instruction\n");
+                fprintf(stderr,"Illegal Instruction %x\n",op);
                 exe->errtype=1;
                 return exe->errtype;
             }

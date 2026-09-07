@@ -10,3 +10,16 @@ f() -> 0,{'ab',g()},"test";
 
 :- export h(value string, value string, i64) -> value string, char;
 h(s,{_,a,'x'},0) -> s,a;
+
+:- export cdr(value string) -> value string;
+cdr({a,*rest}) -> rest;
+
+:- export len(value string) -> i64;
+len("") -> 0;
+len({a,*rest}) -> len(rest)+1;
+
+:- export member(char, value string) -> bool;
+member(_,{}) -> false;
+member(x,{x,*_}) -> true;
+member(x,{_,*rest}) -> member(x,rest);
+

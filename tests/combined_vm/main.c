@@ -28,7 +28,24 @@ int main(int argc, char** argv) {
     printf("g:");
     ret_code=rw_h(exe,"test","hex",0,&resultc1,&resultc);
     if(!ret_code && result0==0 && strcmp(resultc1,"test")==0 && (char)resultc=='e') { printf("success\n"); } else { printf("fail:%d %ld %c %s\n",ret_code,result0,resultc,resultc1); };
-    //free(resultc1);
+    free(resultc1);
+
+    printf("cdr:");
+    ret_code=rw_cdr(exe,"test",&resultc1);
+    if(!ret_code && strcmp(resultc1,"est")==0) { printf("success\n"); } else { printf("fail:%d %s\n",ret_code,resultc1); };
+    free(resultc1);
+
+    printf("len:");
+    ret_code=rw_len(exe,"flaccinaucinihilipilification",&result0);
+    if(!ret_code && result0==29) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("member:");
+    ret_code=rw_member(exe,'h',"flaccinaucinihilipilification",&resultb);
+    if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
+
+    printf("member:");
+    ret_code=rw_member(exe,'x',"flaccinaucinihilipilification",&resultb);
+    if(!ret_code && !resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
 
     program_unload(&p);
     rw_instance_unload(exe);
