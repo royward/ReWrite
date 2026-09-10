@@ -1,6 +1,7 @@
 #include "vm.h"
 #include <stdlib.h>
 #include <inttypes.h>
+#include <string.h>
 
 #define OVERFLOW_SIZE 1000
 #define REGISTERS_SIZE 100000
@@ -29,6 +30,8 @@
 #define OP_EXTRACT_LL 0x30
 #define OP_ALLOC 0xC0
 #define OP_DEREF_FREE 0xC1
+#define OP_REALLOC 0xC2
+#define OP_CONTINUATION 0xCF
 #define OP_CMP_NE_BRANCH 0xF0
 #define OP_CMP_LT_BRANCH 0xF6
 #define OP_CMP_LE_BRANCH 0xF7
@@ -337,6 +340,24 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out,"deref_free ");
                 display_operand(out,operation->flags_src1,operation->src1);
             } break;
+            case OP_REALLOC: {
+                Operation* operation2=&program->code[i+1];
+                fprintf(out,"let (");
+                display_operand(out,operation->flags_dst,operation->dst);
+                fprintf(out,",");
+                display_operand(out,operation2->flags_dst,operation2->dst);
+                fprintf(out,") = realloc (");
+                display_operand(out,operation->flags_src1,operation->src1);
+                fprintf(out,",");
+                display_operand(out,operation2->flags_src1,operation2->src1);
+                fprintf(out,") sz=");
+                display_operand(out,operation->flags_src2,operation->src2);
+                fprintf(out," pre=%d post=%d+",operation->label2,operation2->label2);
+                display_operand(out,operation2->flags_src2,operation2->src2);
+            } break;
+            case OP_CONTINUATION: {
+                fprintf(out,"(continuation)");
+            }
             case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"let.%d ",sz);
@@ -567,6 +588,26 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_ALLOC: {
                 uint32_t ret=alloc(exe,operand_load(exe,64,operation->flags_src1,operation->src1,sp),operand_load(exe,64,operation->flags_src1,operation->src2,sp));
                 operand_store(exe, operation, ret, 64, sp);
+            }
+            case OP_REALLOC: {
+                Operation* operation2=&program->code[pc+1];
+                pc++;
+                uint32_t pre=operation->label2;
+                uint32_t post=operation2->label2 + operand_load(exe, 32, operation2->flags_src2, operation2->src2, sp);
+                uint32_t array=operand_load(exe,32,operation->flags_src1,operation->src1,sp);
+                uint32_t start=operand_load(exe,32,operation2->flags_src1,operation2->src1,sp);
+                uint32_t stride=operand_load(exe, 32, operation->flags_src2, operation->src2, sp);
+                uint32_t* parray=&exe->heap[array+array];
+                uint32_t end=parray[2];
+                if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
+                    // no need to realloc
+                    operand_store(exe, operation, array, 32, sp);
+                    operand_store(exe, operation2, start-pre, 32, sp);
+                } else {
+                    uint32_t ret=alloc(exe,pre+post+end-start,stride);
+                    memcpy((uint8_t*)(&exe->heap[ret+ret+4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
+                    deref_free(exe,array);
+                }
             } break;
             case OP_DEREF_FREE: {
                 deref_free(exe,operand_load(exe, 64, operation->flags_src1, operation->src1, sp));
