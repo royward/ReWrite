@@ -23,3 +23,12 @@ member(_,{}) -> false;
 member(x,{x,*_}) -> true;
 member(x,{_,*rest}) -> member(x,rest);
 
+:- temp() -> bool;
+temp() -> member('a',"abc");
+
+:- export listn2(i64) -> value string;
+listn2(n) -> listn_aux(0,n,{});
+
+:- listn_aux(i64,i64,string) -> string;
+listn_aux(n,n,sofar) -> sofar;
+//listn_aux(n,m,sofar) -> listn_aux(n+1,m,{*sofar,'a'+n});

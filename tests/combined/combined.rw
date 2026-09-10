@@ -56,7 +56,6 @@ fib(n) -> fib(n-2)+fib(n-1);
 
 //listn2.rw
 //listn.rw
-//member.rw
 //misc_splat.rw
 //nprime.rw
 //nqueens_bitmask.rw
