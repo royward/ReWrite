@@ -19,8 +19,10 @@ typedef struct {
     uint8_t flags_src1;
     uint8_t flags_src2;
 // 8
-    uint32_t dst;
-    uint32_t label2;
+    union {
+        uint64_t dst;
+        fparts fdst;
+    };
 // 16
     union {
         uint64_t src1;

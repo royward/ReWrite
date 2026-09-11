@@ -541,7 +541,6 @@ lookup_type_size_pri(t,types) match nth(t,types) => {_,_,_,size_pri} -> size_pri
 const OpLabel=1;
 const OpError=2;
 const OpRet=3;
-const OpAddStack=5;
 const OpLLAlloc=14;
 const OpLLStore=15;
 const OpMove=16;
@@ -850,7 +849,6 @@ generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args}) match ctx_get_fn_
     update generate_callout_bindings(ctx,{},type_right) => ctx,callout ->
     ctx,false,{*args_code,
         {ctx_fnr(ctx),OpCall,0,BindLabel,fn_id,0,spinc,0,callctr},
-        {ctx_fnr(ctx),OpAddStack,0,0,0,0,-spinc},
         *callout_extract(ctx_fnr(ctx),callctr,{},callout)},
     callout_ret({},callout);
 generate_expr_code_aux(types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}})
@@ -891,7 +889,7 @@ array_fixed_elt_assign(ctx,mem,c,code,{}) -> c,0,code;
 array_fixed_elt_assign(ctx,mem,c,code,{{_,partcode,r},*rest}) -> array_fixed_elt_assign(ctx,mem,array_fixed_elt_assign_aux(ctx,mem,c,{*code,*partcode},r),rest);
 
 array_fixed_elt_assign_aux(ctx,mem,c,code,{}) -> c,code;
-array_fixed_elt_assign_aux(ctx,mem,c,code,{{{{src_flag,src,sz}},_},*rest}) -> println_any(c),println_any(sz),array_fixed_elt_assign_aux(ctx,mem,c+1,{*code,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindMem,mem,src_flag,src,0,0,16+(c*sz>>3)}},rest);
+array_fixed_elt_assign_aux(ctx,mem,c,code,{{{{src_flag,src,sz}},_},*rest}) -> array_fixed_elt_assign_aux(ctx,mem,c+1,{*code,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindMem,mem,src_flag,src,0,0,16+(c*sz>>3)}},rest);
 
 decompose_stypes({0,n}) -> n,{0,n};
 decompose_stypes({1,a,*rest}) -> a,{1,*rest};
@@ -1030,7 +1028,6 @@ add_newline(str) -> {*str,'\n'};
 
 ll_emit_instruction(_,{_,_,OpLabel,_,_,dst}) -> {'L',*int2s36(dst),':'};
 ll_emit_instruction(_,{_,_,OpRet,_}) -> "\tbr label %exit";
-ll_emit_instruction(_,{_,_,OpAddStack,_,_,_,_,_}) -> "";
 ll_emit_instruction(_,{_,_,op,_,BindReg,dst,BindArgRet,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\t%t',*int2s36(dst),'=load ',*intsize(op-OpMove),',',*ll_emit_arg(BindArgRet,src)};
 ll_emit_instruction(_,{_,_,op,_,BindArgRet,dst,flag_src,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\tstore ',*intsize(op-OpMove),' ',*ll_emit_arg(flag_src,src),',ptr %x','0'+dst};
 ll_emit_instruction(_,{_,_,op,_,BindReg,dst,flag_src,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\t%t',*int2s36(dst),'=or ',*intsize(op-OpMove),' ','%t',*int2s36(src),',0'};
@@ -1126,7 +1123,6 @@ create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{_,_,_,name,
         {new_lbl,{{new_lbl,0,OpLabel,0,BindLabel,new_lbl},
             *create_export_vm_code_in(types,new_lbl,0,{},left,values_left),
             {new_lbl,0,OpCall,0,BindLabel,fnid,0,2,0,0},
-            {new_lbl,0,OpAddStack,0,0,0,0,-2},
             *create_export_vm_code_out(types,new_lbl,0,{},right,values_right),
             {new_lbl,0,OpRet,0}}}},
         {*sofarh,'\nstatic inline int32_t rw_',*name,'(RWInstance* a',*sig1,*sig2,') {\n',

@@ -13,7 +13,6 @@
 #define OP_LABEL 0x01
 #define OP_ERROR 0x02
 #define OP_RET 0x03
-#define OP_ADD_STACK 0x05
 #define OP_LLALLOC 0x0E
 #define OP_STORE 0x0F
 #define OP_MOVE 0x10
@@ -55,15 +54,15 @@ int program_link(Program* program) {
     for(uint32_t i=1;i<program->instr_max;i++) {
         Operation* operation=&program->code[i];
         if(operation->op==OP_LABEL) {
-            labels[operation->dst]=i;
+            labels[operation->fdst.a]=i;
         }
     }
     for(uint32_t i=1;i<program->instr_max;i++) {
         Operation* operation=&program->code[i];
         if(operation->op>=OP_MIN_BRANCH) {
-            operation->dst=labels[operation->dst];
-            if(operation->label2!=(uint32_t)(-1)) {
-                operation->label2=labels[operation->label2];
+            operation->fdst.a=labels[operation->fdst.a]+1;
+            if(operation->fdst.b!=(uint32_t)(-1)) {
+                operation->fdst.b=labels[operation->fdst.b]+1;
             }
         }
     }
@@ -167,19 +166,19 @@ void display_operand(FILE* out, uint8_t flag, int64_t val) {
     }
     switch(bind) {
         case BIND_IMM: {
-            fprintf(out,"%" PRId64,val);
+            fprintf(out,"%" PRId64,val&0xFFFFFFFF);
         } break;
         case BIND_REG: {
-            fprintf(out,"r%" PRIu64,val);
+            fprintf(out,"r%" PRIu64,val&0xFFFFFFFF);
         } break;
         case BIND_ARGRET: {
-            fprintf(out,"x%" PRIu64,val);
+            fprintf(out,"x%" PRIu64,val&0xFFFFFFFF);
         } break;
         case BIND_OVERFLOW: {
-            fprintf(out,"ov+%" PRId64,val);
+            fprintf(out,"ov+%" PRId64,val&0xFFFFFFFF);
         } break;
         case BIND_INOUT: {
-            fprintf(out,"(r0+%" PRId64 ")",val);
+            fprintf(out,"(r0+%" PRId64 ")",val&0xFFFFFFFF);
         } break;
         case BIND_MEM: {
             fprintf(out,"(r%" PRId64 "+%" PRId64 ")",val&0xFFFFFFFF, val>>32);
@@ -190,34 +189,34 @@ void display_operand(FILE* out, uint8_t flag, int64_t val) {
 void program_display_label(Program* program, FILE* out, Operation* operation) {
     uint32_t label=0;
     for(uint32_t i=0;i<program->label_count;i++) {
-        if(program->labels[i]==operation->dst) {
+        if(program->labels[i]==operation->fdst.a-1) {
             label=i;
             break;
         }
     }
-    fprintf(out,"%d (line %d)",label,operation->dst);
+    fprintf(out,"%d (line %d)",label,operation->fdst.a);
 }
 
 void program_display_label_both(Program* program, FILE* out, Operation* operation) {
-    if(operation->label2==(uint32_t)(-1)) {
+    if(operation->fdst.b==(uint32_t)(-1)) {
         program_display_label(program,out,operation);
         return;
     }
     uint32_t label=0;
     for(uint32_t i=0;i<program->label_count;i++) {
-        if(program->labels[i]==operation->dst) {
+        if(program->labels[i]==operation->fdst.a) {
             label=i;
             break;
         }
     }
     uint32_t label2=0;
     for(uint32_t i=0;i<program->label_count;i++) {
-        if(program->labels[i]==operation->label2) {
+        if(program->labels[i]==operation->fdst.b) {
             label2=i;
             break;
         }
     }
-    fprintf(out,"%d/%d (line %d/line %d)",label,label2,operation->dst,operation->label2);
+    fprintf(out,"%d/%d (line %d/line %d)",label,label2,operation->fdst.a,operation->fdst.b);
 }
 
 const char* display_type(uint8_t tp) {
@@ -276,13 +275,13 @@ void program_disassemble(Program* program, FILE* out) {
         uint8_t op=operation->op;
         switch(op) {
             case OP_LABEL: {
-                fprintf(out,"label %d",operation->dst);
+                fprintf(out,"label %d",operation->fdst.a);
             } break;
             case OP_LLALLOC: {
-                fprintf(out,"ll_alloc %d",operation->dst);
+                fprintf(out,"ll_alloc %d",operation->fdst.a);
             } break;
             case OP_STORE: {
-                fprintf(out,"ll_store.%s %d",display_type(operation->type),operation->dst);
+                fprintf(out,"ll_store.%s %d",display_type(operation->type),operation->fdst.a);
             } break;
             case OP_ERROR: {
                 fprintf(out,"error type:");
@@ -306,13 +305,6 @@ void program_disassemble(Program* program, FILE* out) {
                     fprintf(out," (o=%d)",(uint32_t)operation->src2);
                 }
             } break;
-            case OP_ADD_STACK: {
-                if((int32_t)operation->src1>=0) {
-                    fprintf(out,"sp+=%d ",(int32_t)operation->src1);
-                } else {
-                    fprintf(out,"sp-=%d ",-(int32_t)operation->src1);
-                }
-            } break;
             case OP_LEA: {
                 fprintf(out,"let.p ");
                 display_operand(out,operation->flags_dst,operation->dst);
@@ -326,7 +318,7 @@ void program_disassemble(Program* program, FILE* out) {
                 display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out,"+");
                 display_operand(out,operation->flags_src2,operation->src2);
-                fprintf(out,"*%d",operation->label2);
+                fprintf(out,"*%d",operation->fdst.b);
             } break;
             case OP_ALLOC: {
                 fprintf(out,"let ");
@@ -352,7 +344,7 @@ void program_disassemble(Program* program, FILE* out) {
                 display_operand(out,operation2->flags_src1,operation2->src1);
                 fprintf(out,") sz=");
                 display_operand(out,operation->flags_src2,operation->src2);
-                fprintf(out," pre=%d post=%d+",operation->label2,operation2->label2);
+                fprintf(out," pre=%d post=%d+",operation->fdst.b,operation2->fdst.b);
                 display_operand(out,operation2->flags_src2,operation2->src2);
             } break;
             case OP_CONTINUATION: {
@@ -437,18 +429,18 @@ void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32
         } break;
         case BIND_REG: {
             value&=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
-            exe->registers[operation->dst+sp]=value;
+            exe->registers[operation->fdst.a+sp]=value;
         } break;
         case BIND_ARGRET: {
             value&=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
-            exe->argret[operation->dst]=value;
+            exe->argret[operation->fdst.a]=value;
         } break;
         case BIND_INOUT: {
             value&=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
-            ((uint64_t*)exe->registers[0])[operation->dst]=value;
+            ((uint64_t*)exe->registers[0])[operation->fdst.a]=value;
         } break;
         case BIND_OVERFLOW: {
-            uint8_t* addr=&exe->overflow[operation->dst];
+            uint8_t* addr=&exe->overflow[operation->fdst.a];
             switch(sz) { // alignment is guaranteed by the compiler
                 case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
                 case 16:*((uint16_t*)addr)=(uint16_t)value; break;
@@ -458,7 +450,7 @@ void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32
             }
         } break;
         case BIND_MEM: {
-            uint8_t* addr=(uint8_t*)(exe->registers[operation->dst+sp]+operation->label2);
+            uint8_t* addr=(uint8_t*)(exe->registers[operation->fdst.a+sp]+operation->fdst.b);
             switch(sz) { // alignment is guaranteed by the compiler
                 case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
                 case 16:*((uint16_t*)addr)=(uint16_t)value; break;
@@ -543,6 +535,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
     uint32_t sp=0; // make sure we are start, even if it was run before
     uint32_t pc=program->labels[in_lbl];
     while(true) {
+        //printf("%d\n",pc);
         Operation* operation=&program->code[pc];
         uint8_t op=operation->op;
         switch(op) {
@@ -553,7 +546,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 // NOP
             } break;
             case OP_ERROR: {
-                exe->errtype=operand_load(exe, 64, operation->flags_dst, operation->dst, sp);
+                exe->errtype=operand_load(exe, 64, operation->flags_dst, operation->fdst.a, sp);
                 exe->errline=operation->src1;
                 exe->errsym=program->symbols+operation->src2;
                 return exe->errtype;
@@ -563,18 +556,16 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     return 0;
                 } else {
                     pc=exe->registers[sp-1];
+                    sp-=program->code[pc].src1; // restore the stack to the old value
                 }
             } break;
             case OP_CALL: {
                 sp+=(int32_t)operation->src1;
                 exe->registers[sp-1]=pc;
-                pc = operation->dst-1;
+                pc = operation->fdst.a-1;
             } break;
             case OP_GOTO: {
-                pc = operation->dst-1;
-            } break;
-            case OP_ADD_STACK: {
-                 sp+=(int32_t)operation->src1;
+                pc = operation->fdst.a-1;
             } break;
             case OP_LEA: {
                 uint64_t val = operand_load(exe, 64, operation->flags_src1, operation->src1, sp);
@@ -583,17 +574,17 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_LEA_SCALE: {
                 uint64_t val = operand_load(exe, 64, operation->flags_src1, operation->src1, sp);
                 uint64_t offset = operand_load(exe, 32, operation->flags_src2, operation->src2, sp);
-                operand_store(exe, operation, val+offset*operation->label2, 64, sp);
+                operand_store(exe, operation, val+offset*operation->fdst.b, 64, sp);
             } break;
             case OP_ALLOC: {
                 uint32_t ret=alloc(exe,operand_load(exe,64,operation->flags_src1,operation->src1,sp),operand_load(exe,64,operation->flags_src1,operation->src2,sp));
                 operand_store(exe, operation, ret, 64, sp);
-            }
+            } break;
             case OP_REALLOC: {
                 Operation* operation2=&program->code[pc+1];
                 pc++;
-                uint32_t pre=operation->label2;
-                uint32_t post=operation2->label2 + operand_load(exe, 32, operation2->flags_src2, operation2->src2, sp);
+                uint32_t pre=operation->fdst.b;
+                uint32_t post=operation2->fdst.b + operand_load(exe, 32, operation2->flags_src2, operation2->src2, sp);
                 uint32_t array=operand_load(exe,32,operation->flags_src1,operation->src1,sp);
                 uint32_t start=operand_load(exe,32,operation2->flags_src1,operation2->src1,sp);
                 uint32_t stride=operand_load(exe, 32, operation->flags_src2, operation->src2, sp);
@@ -627,7 +618,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
                 uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp);
                 if(src1 != src2) {
-                    pc = operation->dst-1; // -1 because pc++ at end of loop
+                    pc = operation->fdst.a-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
@@ -635,14 +626,14 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 if(src1 != src2) {
-                    pc = operation->dst-1; // -1 because pc++ at end of loop
+                    pc = operation->fdst.a-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_CMP_EQ_BRANCH: {
                 uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
                 uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp);
                 if(src1 == src2) {
-                    pc = operation->dst-1; // -1 because pc++ at end of loop
+                    pc = operation->fdst.a-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
@@ -650,7 +641,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 if(src1 == src2) {
-                    pc = operation->dst-1; // -1 because pc++ at end of loop
+                    pc = operation->fdst.a-1; // -1 because pc++ at end of loop
                 }
             } break;
              case OP_CMP_LE_BRANCH: {
@@ -658,7 +649,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 int64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 int64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 if(src1 <= src2) {
-                    pc = operation->dst-1; // -1 because pc++ at end of loop
+                    pc = operation->fdst.a-1; // -1 because pc++ at end of loop
                 }
             } break;
              case OP_CMP_LT_BRANCH: {
@@ -666,7 +657,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 int64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 int64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 if(src1 < src2) {
-                    pc = operation->dst-1; // -1 because pc++ at end of loop
+                    pc = operation->fdst.a-1; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
