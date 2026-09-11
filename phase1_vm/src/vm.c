@@ -30,6 +30,7 @@
 #define OP_ALLOC 0xC0
 #define OP_DEREF_FREE 0xC1
 #define OP_REALLOC 0xC2
+#define OP_APPEND 0xC3
 #define OP_CONTINUATION 0xCF
 #define OP_CMP_NE_BRANCH 0xF0
 #define OP_CMP_LT_BRANCH 0xF6
@@ -342,14 +343,22 @@ void program_disassemble(Program* program, FILE* out) {
                 display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out,",");
                 display_operand(out,operation2->flags_src1,operation2->src1);
-                fprintf(out,") sz=");
+                fprintf(out,") stride=");
                 display_operand(out,operation->flags_src2,operation->src2);
                 fprintf(out," pre=%d post=%d+",operation->fdst.b,operation2->fdst.b);
                 display_operand(out,operation2->flags_src2,operation2->src2);
             } break;
+            case OP_APPEND: {
+                fprintf(out,"append.%d (",operation->fdst.b);
+                display_operand(out,operation->flags_dst,operation->dst);
+                fprintf(out,",");
+                display_operand(out,operation->flags_src1,operation->src1);
+                fprintf(out,") <- ");
+                display_operand(out,operation->flags_src2,operation->src2);
+            } break;
             case OP_CONTINUATION: {
                 fprintf(out,"(continuation)");
-            }
+            } break;
             case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"let.%d ",sz);
@@ -466,7 +475,8 @@ void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32
     }
 }
 
-uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t src, uint32_t sp) {
+uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t srcfull, uint32_t sp) {
+    uint32_t src=srcfull&0xFFFFFFFF;
     uint64_t mask=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
     switch(flags_src&0xF) {
         case BIND_IMM: {
@@ -494,7 +504,7 @@ uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t
             return value&mask;
         } break;
         case BIND_MEM: {
-            uint8_t* addr=(uint8_t*)(exe->registers[(src&0xFFFFFFFF)+sp]+(src>>32));
+            uint8_t* addr=(uint8_t*)(exe->registers[src+sp]+(srcfull>>32));
             uint64_t value;
             switch(sz) { // alignment is guaranteed by the compiler
                 case 1:case 8: value=*((uint8_t*)addr); break;
@@ -596,9 +606,28 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     operand_store(exe, operation2, start-pre, 32, sp);
                 } else {
                     uint32_t ret=alloc(exe,pre+post+end-start,stride);
-                    memcpy((uint8_t*)(&exe->heap[ret+ret+4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
+                    uint32_t* parray2=&exe->heap[ret+ret];
+                    memcpy((uint8_t*)(&parray2[4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
+                    parray2[2]=pre+end;
                     deref_free(exe,array);
+                    operand_store(exe, operation, ret, 32, sp);
+                    operand_store(exe, operation2, 0, 32, sp);
                 }
+            } break;
+            case OP_APPEND: {
+                uint32_t array=operand_load(exe,32,operation->flags_dst,operation->dst,sp);
+                uint32_t value=operand_load(exe,32,operation->flags_src2, operation->src2, sp);
+                uint32_t* parray=&exe->heap[array+array];
+                uint32_t end=parray[2];
+                parray[2]=end+1;
+                uint8_t* addr=((uint8_t*)parray)+16+end*(operation->fdst.b>>3);
+                switch(operation->fdst.b) { // alignment is guaranteed by the compiler
+                    case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
+                    case 16:*((uint16_t*)addr)=(uint16_t)value; break;
+                    case 32:*((uint32_t*)addr)=(uint32_t)value; break;
+                    case 64:*((uint64_t*)addr)=(uint64_t)value; break;
+                    default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
+                } break;
             } break;
             case OP_DEREF_FREE: {
                 deref_free(exe,operand_load(exe, 64, operation->flags_src1, operation->src1, sp));

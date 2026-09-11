@@ -557,6 +557,9 @@ const OpLeaScale=41;
 const OpExtract=48;
 const OpAlloc=192;
 const OpDerefFree=193;
+const OpRealloc=194;
+const OpAppend=195;
+const OpCont=207;
 const OpCompareNotEqualBranch=240;
 const OpCompareLessThanBranch=246;
 const OpCompareLessThanEqualBranch=247;
@@ -868,28 +871,40 @@ generate_expr_code_aux(types,ctx,{0,t},{ExprSplat,arg})
 generate_expr_code_list(ctx,sz,stype,args_code,{},{}) // no splats
     update ctx_newreg(ctx,32) => ctx,array
     update ctx_newreg(ctx,64) => ctx,parray
-    update array_fixed_elt_assign(ctx,parray,0,{},args_code) => c,csplat,code
+    update array_fixed_elt_assign(ctx,parray,0,{},args_code) => c,code
     -> ctx,false,{{ctx_fnr(ctx),OpAlloc,0,BindReg,array,BindImm,sz>>3,BindImm,c},{ctx_fnr(ctx),OpLea,0,BindReg,parray,BindReg,array},*code,{ctx_fnr(ctx),OpMove+3,0,BindMem,parray,BindImm,c,0,0,8}},
     {{{{BindReg,array,32},{BindImm,0,32}},stype}};
-generate_expr_code_list(ctx,sz,stype,{},splat,post_splat) // first splat at start - check for append
+generate_expr_code_list(ctx,sz,stype,{},{{true,{},{{{array_flag,array,32},{start_flag,start,32}},stype}}},post_splat) // first splat at start - check for append
     update get_post_splat_alloc_size(ctx,0,{},BindImm,0,post_splat) => ctx,sum_const,sum_code,sum_src_flag,sum_src
-    -> println_any(stype),println_any(splat),println_any(post_splat),#error(12);
+    update ctx_newreg(ctx,32) => ctx,newarray
+    update ctx_newreg(ctx,32) => ctx,newstart
+    update array_var_elt_assign(ctx,BindReg,newarray,BindReg,newstart,{},post_splat) => code
+    -> ctx,false,
+        {*sum_code,{ctx_fnr(ctx),OpRealloc,0,BindReg,newarray,array_flag,array,BindImm,sz>>3,0},
+        {ctx_fnr(ctx),OpCont,0,BindReg,newstart,start_flag,start,sum_src_flag,sum_src,sum_const},*code},
+    {{{{BindReg,newarray,32},{BindReg,newstart,32}},stype}};
 generate_expr_code_list(ctx,sz,stype,pre_splat,splat,post_splat) // first splat in middle - check for prepend and append
     -> println_any(pre_splat),#error(13);
 
 split_splat(sofar,{}) -> sofar,{},{};
-split_splat(sofar,{{true,partcode,r},*rest}) -> sofar,{{true,partcode,r}},rest;
-split_splat(sofar,{{false,partcode,r},*rest}) -> split_splat({*sofar,{false,partcode,r}},rest);
+split_splat(sofar,{{_,{},{}},*rest}) -> split_splat(sofar,rest);
+split_splat(sofar,{{true,partcode,{r,*r1}},*rest}) -> sofar,{{true,partcode,r}},split_splat_aux({},{{true,{},r1},*rest});
+split_splat(sofar,{{false,partcode,{r,*r1}},*rest}) -> split_splat({*sofar,{false,partcode,r}},{{false,{},r1},*rest});
 
-get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{}) -> sum,sum_code,sum_src_flag,sum_src;
+split_splat_aux(sofar,{}) -> sofar;
+split_splat_aux(sofar,{{_,{},{}},*rest}) -> split_splat_aux(sofar,rest);
+split_splat_aux(sofar,{{splatflag,partcode,{r,*r1}},*rest}) -> split_splat_aux({*sofar,{splatflag,partcode,r}},{{splatflag,{},r1},*rest});
+
+get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{}) -> ctx,sum,sum_code,sum_src_flag,sum_src;
 get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{{false,*_},*rest}) -> get_post_splat_alloc_size(ctx,sum+1,sum_code,sum_src_flag,sum_src,rest);
-//get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{{true,*_},*rest}) -> get_post_splat_alloc_size(ctx,sum+1,sum_code,sum_src_flag,sum_src,rest);
+get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{{true,*_},*rest}) -> #error(12); // TODO
 
-array_fixed_elt_assign(ctx,mem,c,code,{}) -> c,0,code;
-array_fixed_elt_assign(ctx,mem,c,code,{{_,partcode,r},*rest}) -> array_fixed_elt_assign(ctx,mem,array_fixed_elt_assign_aux(ctx,mem,c,{*code,*partcode},r),rest);
+array_fixed_elt_assign(ctx,mem,c,code,{}) -> c,code;
+array_fixed_elt_assign(ctx,mem,c,code,{{false,partcode,{{{src_flag,src,sz}},tp}},*rest}) -> array_fixed_elt_assign(ctx,mem,c+1,{*code,*partcode,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindMem,mem,src_flag,src,0,0,16+(c*sz>>3)}},rest);
 
-array_fixed_elt_assign_aux(ctx,mem,c,code,{}) -> c,code;
-array_fixed_elt_assign_aux(ctx,mem,c,code,{{{{src_flag,src,sz}},_},*rest}) -> array_fixed_elt_assign_aux(ctx,mem,c+1,{*code,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindMem,mem,src_flag,src,0,0,16+(c*sz>>3)}},rest);
+array_var_elt_assign(ctx,arrayf,array,startf,start,code,{}) -> code;
+array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{false,partcode,{{{src_flag,src,sz}},tp}},*rest})
+    -> array_var_elt_assign(ctx,arrayf,array,startf,start,{*code,*partcode,{ctx_fnr(ctx),OpAppend,0,arrayf,array,startf,start,src_flag,src,sz}},rest);
 
 decompose_stypes({0,n}) -> n,{0,n};
 decompose_stypes({1,a,*rest}) -> a,{1,*rest};
@@ -900,8 +915,12 @@ match_types({a,*rest1},{a,*rest2}) -> match_types(rest1,rest2);
 
 generate_callout_bindings(ctx,sofar,{}) -> ctx,sofar;
 generate_callout_bindings(ctx,sofar,{{{{ret_flags,ret,sz}},tp},*rest})
-    update ctx_newreg(ctx,1<<sz) => ctx,newreg ->
-    generate_callout_bindings(ctx,{*sofar,{newreg,{{ret_flags,ret,sz}},tp}},rest);
+    update ctx_newreg(ctx,1<<sz) => ctx,newreg
+    -> generate_callout_bindings(ctx,{*sofar,{{newreg},{{ret_flags,ret,sz}},tp}},rest);
+generate_callout_bindings(ctx,sofar,{{{{ret_flags1,ret1,sz},{ret_flags2,ret2,sz}},tp},*rest})
+    update ctx_newreg(ctx,1<<sz) => ctx,newreg1
+    update ctx_newreg(ctx,1<<sz) => ctx,newreg2
+    -> generate_callout_bindings(ctx,{*sofar,{{newreg1,newreg2},{{ret_flags1,ret1,sz},{ret_flags2,ret2,sz}},tp}},rest);
 
 generate_expr_code_aux_map(types,ctx,sofar,{0,_},{}) -> ctx,sofar;
 generate_expr_code_aux_map(types,ctx,sofar,{1},{}) -> ctx,sofar;
@@ -928,11 +947,13 @@ callout_insert_aux(l1,l2,callctr,sofar,{{src_flag,src,sz},*rs},{{dst_flag,dst,sz
     callout_insert_aux(l1,l2,callctr,{*sofar,{l1,l2,if_not_zero(callctr,OpInsert,OpMove)+get_size_scale(sz),0,dst_flag,dst,src_flag,src,0,callctr}},rs,rd);
 
 callout_extract(l1,l2,callctr,sofar,{}) -> sofar;
-callout_extract(l1,l2,callctr,sofar,{{newreg,{{ret_flags,ret,sz}},tp},*rest}) ->
-    callout_extract(l1,l2,callctr,{*sofar,{l1,l2,if_not_zero(callctr,OpExtract,OpMove)+get_size_scale(sz),0,BindReg,newreg,ret_flags,ret,0,callctr}},rest);
+callout_extract(l1,l2,callctr,sofar,{{{},{},tp},*rest}) -> callout_extract(l1,l2,callctr,sofar,rest);
+callout_extract(l1,l2,callctr,sofar,{{{newreg,*reg1},{{ret_flags,ret,sz},*st1},tp},*rest}) ->
+    callout_extract(l1,l2,callctr,{*sofar,{l1,l2,if_not_zero(callctr,OpExtract,OpMove)+get_size_scale(sz),0,BindReg,newreg,ret_flags,ret,0,callctr}},{{reg1,st1,tp},*rest});
 
 callout_ret(sofar,{}) -> sofar;
-callout_ret(sofar,{{newreg,{{ret_flags,ret,sz}},tp},*rest}) -> callout_ret({*sofar,{{{BindReg,newreg,sz}},tp}},rest);
+callout_ret(sofar,{{{newreg},{{ret_flags,ret,sz}},tp},*rest}) -> callout_ret({*sofar,{{{BindReg,newreg,sz}},tp}},rest);
+callout_ret(sofar,{{{nr1,nr2},{{ret_flags1,ret1,sz},{ret_flags2,ret2,sz}},tp},*rest}) -> callout_ret({*sofar,{{{BindReg,nr1,sz},{BindReg,nr2,sz}},tp}},rest);
 
 binop(t1,t1,Plus) -> true,false,t1,OpPlus;
 binop(TypeChar,t1,Plus) -> true,false,TypeChar,OpPlus;
