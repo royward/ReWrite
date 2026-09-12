@@ -54,6 +54,7 @@ struct ExecutionState {
     Program* program;
     uint32_t errtype;
     uint32_t errline;
+    int32_t allocated;
     const char* errsym;
     uint64_t argret[ARGREG_NO];
     uint64_t* heap8;

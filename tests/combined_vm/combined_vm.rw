@@ -14,6 +14,9 @@ h(s,{_,a,'x'},0) -> s,a;
 :- export cdr(value string) -> value string;
 cdr({a,*rest}) -> rest;
 
+:- export car(value string) -> char;
+car({a,*rest}) -> a;
+
 :- export len(value string) -> i64;
 len("") -> 0;
 len({a,*rest}) -> len(rest)+1;

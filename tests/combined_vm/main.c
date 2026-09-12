@@ -20,44 +20,58 @@ int main(int argc, char** argv) {
     int ret_code;
 
     printf("f:");
+    exe->allocated=0;
     ret_code=rw_f(exe,&result0,&resultc1,&resultc2);
     if(!ret_code && result0==0 && strcmp(resultc1,"abcd")==0 && strcmp(resultc2,"test")==0) { printf("success\n"); } else { printf("fail:%d %ld %s %s\n",ret_code,result0,resultc1,resultc2); };
     free(resultc1);
     free(resultc2);
 
-    printf("g:");
+    printf("h:");
+    exe->allocated=0;
     ret_code=rw_h(exe,"test","hex",0,&resultc1,&resultc);
     if(!ret_code && result0==0 && strcmp(resultc1,"test")==0 && (char)resultc=='e') { printf("success\n"); } else { printf("fail:%d %ld %c %s\n",ret_code,result0,resultc,resultc1); };
     free(resultc1);
 
     printf("cdr:");
+    exe->allocated=0;
     ret_code=rw_cdr(exe,"test",&resultc1);
     if(!ret_code && strcmp(resultc1,"est")==0) { printf("success\n"); } else { printf("fail:%d %s\n",ret_code,resultc1); };
     free(resultc1);
 
+    printf("car:");
+    exe->allocated=0;
+    ret_code=rw_car(exe,"test",&resultc);
+    if(!ret_code && resultc=='t') { printf("success\n"); } else { printf("fail:%d %c\n",ret_code,resultc); };
+
     printf("len:");
+    exe->allocated=0;
     ret_code=rw_len(exe,"flaccinaucinihilipilification",&result0);
     if(!ret_code && result0==29) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
     printf("member:");
+    exe->allocated=0;
     ret_code=rw_member(exe,'h',"flaccinaucinihilipilification",&resultb);
     if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
 
     printf("member:");
+    exe->allocated=0;
     ret_code=rw_member(exe,'x',"flaccinaucinihilipilification",&resultb);
     if(!ret_code && !resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
 
     printf("listn2:");
+    exe->allocated=0;
     ret_code=rw_listn2(exe,7,&resultc1);
     if(!ret_code && strcmp(resultc1,"abcdefg")==0) { printf("success\n"); } else { printf("fail:%d \"%s\"\n",ret_code,resultc1); };
     free(resultc1);
 
     printf("listn:");
+    exe->allocated=0;
     ret_code=rw_listn(exe,7,&resultc1);
     if(!ret_code && strcmp(resultc1,"abcdefg")==0) { printf("success\n"); } else { printf("fail:%d \"%s\"\n",ret_code,resultc1); };
     free(resultc1);
 
     printf("hw:");
+    exe->allocated=0;
     ret_code=rw_hw(exe,&resultc1);
     if(!ret_code && strcmp(resultc1,"hello world!hello world!")==0) { printf("success\n"); } else { printf("fail:%d \"%s\"\n",ret_code,resultc1); };
     free(resultc1);

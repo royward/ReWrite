@@ -767,18 +767,18 @@ generate_conditional_rhs(ctx,code,tp,{{src_flag,src,sz}},{{src_flag2,src2,sz}})
     ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id}};
 
 // TODO reduce refcount where appropriate
-generate_bind_variable(types,0,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel ->
-    ctx,{bindlevel,tp,{},name},{},{};
+generate_bind_variable(types,0,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
+    -> ctx,{bindlevel,tp,{},name},{},{};
 generate_bind_variable(types,count,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
-    update generate_bind_variable_aux(ctx,{},{},storage) => ctx,bind,code ->
-    ctx,{bindlevel,tp,bind,name},code,{};
+    update generate_bind_variable_aux(ctx,{},{},storage) => ctx,bind,code
+    -> ctx,{bindlevel,tp,bind,name},code,{};
 generate_bind_variable(types,count,false,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => lblnext,ctx,code
-    update ctx_set_lblnext(ctx,lblnext) => ctx ->
-    ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
+    update ctx_set_lblnext(ctx,lblnext) => ctx
+    -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
 generate_bind_variable(types,count,true,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
-    update generate_conditional_rhs(ctx,{},tp,{{src_flag,src,sz}},{{src_flag2,src2,sz}}) => ctx,code ->
-    ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
+    update generate_conditional_rhs(ctx,{},tp,{{src_flag,src,sz}},{{src_flag2,src2,sz}}) => ctx,code
+    -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
 
 generate_bind_variable_aux(ctx,bind,code,{}) -> ctx,bind,code;
 generate_bind_variable_aux(ctx,bind,code,{{src_flag,src,sz},*rest})
@@ -828,7 +828,6 @@ use_binding(ctx,id) match split3_nth(id,{},ctx_bindings(ctx)) => prebind,{bind_l
     ctx_newbindings(ctx,{*prebind,{bind_level,tp,storage,name},*post_bind}),tp,storage;
 
 generate_expr_code(types,_,ctx,code1,code2,{},{}) -> ctx,{*code1,*code2};
-// TODO deal with lists and splats first
 generate_expr_code(types,callctr,ctx,sofar1,sofar2,typelist,{expr,*rest})
     update generate_expr_code_aux(types,ctx,extract_types({},typelist),expr) => ctx,false,newcode,callout_ret
     match callout_insert(ctx_fnr(ctx),callctr,{},callout_ret,typelist) => code_insert,typelist_rest ->
@@ -1165,6 +1164,7 @@ create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{_,_,_,name,
             '\tuint64_t inout[',*int2s(max(n1,n2)),']={',*inarray,*outarray,'};\n',
             '\tint32_t e=RW__vmcall(a,',*int2s(new_lbl),',inout);\n\tif(e!=0)return e;\n',
             *create_export_vm_out(types,{},{},0,0,right,values_right),
+            '\tprintf("%d:",a->allocated);\n',
             '\treturn 0;\n}\n'},
         fnid+1,new_lbl,rest);
 
@@ -1222,7 +1222,9 @@ create_export_vm_out(types,sofar,allocs,labeln,n,{{_,TypeString},*rest},{val,*vr
         '\t\tif(err!=0) {\n',
         *create_export_free_and_null({},"\t\t\tFREE_AND_NULL(",");\n",allocs),
         '\t\t\treturn err;\n',
-        '\t\t}\n\t}\n'},{*allocs,{'out',*int2s(labeln)}},labeln+1,n+2,rest,vrest);
+        '\t\t}\n',
+        '\t\tderef_free(a,inout[',*int2s(n),']);\n',
+        '\t}\n'},{*allocs,{'out',*int2s(labeln)}},labeln+1,n+2,rest,vrest);
 create_export_vm_out(types,sofar,allocs,labeln,n,{{_,tp},*rest},{_,*vrest}) ->
     create_export_vm_out(types,{*sofar,'\t*out',*int2s(labeln),'=(',*c_type(tp),')inout[',*int2s(n),'];\n'},allocs,labeln+1,n+1,rest,vrest);
 

@@ -534,6 +534,8 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
     uint64_t sz=((uint64_t)count)*size;
     uint64_t alloc=exe->end_of_heap;
     uint32_t full_size=(16+sz+7)>>3;
+    exe->allocated+=full_size;
+    //printf("alloc +%d=%d %d\n",full_size,exe->allocated,alloc);
     uint32_t* header=rwu_get_header(exe,alloc);
     header[0]=full_size;
     header[1]=1;
@@ -546,7 +548,12 @@ void deref_free(RWInstance* exe, uint64_t v) {
     uint32_t* header=rwu_get_header(exe,v);
     header[1]--;
     if(header[1]==0) {
-
+        uint32_t sz=header[0];
+        exe->allocated-=sz;
+        //printf("dealloc -%d=%d %d\n",sz,exe->allocated,v);
+        for(uint32_t i=1;i<sz;i++) {
+            exe->heap8[v+i]=0xDEADBEEFDEADBEEF;
+        }
     }
 }
 
