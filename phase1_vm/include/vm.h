@@ -56,7 +56,7 @@ struct ExecutionState {
     uint32_t errline;
     const char* errsym;
     uint64_t argret[ARGREG_NO];
-    uint32_t* heap;
+    uint64_t* heap8;
 };
 
 typedef struct ExecutionState RWInstance;
@@ -72,10 +72,10 @@ int rw_instance_get_error(RWInstance* exe, uint32_t* line, const char** function
 uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size);
 void deref_free(RWInstance* exe, uint64_t p);
 
-static inline uint32_t* rwu_get_header(RWInstance* a, uint32_t x) {return a->heap+(x<<1);}
+static inline uint32_t* rwu_get_header(RWInstance* a, uint32_t x) {return (uint32_t*)(a->heap8+x);}
 static inline void* rwu_get_data(uint32_t* header, uint32_t start) {return (void*)(header+4+start);}
 static inline uint32_t rwu_get_len(uint32_t* header, uint32_t start) {return (header[2]-start);}
-static inline void rwu_set_len(RWInstance* a, uint32_t alloc, uint32_t val) {a->heap[alloc+alloc+2]=val;}
+static inline void rwu_set_len(RWInstance* a, uint32_t alloc, uint32_t val) {rwu_get_header(a,alloc)[2]=val;}
 
 #define UTF32_UNBOUNDED ((size_t)-1)
 #define UTF8_ERROR_MALFORMED 8
@@ -102,7 +102,7 @@ static inline int utf32_to_string(const uint32_t *src, uint32_t sz, char **dst) 
 static inline int string_to_utf32(RWInstance* exe, const char* src, uint32_t* dst, uint32_t* len) {
     size_t count=utf8_count_elements(src);
     uint32_t m=alloc(exe,count,4);
-    int err=utf8_populate_buffer(src,exe->heap+m+m+4);
+    int err=utf8_populate_buffer(src,(uint32_t*)(exe->heap8+m+2));
     *dst=m;
     *len=count;
     return err;

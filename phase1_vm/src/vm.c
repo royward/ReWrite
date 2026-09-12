@@ -116,12 +116,12 @@ int rw_instance_init(RWInstance* exe, Program* p) {
     exe->program = p;
     exe->registers = (uint64_t*)malloc(REGISTERS_SIZE*sizeof(uint64_t));
     exe->overflow = (uint8_t*)malloc(OVERFLOW_SIZE*sizeof(uint8_t));
-    exe->heap = (uint32_t*)malloc(HEAP_SIZE*sizeof(uint8_t));
+    exe->heap8 = (uint64_t*)malloc(HEAP_SIZE*sizeof(uint8_t));
     exe->end_of_heap = 0;
-    if(!exe->registers || !exe->overflow || !exe->heap) {
+    if(!exe->registers || !exe->overflow || !exe->heap8) {
         free(exe->registers);
         free(exe->overflow);
-        free(exe->heap);
+        free(exe->heap8);
         fprintf(stderr, "fatal: problem allocating memory\n");
         return EXIT_FAILURE;
     }
@@ -131,7 +131,7 @@ int rw_instance_init(RWInstance* exe, Program* p) {
 void rw_instance_unload(RWInstance* exe) {
     free(exe->registers);
     free(exe->overflow);
-        free(exe->heap);
+    free(exe->heap8);
     free(exe);
 }
 
@@ -534,16 +534,18 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
     uint64_t sz=((uint64_t)count)*size;
     uint64_t alloc=exe->end_of_heap;
     uint32_t full_size=(16+sz+7)>>3;
-    exe->heap[alloc+alloc]=full_size;
-    exe->heap[alloc+alloc+1]=1;
-    exe->heap[alloc+alloc+3]=0xDEADBEEF;
+    uint32_t* header=rwu_get_header(exe,alloc);
+    header[0]=full_size;
+    header[1]=1;
+    header[3]=0xDEADBEEF;
     exe->end_of_heap+=full_size;
     return alloc;
 }
 
 void deref_free(RWInstance* exe, uint64_t v) {
-    exe->heap[v+v+1]--;
-    if(exe->heap[v+v+1]==0) {
+    uint32_t* header=rwu_get_header(exe,v);
+    header[1]--;
+    if(header[1]==0) {
 
     }
 }
@@ -590,7 +592,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             } break;
             case OP_LEA: {
                 uint64_t val = operand_load(exe, 64, operation->flags_src1, operation->src1, sp);
-                operand_store(exe, operation, ((uint64_t)exe->heap)+val*8, 64, sp);
+                operand_store(exe, operation, ((uint64_t)exe->heap8)+val*8, 64, sp);
             } break;
             case OP_LEA_SCALE: {
                 uint64_t val = operand_load(exe, 64, operation->flags_src1, operation->src1, sp);
@@ -609,7 +611,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint32_t array=operand_load(exe,32,operation->flags_src1,operation->src1,sp);
                 uint32_t start=operand_load(exe,32,operation2->flags_src1,operation2->src1,sp);
                 uint32_t stride=operand_load(exe, 32, operation->flags_src2, operation->src2, sp);
-                uint32_t* parray=&exe->heap[array+array];
+                uint32_t* parray=rwu_get_header(exe,array);
                 uint32_t end=parray[2];
                 if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
                     // no need to realloc
@@ -617,7 +619,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     operand_store(exe, operation2, start-pre, 32, sp);
                 } else {
                     uint32_t ret=alloc(exe,pre+post+end-start,stride);
-                    uint32_t* parray2=&exe->heap[ret+ret];
+                    uint32_t* parray2=rwu_get_header(exe,ret);
                     memcpy((uint8_t*)(&parray2[4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
                     parray2[2]=pre+end;
                     deref_free(exe,array);
@@ -628,7 +630,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_APPEND: {
                 uint32_t array=operand_load(exe,32,operation->flags_dst,operation->dst,sp);
                 uint32_t value=operand_load(exe,32,operation->flags_src1, operation->src1, sp);
-                uint32_t* parray=&exe->heap[array+array];
+                uint32_t* parray=rwu_get_header(exe,array);
                 uint32_t end=parray[2];
                 parray[2]=end+1;
                 uint8_t* addr=((uint8_t*)parray)+16+end*(operation->fdst.b>>3);
@@ -644,8 +646,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint32_t dstarray=operand_load(exe,32,operation->flags_dst,operation->dst,sp);
                 uint32_t array=operand_load(exe,32,operation->flags_src1, operation->src1, sp);
                 uint32_t start=operand_load(exe,32,operation->flags_src2, operation->src2, sp);
-                uint32_t* pdstarray=&exe->heap[dstarray+dstarray];
-                uint32_t* parray=&exe->heap[array+array];
+                uint32_t* pdstarray=rwu_get_header(exe,dstarray);
+                uint32_t* parray=rwu_get_header(exe,array);
                 uint32_t dstend=pdstarray[2];
                 uint32_t end=parray[2];
                 uint32_t stride=operation->fdst.b>>3;
