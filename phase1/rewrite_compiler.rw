@@ -356,7 +356,7 @@ parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Identifier,id},*rest}) match
     parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeI64,val}},pri,rest);
 parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Identifier,id},*rest})
     update get_noadd_symbol_list(0,{},bindings,id) => bindings,bindnum ->
-    parse_exprs1(consts,fnnames,bindings,sofar,{ExprId,{bindnum,0}},pri,rest);
+    parse_exprs1(consts,fnnames,bindings,sofar,{ExprId,{bindnum,0,0}},pri,rest);
 parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,tok,_},*rest}) match prefix_binding_power(tok) => pre_pri when pre_pri>0
     update parse_exprs(consts,fnnames,bindings,{},pre_pri,rest) => fnnames,bindings,{arg},rest ->
     parse_exprs1(consts,fnnames,bindings,sofar,{tok,arg},pri,rest);
@@ -433,7 +433,7 @@ calc_counts_clear_touched(_,sofar,{}) -> sofar;
 calc_counts_clear_touched(_,sofar,{{count,false},*rest}) -> calc_counts_clear_touched(true,{*sofar,{count,false}},rest);
 calc_counts_clear_touched(_,sofar,{_,*rest}) -> calc_counts_clear_touched(true,{*sofar,{0,false}},rest);
 
-calc_counts_expr(counts,{ExprId,{n,_}}) match split3_nth(n,{},counts) => bind1,{count,touched},bind2 -> {*bind1,{count+1,touched},*bind2},{ExprId,{n,count}};
+calc_counts_expr(counts,{ExprId,{n,_,_}}) match split3_nth(n,{},counts) => bind1,{count,touched},bind2 -> {*bind1,{count+1,touched},*bind2},{ExprId,{n,count,0}};
 calc_counts_expr(counts,{ExprCallInternal,op,args}) update calc_counts_expr_map_rev(counts,args) => counts,args2 -> counts,{ExprCallInternal,op,args2};
 calc_counts_expr(counts,{ExprCall,op,args}) update calc_counts_expr_map_rev(counts,args) => counts,args2 -> counts,{ExprCall,op,args2};
 calc_counts_expr(counts,{ExprList,args}) update calc_counts_expr_map_rev(counts,args) => counts,args2 -> counts,{ExprList,args2};
@@ -632,6 +632,10 @@ ctx_update_get_callctr({TargetVM,callctr,tailcall,active,lblnext,label_id,fn_id,
 ctx_update_get_callctr({target,callctr,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table},inc) ->
     {target,callctr+inc,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table},callctr;
 
+// TODO expand this to deal properly with types. Just scalars and lists of scalars for now
+gen_types_deref_free(types,ctx,tp,{{src_flag1,src1,sz1},_}) -> {{ctx_fnr(ctx),OpDerefFree,0,0,0,src_flag1,src1}};
+gen_types_deref_free(types,ctx,tp,{_}) -> {};
+
 // deal with tail recursion (error if sigs don't match)
 compile_rule(target,types,linerule,ctx,sofar,params,clauses,{{ExprCall,fn_id,args}},regs_left,type_left,regs_right,type_right)
     @match ctx_get_tail(ctx) => 0
@@ -682,7 +686,9 @@ generate_expr_code_untyped(types,ctx,sofar,etypes,{expr,*rest})
     generate_expr_code_untyped(types,ctx,{*sofar,*newcode},{*etypes,*callout_ret},rest);
 
 generate_param_code(types,post_arrow,bindlevel,{},ctx,sofar0,sofar1,{},{}) -> ctx,sofar0,sofar1;
-generate_param_code(types,post_arrow,bindlevel,{_,src_flag,src,_,_,_,_,_},ctx,sofar0,sofar1,{},{}) -> ctx,sofar0,{*sofar1,{ctx_fnr(ctx),OpDerefFree,0,0,0,src_flag,src}};
+generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,_,_,_},ctx,sofar0,sofar1,{},{})
+    match gen_types_deref_free(types,ctx,tp,{{src_flag1,src1,32},{src_flag2,src2,32}}) => codefree
+    -> ctx,sofar0,{*sofar1,*codefree};
 generate_param_code(types,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp},type_left
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,BindImm,val) => lblnext,ctx,code
@@ -690,7 +696,7 @@ generate_param_code(types,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const
     generate_param_code(types,false,bindlevel,newstride,ctx,{*sofar0,*code},sofar1,type_left,rest);
 generate_param_code(types,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp},type_left
-    update generate_conditional_rhs(ctx,sofar0,tp,{{src_flag,src,sz}},{{BindImm,val,sz}}) => ctx,code ->
+    update generate_conditional_rhs(ctx,sofar0,tp,{{src_flag,src,sz},{BindImm,val,sz}}) => ctx,code ->
     generate_param_code(types,true,bindlevel,newstride,ctx,code,sofar1,type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{storage,tp},type_left
@@ -707,11 +713,12 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,pend
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,TypeU32,32,src_flag2,src2,BindReg,pend) => lblnext,ctx,code
-    update ctx_set_lblnext(ctx,lblnext) => ctx ->
-    generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
+    update ctx_set_lblnext(ctx,lblnext) => ctx
+    update gen_types_deref_free(types,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => freecode
+    -> generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
         {ctx_fnr(ctx),OpLea,0,BindReg,parray,src_flag1,src1},
         {ctx_fnr(ctx),OpMove+3,0,BindReg,pend,BindMem,parray+(8<<32)},*code},
-        {*sofar1,{ctx_fnr(ctx),OpDerefFree,0,0,0,src_flag1,src1}},type_left,rest);
+        {*sofar1,*freecode},type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,elements},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp},type_left
     match nth(tp,types) => {_,_,{2,sub_type},{0,32,0,32}}
@@ -731,8 +738,9 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
         {ctx_fnr(ctx),OpMinus,TypeU32,BindReg,len,BindReg,pend,src_flag2,src2},*code,
         {ctx_fnr(ctx),OpLeaScale,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,substride>>3},
         *code1},{*sofar1,*code2},type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{{{BindMem,p,sz}},t},*_},{{ParamSplatWild,{}}}) -> // note: no rest here
-    ctx,sofar0,{*sofar1,{ctx_fnr(ctx),OpDerefFree,0,0,0,src_flag1,src1}};
+generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{{{BindMem,p,sz}},t},*_},{{ParamSplatWild,{}}}) // note: no rest here
+    match gen_types_deref_free(types,ctx,tp,{{src_flag1,src1,32},{src_flag2,src2,32}}) => codefree
+    -> ctx,sofar0,{*sofar1,*codefree};
 generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{{{BindMem,p,sz}},t},*_},{{ParamSplat,{id,count}}}) // note: no rest here
     update ctx_bindings(ctx) => bindings
     update ctx_newreg(ctx,32) => ctx,start
@@ -758,7 +766,7 @@ generate_list_min_size_aux({ParamSplatWild,_}) -> 0,1;
 sum_sub_alloc(n,{}) -> n;
 sum_sub_alloc(n,{_,sz,*rest}) -> sum_sub_alloc(n+sz,rest);
 
-generate_conditional_rhs(ctx,code,tp,{{src_flag,src,sz}},{{src_flag2,src2,sz}})
+generate_conditional_rhs(ctx,code,tp,{{src_flag,src,sz},{src_flag2,src2,sz}})
     update ctx_update_label_id(ctx) => ctx
     match ctx_get_lbl_stuff(ctx) => target,active,lblnext,label_id
     update generate_conditional(ctx,target,active,label_id,label_id,OpCompareEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => _,ctx,newcode
@@ -766,9 +774,12 @@ generate_conditional_rhs(ctx,code,tp,{{src_flag,src,sz}},{{src_flag2,src2,sz}})
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
     ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset},{ctx_fnr(ctx),OpLabel,0,BindLabel,label_id}};
 
-// TODO reduce refcount where appropriate
+generate_bind_variable_rem_last(types,ctx,tp,storage,0) -> {};
+generate_bind_variable_rem_last(types,ctx,tp,storage,0) -> gen_types_deref_free(types,ctx,tp,storage);
+
+// TODO have comparison deal with non-scalars, and reduce refcount where appropriate
 generate_bind_variable(types,0,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
-    -> ctx,{bindlevel,tp,{},name},{},{};
+    -> ctx,{bindlevel,tp,{},name},{},gen_types_deref_free(types,ctx,tp,storage);
 generate_bind_variable(types,count,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
     update generate_bind_variable_aux(ctx,{},{},storage) => ctx,bind,code
     -> ctx,{bindlevel,tp,bind,name},code,{};
@@ -777,7 +788,7 @@ generate_bind_variable(types,count,false,bindlevel,ctx,{{src_flag,src,sz}},tp,{_
     update ctx_set_lblnext(ctx,lblnext) => ctx
     -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
 generate_bind_variable(types,count,true,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
-    update generate_conditional_rhs(ctx,{},tp,{{src_flag,src,sz}},{{src_flag2,src2,sz}}) => ctx,code
+    update generate_conditional_rhs(ctx,{},tp,{{src_flag,src,sz},{src_flag2,src2,sz}}) => ctx,code
     -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
 
 generate_bind_variable_aux(ctx,bind,code,{}) -> ctx,bind,code;
@@ -836,7 +847,7 @@ generate_expr_code(types,callctr,ctx,sofar1,sofar2,typelist,{expr,*rest})
 //generate_expr_code_aux(types,ctx,stypes,_) -> println_any(stypes),#error(12);
 generate_expr_code_aux(types,ctx,stypes,{Const,{tp,val}}) match lookup_type_size_pri(tp,types) => {_,sz} ->
     ctx,false,{},{{{{BindImm,val,sz}},tp}};
-generate_expr_code_aux(types,ctx,stypes,{ExprId,{id,count}})
+generate_expr_code_aux(types,ctx,stypes,{ExprId,{id,count,lastborrow}})
     update use_binding(ctx,id) => ctx,tp,storage ->
     ctx,false,{},{{storage,tp}};
 generate_expr_code_aux(types,ctx,stypes,{ExprCallInternal,op,args})
