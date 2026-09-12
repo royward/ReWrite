@@ -52,6 +52,11 @@ int main(int argc, char** argv) {
     if(!ret_code && strcmp(resultc1,"abcdefg")==0) { printf("success\n"); } else { printf("fail:%d \"%s\"\n",ret_code,resultc1); };
     free(resultc1);
 
+    printf("listn:");
+    ret_code=rw_listn(exe,7,&resultc1);
+    if(!ret_code && strcmp(resultc1,"abcdefg")==0) { printf("success\n"); } else { printf("fail:%d \"%s\"\n",ret_code,resultc1); };
+    free(resultc1);
+
     program_unload(&p);
     rw_instance_unload(exe);
     return EXIT_SUCCESS;

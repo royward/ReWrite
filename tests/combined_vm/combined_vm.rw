@@ -32,3 +32,14 @@ listn2(n) -> listn_aux(0,n,{});
 :- listn_aux(i64,i64,string) -> string;
 listn_aux(n,n,sofar) -> sofar;
 listn_aux(n,m,sofar) -> listn_aux(n+1,m,{*sofar,'a'+n});
+
+:- export listn(i64) -> value string;
+listn(0) -> {};
+listn(n) -> {*listn(n-1),'a'+n-1};
+
+:- hw_aux() -> string,string,string;
+hw_aux() -> "hello ","world","!";
+
+:- export hw() -> value string;
+hw() -> {*hw_aux(),*hw_aux()};
+

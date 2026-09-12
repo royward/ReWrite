@@ -30,7 +30,8 @@
 #define OP_ALLOC 0xC0
 #define OP_DEREF_FREE 0xC1
 #define OP_REALLOC 0xC2
-#define OP_APPEND 0xC3
+#define OP_APPEND 0xC4
+#define OP_APPEND_ARRAY 0xC5
 #define OP_CONTINUATION 0xCF
 #define OP_CMP_NE_BRANCH 0xF0
 #define OP_CMP_LT_BRANCH 0xF6
@@ -351,10 +352,17 @@ void program_disassemble(Program* program, FILE* out) {
             case OP_APPEND: {
                 fprintf(out,"append.%d (",operation->fdst.b);
                 display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out,",");
+                fprintf(out,",_) <- ");
                 display_operand(out,operation->flags_src1,operation->src1);
-                fprintf(out,") <- ");
+            } break;
+            case OP_APPEND_ARRAY: {
+                fprintf(out,"append_array.%d (",operation->fdst.b);
+                display_operand(out,operation->flags_dst,operation->dst);
+                fprintf(out,",_) <- (");
+                display_operand(out,operation->flags_src1,operation->src1);
+                fprintf(out,",");
                 display_operand(out,operation->flags_src2,operation->src2);
+                fprintf(out,")");
             } break;
             case OP_CONTINUATION: {
                 fprintf(out,"(continuation)");
@@ -616,7 +624,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             } break;
             case OP_APPEND: {
                 uint32_t array=operand_load(exe,32,operation->flags_dst,operation->dst,sp);
-                uint32_t value=operand_load(exe,32,operation->flags_src2, operation->src2, sp);
+                uint32_t value=operand_load(exe,32,operation->flags_src1, operation->src1, sp);
                 uint32_t* parray=&exe->heap[array+array];
                 uint32_t end=parray[2];
                 parray[2]=end+1;
@@ -628,6 +636,21 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     case 64:*((uint64_t*)addr)=(uint64_t)value; break;
                     default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
                 } break;
+            } break;
+            case OP_APPEND_ARRAY: {
+                uint32_t dstarray=operand_load(exe,32,operation->flags_dst,operation->dst,sp);
+                uint32_t array=operand_load(exe,32,operation->flags_src1, operation->src1, sp);
+                uint32_t start=operand_load(exe,32,operation->flags_src1, operation->src1, sp);
+                uint32_t* pdstarray=&exe->heap[dstarray+dstarray];
+                uint32_t* parray=&exe->heap[array+array];
+                uint32_t dstend=pdstarray[2];
+                uint32_t end=parray[2];
+                uint32_t stride=operation->fdst.b>>3;
+                uint8_t* dstaddr=((uint8_t*)pdstarray)+16+dstend*(operation->fdst.b>>3);
+                uint8_t* addr=((uint8_t*)parray)+16+start*(operation->fdst.b>>3);
+                uint32_t len=end-start;
+                memcpy(dstaddr,addr,len*stride);
+                pdstarray[2]=dstend+len;
             } break;
             case OP_DEREF_FREE: {
                 deref_free(exe,operand_load(exe, 64, operation->flags_src1, operation->src1, sp));
