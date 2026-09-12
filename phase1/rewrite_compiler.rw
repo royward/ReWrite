@@ -897,16 +897,16 @@ split_splat_aux(sofar,{{_,{},{}},*rest}) -> split_splat_aux(sofar,rest);
 split_splat_aux(sofar,{{splatflag,partcode,{r,*r1}},*rest}) -> split_splat_aux({*sofar,{splatflag,partcode,r}},{{splatflag,{},r1},*rest});
 
 get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{}) -> ctx,sum,sum_code,sum_src_flag,sum_src;
-get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{{false,*_},*rest}) -> get_post_splat_alloc_size(ctx,sum+1,sum_code,sum_src_flag,sum_src,rest);
-get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{{true,_,{{{arrayf,array,sz},{startf,start,sz}},_}},*rest})
+get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{{false,partcode,_},*rest}) -> get_post_splat_alloc_size(ctx,sum+1,{*sum_code,*partcode},sum_src_flag,sum_src,rest);
+get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{{true,partcode,{{{arrayf,array,sz},{startf,start,sz}},_}},*rest})
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,64) => ctx,end
     update ctx_newreg(ctx,32) => ctx,len
-    update splat_sum(ctx,{},sum_src_flag,sum_src,len) => ctx,new_sum_code,len
-    -> get_post_splat_alloc_size(ctx,sum,{*sum_code,
+    update splat_sum(ctx,{},sum_src_flag,sum_src,len) => ctx,new_sum_code,newlen
+    -> get_post_splat_alloc_size(ctx,sum,{*sum_code,*partcode,
         {ctx_fnr(ctx),OpLea,0,BindReg,parray,BindReg,array},
         {ctx_fnr(ctx),OpMove+3,0,BindReg,end,BindMem,parray+(8<<32)},
-        {ctx_fnr(ctx),OpMinus,TypeU32,BindReg,len,BindReg,end,startf,start},*new_sum_code},BindReg,len,rest);
+        {ctx_fnr(ctx),OpMinus,TypeU32,BindReg,len,BindReg,end,startf,start},*new_sum_code},BindReg,newlen,rest);
 
 splat_sum(ctx,code,BindImm,0,len) -> ctx,code,len;
 splat_sum(ctx,code,src_flag,src,len) update ctx_newreg(ctx,32) => ctx,t -> ctx,{{ctx_fnr(ctx),OpPlus,TypeU32,BindReg,t,BindReg,len,src_flag,src}},t;
@@ -915,10 +915,10 @@ array_fixed_elt_assign(ctx,mem,c,code,{}) -> c,code;
 array_fixed_elt_assign(ctx,mem,c,code,{{false,partcode,{{{src_flag,src,sz}},tp}},*rest}) -> array_fixed_elt_assign(ctx,mem,c+1,{*code,*partcode,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindMem,mem,src_flag,src,0,0,16+(c*sz>>3)}},rest);
 
 array_var_elt_assign(ctx,arrayf,array,startf,start,code,{}) -> code;
-array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{false,partcode,{{{src_flag,src,sz}},tp}},*rest})
-    -> array_var_elt_assign(ctx,arrayf,array,startf,start,{*code,*partcode,{ctx_fnr(ctx),OpAppend,0,arrayf,array,src_flag,src,0,0,sz}},rest);
-array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{true,partcode,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp}},*rest})
-    -> array_var_elt_assign(ctx,arrayf,array,startf,start,{*code,*partcode,{ctx_fnr(ctx),OpAppendArray,0,arrayf,array,src_flag1,src1,src_flag2,src2,sz}},rest);
+array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{false,_,{{{src_flag,src,sz}},tp}},*rest})
+    -> array_var_elt_assign(ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),OpAppend,0,arrayf,array,src_flag,src,0,0,sz}},rest);
+array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{true,_,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp}},*rest})
+    -> array_var_elt_assign(ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),OpAppendArray,0,arrayf,array,src_flag1,src1,src_flag2,src2,sz}},rest);
 
 decompose_stypes({0,n}) -> n,{0,n};
 decompose_stypes({1,a,*rest}) -> a,{1,*rest};

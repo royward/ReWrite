@@ -350,15 +350,15 @@ void program_disassemble(Program* program, FILE* out) {
                 display_operand(out,operation2->flags_src2,operation2->src2);
             } break;
             case OP_APPEND: {
-                fprintf(out,"append.%d (",operation->fdst.b);
+                fprintf(out,"append.%d ",operation->fdst.b);
                 display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out,",_) <- ");
+                fprintf(out,") <- ");
                 display_operand(out,operation->flags_src1,operation->src1);
             } break;
             case OP_APPEND_ARRAY: {
                 fprintf(out,"append_array.%d (",operation->fdst.b);
                 display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out,",_) <- (");
+                fprintf(out,") <- (");
                 display_operand(out,operation->flags_src1,operation->src1);
                 fprintf(out,",");
                 display_operand(out,operation->flags_src2,operation->src2);
@@ -543,6 +543,9 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
 
 void deref_free(RWInstance* exe, uint64_t v) {
     exe->heap[v+v+1]--;
+    if(exe->heap[v+v+1]==0) {
+
+    }
 }
 
 int program_execute(RWInstance* exe, uint32_t in_lbl) {
@@ -640,7 +643,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_APPEND_ARRAY: {
                 uint32_t dstarray=operand_load(exe,32,operation->flags_dst,operation->dst,sp);
                 uint32_t array=operand_load(exe,32,operation->flags_src1, operation->src1, sp);
-                uint32_t start=operand_load(exe,32,operation->flags_src1, operation->src1, sp);
+                uint32_t start=operand_load(exe,32,operation->flags_src2, operation->src2, sp);
                 uint32_t* pdstarray=&exe->heap[dstarray+dstarray];
                 uint32_t* parray=&exe->heap[array+array];
                 uint32_t dstend=pdstarray[2];
