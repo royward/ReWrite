@@ -417,12 +417,13 @@ parse_params(consts,bindings,params,rest) -> bindings,params,rest;
 parse_params1(consts,bindings,params,{{_,_,Comma,_},*rest}) -> parse_params(consts,bindings,params,rest);
 parse_params1(consts,bindings,params,rest) -> bindings,params,rest; // deal with no trailing comma
 
-calc_counts(types,bindings,{pf1,pf2,params},clauses,exprs)
+calc_counts(types,bindings,{_,_,params},clauses,exprs)
     match calc_counts_setup_bind(0,length(bindings),{}) => counts
     update calc_counts_expr_map_rev(types,true,false,counts,exprs) => counts,exprs
-    update calc_counts_clause_map_rev(types,counts,clauses) => counts,clauses
-    update calc_counts_param_map_rev(counts,params) => _,params ->
-    {pf1,pf2,params},clauses,exprs;
+    update calc_counts_clause_map_rev(types,0,counts,clauses) => maydecline,counts,clauses
+    update calc_counts_param_map_rev(counts,params) => _,params
+    match calc_counts_maydecline(true,maydecline,counts) => pf1,pf2,_
+    -> {pf1,pf2,params},clauses,exprs;
 
 calc_counts_setup_bind(n,n,sofar) -> sofar;
 calc_counts_setup_bind(i,n,sofar) -> calc_counts_setup_bind(i+1,n,{*sofar,{0,false}});
@@ -431,6 +432,10 @@ calc_counts_clear_touched(false,_,counts) -> counts;
 calc_counts_clear_touched(_,sofar,{}) -> sofar;
 calc_counts_clear_touched(_,sofar,{{count,false},*rest}) -> calc_counts_clear_touched(true,{*sofar,{count,false}},rest);
 calc_counts_clear_touched(_,sofar,{_,*rest}) -> calc_counts_clear_touched(true,{*sofar,{0,false}},rest);
+
+calc_counts_maydecline(true,0,counts) -> 1,counts,1;
+calc_counts_maydecline(_,1,_) -> 1,{},2;
+calc_counts_maydecline(_,n,_) -> n,{},n;
 
 calc_counts_expr(types,consume,counts,{ExprId,{n,_,_}}) match nth(n,counts) => {count,touched} -> nth_insert(n,{count+1,touched},counts),{ExprId,{n,count,0}};
 calc_counts_expr(types,consume,counts,{ExprCallInternal,op,args}) update calc_counts_expr_map_rev(types,false,false,counts,args) => counts,args2 -> counts,{ExprCallInternal,op,args2};
@@ -452,13 +457,14 @@ calc_counts_param_map_rev(counts,{}) -> counts,{};
 calc_counts_param_map_rev(counts,{param,*rest})
     update calc_counts_param_map_rev(counts,rest) => counts,rest2 update calc_counts_param(counts,param) => counts,param2 -> counts,{param2,*rest2};
 
-calc_counts_clause_map_rev(types,counts,{}) -> counts,{};
-calc_counts_clause_map_rev(types,counts,{{upd_flag,decline,{pf1,pf2,params},exprs},*rest})
-    update calc_counts_clause_map_rev(types,counts,rest) => counts,rest
+calc_counts_clause_map_rev(types,maydecline,counts,{}) -> maydecline,counts,{};
+calc_counts_clause_map_rev(types,maydecline,counts,{{upd_flag,decline,{_,_,params},exprs},*rest})
+    match calc_counts_maydecline(decline,maydecline,counts) => pf1,pf2,next_maydecline
+    update calc_counts_clause_map_rev(types,next_maydecline,counts,rest) => maydecline,counts,rest
     update calc_counts_param_map_rev(counts,params) => counts,params
     update calc_counts_clear_touched(upd_flag,{},counts) => counts
-    update calc_counts_expr_map_rev(types,true,false,counts,exprs) => counts,exprs ->
-    counts,{{upd_flag,decline,{pf1,pf2,params},exprs},*rest};
+    update calc_counts_expr_map_rev(types,true,false,counts,exprs) => counts,exprs
+    -> maydecline,counts,{{upd_flag,decline,{pf1,pf2,params},exprs},*rest};
 
 ///////////////////////////////////////////////////////////
 // Compiler
