@@ -264,7 +264,7 @@ parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{{linerul
     update parse_params(consts,{},{},rest) => bindings,params,{{_,_,RParen,_},*rest}
     update parse_function_match_clauses(consts,{},fnnames,bindings,Arrow,rest) => clauses,fnnames,bindings,rest
     update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,exprs,{{_,_,Semicolon,_},*rest}
-    -> parse_aux(target,add_rule({},rules,fn_id,{linerule+1,bindings,params,clauses,{0,{},exprs}}),fnnames,symtext,symsz,consts,types,types_lookup,rest);
+    -> parse_aux(target,add_rule({},rules,fn_id,{linerule+1,bindings,{0,{},params},clauses,exprs}),fnnames,symtext,symsz,consts,types,types_lookup,rest);
 parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{{fnlineno,_,TypeFn,_},{_,_,Identifier,name},{_,_,LParen,_},*rest})
     update parse_types(true,false,{},{},RParen,types,types_lookup,rest) => types_lhs,value_lhs,rest,types,types_lookup
     update rest => {{_,_,Arrow,_},*rest}
@@ -312,11 +312,11 @@ add_rule(sofar,{r,*rest},n,x) -> add_rule({*sofar,r},rest,n-1,x);
 parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,endtok,_},*rest}) -> sofar,fnnames,bindings,rest;
 parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,When,_},*rest})
     update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames2,bindings,expr,rest2 ->
-    parse_function_match_clauses(consts,{*sofar,{false,true,{{Const,{TypeBool,1}}},{0,{},expr}}},fnnames2,bindings,endtok,rest2);
+    parse_function_match_clauses(consts,{*sofar,{false,true,{0,{},{{Const,{TypeBool,1}}}},expr}},fnnames2,bindings,endtok,rest2);
 parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,tok,_},*rest}) match match_or_update(tok) => true,upd,decline
     update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,expr,{{_,_,DoubleArrow,_},*rest}
     update parse_params(consts,bindings,{},rest) => bindings,params,rest ->
-    parse_function_match_clauses(consts,{*sofar,{upd,decline,params,{0,{},expr}}},fnnames,bindings,endtok,rest);
+    parse_function_match_clauses(consts,{*sofar,{upd,decline,{0,{},params},expr}},fnnames,bindings,endtok,rest);
 
 match_or_update(Match) -> true,false,false;
 match_or_update(Update) -> true,true,false;
@@ -417,12 +417,12 @@ parse_params(consts,bindings,params,rest) -> bindings,params,rest;
 parse_params1(consts,bindings,params,{{_,_,Comma,_},*rest}) -> parse_params(consts,bindings,params,rest);
 parse_params1(consts,bindings,params,rest) -> bindings,params,rest; // deal with no trailing comma
 
-calc_counts(types,bindings,params,clauses,{ef1,ef2,exprs})
+calc_counts(types,bindings,{pf1,pf2,params},clauses,exprs)
     match calc_counts_setup_bind(0,length(bindings),{}) => counts
     update calc_counts_expr_map_rev(types,true,false,counts,exprs) => counts,exprs
     update calc_counts_clause_map_rev(types,counts,clauses) => counts,clauses
     update calc_counts_param_map_rev(counts,params) => _,params ->
-    params,clauses,{ef1,ef2,exprs};
+    {pf1,pf2,params},clauses,exprs;
 
 calc_counts_setup_bind(n,n,sofar) -> sofar;
 calc_counts_setup_bind(i,n,sofar) -> calc_counts_setup_bind(i+1,n,{*sofar,{0,false}});
@@ -453,12 +453,12 @@ calc_counts_param_map_rev(counts,{param,*rest})
     update calc_counts_param_map_rev(counts,rest) => counts,rest2 update calc_counts_param(counts,param) => counts,param2 -> counts,{param2,*rest2};
 
 calc_counts_clause_map_rev(types,counts,{}) -> counts,{};
-calc_counts_clause_map_rev(types,counts,{{upd_flag,decline,params,{ef1,ef2,exprs}},*rest})
+calc_counts_clause_map_rev(types,counts,{{upd_flag,decline,{pf1,pf2,params},exprs},*rest})
     update calc_counts_clause_map_rev(types,counts,rest) => counts,rest
     update calc_counts_param_map_rev(counts,params) => counts,params
     update calc_counts_clear_touched(upd_flag,{},counts) => counts
     update calc_counts_expr_map_rev(types,true,false,counts,exprs) => counts,exprs ->
-    counts,{{upd_flag,decline,params,{ef1,ef2,exprs},*rest};
+    counts,{{upd_flag,decline,{pf1,pf2,params},exprs},*rest};
 
 ///////////////////////////////////////////////////////////
 // Compiler
@@ -639,17 +639,17 @@ gen_types_deref_free(types,ctx,tp,{{src_flag1,src1,sz1},_}) -> {{ctx_fnr(ctx),Op
 gen_types_deref_free(types,ctx,tp,{_}) -> {};
 
 // deal with tail recursion (error if sigs don't match)
-compile_rule(target,types,linerule,ctx,sofar,params,clauses,{ef0,ef1,{{ExprCall,fn_id,args}}},regs_left,type_left,regs_right,type_right)
+compile_rule(target,types,linerule,ctx,sofar,{pf1,pf2,params},clauses,{{ExprCall,fn_id,args}},regs_left,type_left,regs_right,type_right)
     @match ctx_get_tail(ctx) => 0
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,_,_,_,regs_left_new,type_left_new,_,_,_,type_right,_} ->
-    compile_rule(target,types,linerule,ctx_set_tail(ctx,fn_id+1),sofar,params,clauses,{ef0,ef1,args},regs_left,type_left,regs_left_new,type_left_new);
-compile_rule(target,types,linerule,ctx,sofar,params,clauses,{ef0,ef1,exprs},regs_left,type_left,regs_right,type_right)
+    compile_rule(target,types,linerule,ctx_set_tail(ctx,fn_id+1),sofar,{pf1,pf2,params},clauses,args,regs_left,type_left,regs_left_new,type_left_new);
+compile_rule(target,types,linerule,ctx,sofar,{pf1,pf2,params},clauses,exprs,regs_left,type_left,regs_right,type_right)
     @match ctx_get_tail(ctx) => 0
     update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
     update generate_expr_code(types,0,ctx,code,{},type_right,exprs) => ctx,code ->
     ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ctx_get_lblnext(ctx),ctx_lbl(ctx),code_or_not(ctx_get_lbl_active(ctx),
         {*code,{ctx_fnr(ctx),OpRet,0}});
-compile_rule(target,types,linerule,ctx,sofar,params,clauses,{ef0,ef1,exprs},regs_left,type_left,regs_right,type_right)
+compile_rule(target,types,linerule,ctx,sofar,{pf1,pf2,params},clauses,exprs,regs_left,type_left,regs_right,type_right)
     match ctx_get_tail(ctx)-1 => call_id
     update ctx_get_fn_sig(ctx,call_id) => {_,_,_,_,regs_right,_,type_right,_,_,_,_,_}
     update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
@@ -669,7 +669,7 @@ generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_lef
     ctx,code;
 
 generate_clause_code(types,bind_level,ctx,code,{}) -> ctx,code;
-generate_clause_code(types,bind_level,ctx,code,{{update_flag,decline,matchx,{_,_,expr}},*rest})
+generate_clause_code(types,bind_level,ctx,code,{{update_flag,decline,{_,_,matchx},expr},*rest})
     update update_bind_level(bind_level,update_flag) => bind_level,this_bind_level
     update generate_clause_code_aux(types,this_bind_level,!decline,ctx,code,expr,matchx) => ctx,code0,code1 ->
     generate_clause_code(types,bind_level,ctx,{*code0,*code1},rest);
