@@ -264,7 +264,6 @@ parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{{linerul
     update parse_params(consts,{},{},rest) => bindings,params,{{_,_,RParen,_},*rest}
     update parse_function_match_clauses(consts,{},fnnames,bindings,Arrow,rest) => clauses,fnnames,bindings,rest
     update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,exprs,{{_,_,Semicolon,_},*rest}
-    update calc_counts(bindings,params,clauses,exprs) => params,clauses,exprs
     -> parse_aux(target,add_rule({},rules,fn_id,{linerule+1,bindings,params,clauses,exprs}),fnnames,symtext,symsz,consts,types,types_lookup,rest);
 parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{{fnlineno,_,TypeFn,_},{_,_,Identifier,name},{_,_,LParen,_},*rest})
     update parse_types(true,false,{},{},RParen,types,types_lookup,rest) => types_lhs,value_lhs,rest,types,types_lookup
@@ -418,10 +417,10 @@ parse_params(consts,bindings,params,rest) -> bindings,params,rest;
 parse_params1(consts,bindings,params,{{_,_,Comma,_},*rest}) -> parse_params(consts,bindings,params,rest);
 parse_params1(consts,bindings,params,rest) -> bindings,params,rest; // deal with no trailing comma
 
-calc_counts(bindings,params,clauses,exprs)
+calc_counts(types,bindings,params,clauses,exprs)
     match calc_counts_setup_bind(0,length(bindings),{}) => counts
-    update calc_counts_expr_map_rev(true,false,counts,exprs) => counts,exprs
-    update calc_counts_clause_map_rev(counts,clauses) => counts,clauses
+    update calc_counts_expr_map_rev(types,true,false,counts,exprs) => counts,exprs
+    update calc_counts_clause_map_rev(types,counts,clauses) => counts,clauses
     update calc_counts_param_map_rev(counts,params) => _,params ->
     params,clauses,exprs;
 
@@ -433,16 +432,16 @@ calc_counts_clear_touched(_,sofar,{}) -> sofar;
 calc_counts_clear_touched(_,sofar,{{count,false},*rest}) -> calc_counts_clear_touched(true,{*sofar,{count,false}},rest);
 calc_counts_clear_touched(_,sofar,{_,*rest}) -> calc_counts_clear_touched(true,{*sofar,{0,false}},rest);
 
-calc_counts_expr(consume,counts,{ExprId,{n,_,_}}) match split3_nth(n,{},counts) => bind1,{count,touched},bind2 -> {*bind1,{count+1,touched},*bind2},{ExprId,{n,count,0}};
-calc_counts_expr(consume,counts,{ExprCallInternal,op,args}) update calc_counts_expr_map_rev(false,false,counts,args) => counts,args2 -> counts,{ExprCallInternal,op,args2};
-calc_counts_expr(consume,counts,{ExprCall,op,args}) update calc_counts_expr_map_rev(true,false,counts,args) => counts,args2 -> counts,{ExprCall,op,args2};
-calc_counts_expr(consume,counts,{ExprList,args}) update calc_counts_expr_map_rev(true,false,counts,args) => counts,args2 -> counts,{ExprList,args2};
-calc_counts_expr(consume,counts,{ExprSplat,arg}) update calc_counts_expr(consume,counts,arg) => counts,arg2 -> counts,{ExprSplat,arg2};
-calc_counts_expr(consume,counts,x) -> counts,x;
+calc_counts_expr(types,consume,counts,{ExprId,{n,_,_}}) match split3_nth(n,{},counts) => bind1,{count,touched},bind2 -> {*bind1,{count+1,touched},*bind2},{ExprId,{n,count,0}};
+calc_counts_expr(types,consume,counts,{ExprCallInternal,op,args}) update calc_counts_expr_map_rev(types,false,false,counts,args) => counts,args2 -> counts,{ExprCallInternal,op,args2};
+calc_counts_expr(types,consume,counts,{ExprCall,op,args}) update calc_counts_expr_map_rev(types,true,false,counts,args) => counts,args2 -> counts,{ExprCall,op,args2};
+calc_counts_expr(types,consume,counts,{ExprList,args}) update calc_counts_expr_map_rev(types,true,false,counts,args) => counts,args2 -> counts,{ExprList,args2};
+calc_counts_expr(types,consume,counts,{ExprSplat,arg}) update calc_counts_expr(types,consume,counts,arg) => counts,arg2 -> counts,{ExprSplat,arg2};
+calc_counts_expr(types,consume,counts,x) -> counts,x;
 
-calc_counts_expr_map_rev(consume,ffs,counts,{}) -> counts,{};
-calc_counts_expr_map_rev(consume,ffs,counts,{expr,*rest})
-    update calc_counts_expr_map_rev(consume,ffs,counts,rest) => counts,rest2 update calc_counts_expr(consume,counts,expr) => counts,expr2 -> counts,{expr2,*rest2};
+calc_counts_expr_map_rev(types,consume,ffs,counts,{}) -> counts,{};
+calc_counts_expr_map_rev(types,consume,ffs,counts,{expr,*rest})
+    update calc_counts_expr_map_rev(types,consume,ffs,counts,rest) => counts,rest2 update calc_counts_expr(types,consume,counts,expr) => counts,expr2 -> counts,{expr2,*rest2};
 
 calc_counts_param(counts,{ParamId,{n,_}}) match split3_nth(n,{},counts) => bind1,{count,_},bind2 -> {*bind1,{count+1,true},*bind2},{ParamId,{n,count}};
 calc_counts_param(counts,{ParamList,args}) update calc_counts_param_map_rev(counts,args) => counts,args2 -> counts,{ParamList,args2};
@@ -453,12 +452,12 @@ calc_counts_param_map_rev(counts,{}) -> counts,{};
 calc_counts_param_map_rev(counts,{param,*rest})
     update calc_counts_param_map_rev(counts,rest) => counts,rest2 update calc_counts_param(counts,param) => counts,param2 -> counts,{param2,*rest2};
 
-calc_counts_clause_map_rev(counts,{}) -> counts,{};
-calc_counts_clause_map_rev(counts,{{upd_flag,decline,params,exprs},*rest})
-    update calc_counts_clause_map_rev(counts,rest) => counts,rest
+calc_counts_clause_map_rev(types,counts,{}) -> counts,{};
+calc_counts_clause_map_rev(types,counts,{{upd_flag,decline,params,exprs},*rest})
+    update calc_counts_clause_map_rev(types,counts,rest) => counts,rest
     update calc_counts_param_map_rev(counts,params) => counts,params
     update calc_counts_clear_touched(upd_flag,{},counts) => counts
-    update calc_counts_expr_map_rev(true,false,counts,exprs) => counts,exprs ->
+    update calc_counts_expr_map_rev(types,true,false,counts,exprs) => counts,exprs ->
     counts,{{upd_flag,decline,params,exprs},*rest};
 
 ///////////////////////////////////////////////////////////
@@ -581,8 +580,8 @@ compile1(target,types,outfile,label_id,n,table,symtext,symsz,sofar,{rules,*rest}
 
 compile1_vm(target,types,outfile,label_id,table,symtext,sofar)
     match create_export_wrappers_vm(target,types,{},{},0,label_id,table) => wrapper_code,wrapperh
-    match {*sofar,*wrapper_code} => vmcode ->
-    save_c_header(target,outfile,wrapperh),
+    match {*sofar,*wrapper_code} => vmcode
+    -> save_c_header(target,outfile,wrapperh),
     save_binary_file({*outfile,'.rwo'},{*convert_to_binary({*emitb(28,{},0),*emitb(4,{},code_length(0,vmcode)+1)},vmcode),*text_to_byte({},symtext)});
 
 text_to_byte(sofar,{}) -> sofar;
@@ -596,10 +595,11 @@ compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofa
     label_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpError,0,BindImm,ErrNoMatch,0,fnlineno,0,symoffset}})};
 compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,regs_left,type_left,regs_right,type_right)
     match rule => {linerule,bindings,params,clauses,exprs}
+    update calc_counts(types,bindings,params,clauses,exprs) => params,clauses,exprs
     update compile_rule(target,types,linerule,{target,1,0,true,0,label_id,fn_id,rule_id,linerule,create_compiler_bindings({},bindings),reg_count,bitmask,{},table},{},params,clauses,exprs,regs_left,type_left,regs_right,type_right) => reg_count,active,oldlblnext,label_id,code
     update {*sofar,*code,*code_or_not(active,{{fn_id,rule_id,OpLabel,0,BindLabel,oldlblnext}})} => code
-    update compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id+1,code,rest,dummy,bitmask,regs_left,type_left,regs_right,type_right) => label_id,code ->
-    label_id,code;
+    update compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id+1,code,rest,dummy,bitmask,regs_left,type_left,regs_right,type_right) => label_id,code
+    -> label_id,code;
 
 create_compiler_bindings(sofar,{}) -> sofar;
 create_compiler_bindings(sofar,{{n,ref},*rest}) -> create_compiler_bindings({*sofar,{0,0,{},n}},rest);
