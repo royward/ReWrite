@@ -417,10 +417,10 @@ parse_params(consts,bindings,params,rest) -> bindings,params,rest;
 parse_params1(consts,bindings,params,{{_,_,Comma,_},*rest}) -> parse_params(consts,bindings,params,rest);
 parse_params1(consts,bindings,params,rest) -> bindings,params,rest; // deal with no trailing comma
 
-calc_counts(types,bindings,{_,_,params},clauses,exprs)
+calc_counts(table,bindings,{_,_,params},clauses,exprs)
     match calc_counts_setup_bind(0,length(bindings),{}) => counts
-    update calc_counts_expr_map_rev(types,true,false,counts,exprs) => counts,exprs
-    update calc_counts_clause_map_rev(types,0,counts,clauses) => maydecline,counts,clauses
+    update calc_counts_expr_map_rev(table,true,counts,exprs) => counts,exprs
+    update calc_counts_clause_map_rev(table,0,counts,clauses) => maydecline,counts,clauses
     update calc_counts_param_map_rev(counts,params) => _,params
     match calc_counts_maydecline(true,maydecline,counts) => pf1,pf2,_
     -> {pf1,pf2,params},clauses,exprs;
@@ -433,20 +433,38 @@ calc_counts_clear_touched(_,sofar,{}) -> sofar;
 calc_counts_clear_touched(_,sofar,{{count,false},*rest}) -> calc_counts_clear_touched(true,{*sofar,{count,false}},rest);
 calc_counts_clear_touched(_,sofar,{_,*rest}) -> calc_counts_clear_touched(true,{*sofar,{0,false}},rest);
 
+// 2 = may decline, 1=last may decline, apply refcounts at end, 0 = committed
 calc_counts_maydecline(true,0,counts) -> 1,counts,1;
 calc_counts_maydecline(_,1,_) -> 1,{},2;
 calc_counts_maydecline(_,n,_) -> n,{},n;
 
-calc_counts_expr(types,consume,counts,{ExprId,{n,_,_}}) match nth(n,counts) => {count,touched} -> nth_insert(n,{count+1,touched},counts),{ExprId,{n,count,0}};
-calc_counts_expr(types,consume,counts,{ExprCallInternal,op,args}) update calc_counts_expr_map_rev(types,false,false,counts,args) => counts,args2 -> counts,{ExprCallInternal,op,args2};
-calc_counts_expr(types,consume,counts,{ExprCall,op,args}) update calc_counts_expr_map_rev(types,true,false,counts,args) => counts,args2 -> counts,{ExprCall,op,args2};
-calc_counts_expr(types,consume,counts,{ExprList,args}) update calc_counts_expr_map_rev(types,true,false,counts,args) => counts,args2 -> counts,{ExprList,args2};
-calc_counts_expr(types,consume,counts,{ExprSplat,arg}) update calc_counts_expr(types,consume,counts,arg) => counts,arg2 -> counts,{ExprSplat,arg2};
-calc_counts_expr(types,consume,counts,x) -> counts,x;
+calc_counts_expr(table,false,counts,{ExprId,{n,_,_}}) @match nth(n,counts) => {0,touched} -> nth_insert(n,{1,touched},counts),{ExprId,{n,0,1}}; // last use is borrow
+calc_counts_expr(table,consume,counts,{ExprId,{n,_,_}}) match nth(n,counts) => {count,touched} -> nth_insert(n,{count+if(consume,1,0),touched},counts),{ExprId,{n,count,0}};
+calc_counts_expr(table,consume,counts,{ExprCallInternal,op,args}) update calc_counts_expr_map_rev(table,false,counts,args) => counts,args2 -> counts,{ExprCallInternal,op,args2};
+calc_counts_expr(table,consume,counts,{ExprCall,op,args}) update calc_counts_expr_map_rev(table,true,counts,args) => counts,args2 -> counts,{ExprCall,op,args2};
+calc_counts_expr(table,consume,counts,{ExprList,args}) update calc_counts_expr_list_rev(table,false,counts,args) => counts,args2 -> counts,{ExprList,args2};
+calc_counts_expr(table,consume,counts,{ExprSplat,arg}) update calc_counts_expr(table,consume,counts,arg) => counts,arg2 -> counts,{ExprSplat,arg2};
+calc_counts_expr(table,consume,counts,x) -> counts,x;
 
-calc_counts_expr_map_rev(types,consume,ffs,counts,{}) -> counts,{};
-calc_counts_expr_map_rev(types,consume,ffs,counts,{expr,*rest})
-    update calc_counts_expr_map_rev(types,consume,ffs,counts,rest) => counts,rest2 update calc_counts_expr(types,consume,counts,expr) => counts,expr2 -> counts,{expr2,*rest2};
+calc_counts_expr_list_rev(table,_,counts,{}) -> counts,{};
+calc_counts_expr_list_rev(table,false,counts,{{ExprSplat,{ExprId,{n,na,nb}}},*rest}) // consume on first splat in list
+    update calc_counts_expr_list_rev(table,true,counts,rest) => counts,rest2
+    update calc_counts_expr(table,true,counts,{ExprSplat,{ExprId,{n,na,nb}}}) => counts,expr2 -> counts,{expr2,*rest2};
+calc_counts_expr_list_rev(table,false,counts,{{ExprSplat,{ExprCall,op,args}},*rest}) // consume on first function returning at least one arg
+    @match nth(op,table) => {_,_,_,_,_,_,_,_,_,_,{_,*_},_} // results have at least one value
+    update calc_counts_expr_list_rev(table,true,counts,rest) => counts,rest2
+    update calc_counts_expr(table,true,counts,{ExprSplat,{ExprCall,op,args}}) => counts,expr2 -> counts,{expr2,*rest2};
+calc_counts_expr_list_rev(table,ffs,counts,{{ExprSplat,args},*rest}) // ignore empty splat, or borrow other splats (they are copied)
+    update calc_counts_expr_list_rev(table,ffs,counts,rest) => counts,rest2
+    update calc_counts_expr(table,false,counts,{ExprSplat,args}) => counts,expr2 -> counts,{expr2,*rest2};
+calc_counts_expr_list_rev(table,ffs,counts,{expr,*rest}) // single values are consumed
+    update calc_counts_expr_list_rev(table,ffs,counts,rest) => counts,rest2
+    update calc_counts_expr(table,true,counts,expr) => counts,expr2 -> counts,{expr2,*rest2};
+
+calc_counts_expr_map_rev(table,_,counts,{}) -> counts,{};
+calc_counts_expr_map_rev(table,consume,counts,{expr,*rest})
+    update calc_counts_expr_map_rev(table,consume,counts,rest) => counts,rest2
+    update calc_counts_expr(table,consume,counts,expr) => counts,expr2 -> counts,{expr2,*rest2};
 
 calc_counts_param(counts,{ParamId,{n,_}}) match nth(n,counts) => {count,_} -> nth_insert(n,{count+1,true},counts),{ParamId,{n,count}};
 calc_counts_param(counts,{ParamList,args}) update calc_counts_param_map_rev(counts,args) => counts,args2 -> counts,{ParamList,args2};
@@ -463,7 +481,7 @@ calc_counts_clause_map_rev(types,maydecline,counts,{{upd_flag,decline,{_,_,param
     update calc_counts_clause_map_rev(types,next_maydecline,counts,rest) => maydecline,counts,rest
     update calc_counts_param_map_rev(counts,params) => counts,params
     update calc_counts_clear_touched(upd_flag,{},counts) => counts
-    update calc_counts_expr_map_rev(types,true,false,counts,exprs) => counts,exprs
+    update calc_counts_expr_map_rev(types,true,counts,exprs) => counts,exprs
     -> maydecline,counts,{{upd_flag,decline,{pf1,pf2,params},exprs},*rest};
 
 ///////////////////////////////////////////////////////////
@@ -566,7 +584,8 @@ const OpAlloc=192;
 const OpDerefFree=193;
 const OpRealloc=194;
 const OpAppend=196;
-const OpAppendArray=197;
+const OpAppendArray=198;
+const OpAppendArrayConsume=199;
 const OpCont=207;
 const OpCompareNotEqualBranch=240;
 const OpCompareLessThanBranch=246;
@@ -603,7 +622,7 @@ compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofa
     label_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpError,0,BindImm,ErrNoMatch,0,fnlineno,0,symoffset}})};
 compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,regs_left,type_left,regs_right,type_right)
     match rule => {linerule,bindings,params,clauses,exprs}
-    update calc_counts(types,bindings,params,clauses,exprs) => params,clauses,exprs
+    update calc_counts(table,bindings,params,clauses,exprs) => params,clauses,exprs
     update compile_rule(target,types,linerule,{target,1,0,true,0,label_id,fn_id,rule_id,linerule,create_compiler_bindings({},bindings),reg_count,bitmask,{},table},{},params,clauses,exprs,regs_left,type_left,regs_right,type_right) => reg_count,active,oldlblnext,label_id,code
     update {*sofar,*code,*code_or_not(active,{{fn_id,rule_id,OpLabel,0,BindLabel,oldlblnext}})} => code
     update compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id+1,code,rest,dummy,bitmask,regs_left,type_left,regs_right,type_right) => label_id,code
@@ -737,7 +756,7 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update ctx_newreg(ctx,32) => ctx,len
     update ctx_newreg(ctx,64) => ctx,pbegin
     update generate_list_min_size(0,0,elements) => min_size,splatcount
-    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),if_not_zero(splatcount,OpCompareLessThanBranch,OpCompareNotEqualBranch),TypeU32,32,BindReg,len,BindImm,min_size) => lblnext,ctx,code
+    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),if(splatcount!=0,OpCompareLessThanBranch,OpCompareNotEqualBranch),TypeU32,32,BindReg,len,BindImm,min_size) => lblnext,ctx,code
     update ctx_set_lblnext(ctx,lblnext) => ctx
     update generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,(substride>>3),0,min_size+splatcount},ctx,{},{},{{{{BindMem,pbegin+(16<<32),substride}},sub_type}},elements) => ctx,code1,code2 ->
     generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
@@ -814,8 +833,8 @@ generate_llvm_store_code(_,_,x,sofar,_,_) when x!=0 -> sofar;
 generate_llvm_store_code(target,l1,l2,sofar,n,{}) -> sofar;
 generate_llvm_store_code(target,l1,l2,sofar,i,{{_,tp},*rest}) -> generate_llvm_store_code(target,l1,l2,{*sofar,{l1,l2,OpLLStore,tp,0,i}},i+1,rest);
 
-if_not_zero(0,_,y) -> y;
-if_not_zero(_,x,_) -> x;
+if(false,_,y) -> y;
+if(true,x,_) -> x;
 
 code_or_not(false,_) -> {};
 code_or_not(_,code) -> code;
@@ -975,12 +994,12 @@ callout_insert(l1,l2,callctr,sofar,{{src_triples,tp},*rest0},{{dst_triples,tp},*
 
 callout_insert_aux(_,_,_,sofar,{},{}) -> sofar;
 callout_insert_aux(l1,l2,callctr,sofar,{{src_flag,src,sz},*rs},{{dst_flag,dst,sz},*rd}) ->
-    callout_insert_aux(l1,l2,callctr,{*sofar,{l1,l2,if_not_zero(callctr,OpInsert,OpMove)+get_size_scale(sz),0,dst_flag,dst,src_flag,src,0,callctr}},rs,rd);
+    callout_insert_aux(l1,l2,callctr,{*sofar,{l1,l2,if(callctr!=0,OpInsert,OpMove)+get_size_scale(sz),0,dst_flag,dst,src_flag,src,0,callctr}},rs,rd);
 
 callout_extract(l1,l2,callctr,sofar,{}) -> sofar;
 callout_extract(l1,l2,callctr,sofar,{{{},{},tp},*rest}) -> callout_extract(l1,l2,callctr,sofar,rest);
 callout_extract(l1,l2,callctr,sofar,{{{newreg,*reg1},{{ret_flags,ret,sz},*st1},tp},*rest}) ->
-    callout_extract(l1,l2,callctr,{*sofar,{l1,l2,if_not_zero(callctr,OpExtract,OpMove)+get_size_scale(sz),0,BindReg,newreg,ret_flags,ret,0,callctr}},{{reg1,st1,tp},*rest});
+    callout_extract(l1,l2,callctr,{*sofar,{l1,l2,if(callctr!=0,OpExtract,OpMove)+get_size_scale(sz),0,BindReg,newreg,ret_flags,ret,0,callctr}},{{reg1,st1,tp},*rest});
 
 callout_ret(sofar,{}) -> sofar;
 callout_ret(sofar,{{{newreg},{{ret_flags,ret,sz}},tp},*rest}) -> callout_ret({*sofar,{{{BindReg,newreg,sz}},tp}},rest);
