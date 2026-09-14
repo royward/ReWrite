@@ -27,6 +27,8 @@
 #define OP_LEA 0x28
 #define OP_LEA_SCALE 0x29
 #define OP_EXTRACT_LL 0x30
+#define OP_EQUAL 0x40
+#define OP_NOT_EQUAL 0x48
 #define OP_ALLOC 0xC0
 #define OP_DEREF_FREE 0xC1
 #define OP_REALLOC 0xC2
@@ -264,6 +266,7 @@ const char* display_binop(uint8_t op) {
         case OP_MINUS: return "-"; break;
         case OP_TIMES: return "*"; break;
         case OP_DIVIDE: return "/"; break;
+        case OP_MODULUS: return "%"; break;
         case OP_LT: return "<"; break;
         case OP_LTE: return "<="; break;
         default: return "(unknown)";
@@ -399,6 +402,24 @@ void program_disassemble(Program* program, FILE* out) {
                 display_operand(out,operation->flags_src2,operation->src2);
                 fprintf(out," goto ");
                 program_display_label_both(program,out,operation);
+            } break;
+            case OP_EQUAL: case OP_EQUAL+1: case OP_EQUAL+2: case OP_EQUAL+3: case OP_EQUAL+4: {
+                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
+                fprintf(out,"let.%d ",sz);
+                display_operand(out,operation->flags_dst,operation->dst);
+                fprintf(out," = ");
+                display_operand(out,operation->flags_src1,operation->src1);
+                fprintf(out," == ");
+                display_operand(out,operation->flags_src2,operation->src2);
+            } break;
+            case OP_NOT_EQUAL: case OP_NOT_EQUAL+1: case OP_NOT_EQUAL+2: case OP_NOT_EQUAL+3: case OP_NOT_EQUAL+4: {
+                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
+                fprintf(out,"let.%d ",sz);
+                display_operand(out,operation->flags_dst,operation->dst);
+                fprintf(out," = ");
+                display_operand(out,operation->flags_src1,operation->src1);
+                fprintf(out," != ");
+                display_operand(out,operation->flags_src2,operation->src2);
             } break;
             case OP_CMP_EQ_BRANCH: case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
@@ -724,6 +745,28 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 if(src1 < src2) {
                     pc = operation->fdst.a-1; // -1 because pc++ at end of loop
                 }
+            } break;
+            case OP_NOT_EQUAL: {
+                uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp);
+                operand_store(exe, operation, src1!=src2, 1, sp);
+            } break;
+            case OP_NOT_EQUAL+1: case OP_NOT_EQUAL+2: case OP_NOT_EQUAL+3: case OP_NOT_EQUAL+4: {
+                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
+                operand_store(exe, operation, src1==src2, 1, sp);
+            } break;
+            case OP_EQUAL: {
+                uint64_t src1 = operand_load(exe, 1, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, 1, operation->flags_src2, operation->src2, sp);
+                operand_store(exe, operation, src1!=src2, 1, sp);
+            } break;
+            case OP_EQUAL+1: case OP_EQUAL+2: case OP_EQUAL+3: case OP_EQUAL+4: {
+                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
+                operand_store(exe, operation, src1==src2, 1, sp);
             } break;
             case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
                 uint32_t sz = type_to_size(operation->type);

@@ -76,6 +76,24 @@ int main(int argc, char** argv) {
     if(!ret_code && strcmp(resultc1,"hello world!hello world!")==0) { printf("success\n"); } else { printf("fail:%d \"%s\"\n",ret_code,resultc1); };
     free(resultc1);
 
+    printf("strdup:");
+    exe->allocated=0;
+    ret_code=rw_strdup(exe,"test",&resultc1,&resultc2);
+    if(!ret_code && strcmp(resultc1,"test")==0 && strcmp(resultc2,"test")==0) { printf("success\n"); } else { printf("fail:%d \"%s\" \"%s\"\n",ret_code,resultc1,resultc2); };
+    free(resultc1);
+    free(resultc2);
+
+    printf("testprime:");
+    exe->allocated=0;
+    ret_code=rw_testprime(exe,6,&resultb);
+    if(!ret_code && !resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
+
+    printf("testprime:");
+    exe->allocated=0;
+    ret_code=rw_testprime(exe,11,&resultb);
+    if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
+
+
     program_unload(&p);
     rw_instance_unload(exe);
     return EXIT_SUCCESS;
