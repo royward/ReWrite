@@ -50,10 +50,10 @@ hw() -> {*hw_aux(),*hw_aux()};
 strdup(x) -> x,x;
 
 :- isprime(i64,[i64]) -> bool;
-isprime(_,{}) -> true;
 isprime(n,{i,*_}) when i*i>n -> true;
 isprime(n,{i,*_}) when n%i==0 -> false;
 isprime(n,{_,*rest}) -> isprime(n,rest);
+isprime(_,{}) -> true;
 
 :- export testprime(i64) -> bool;
 testprime(n) -> isprime(n,{2,3,5,7,11});

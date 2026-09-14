@@ -514,10 +514,10 @@ nprime_aux(0,_,sofar) -> sofar;
 nprime_aux(n,p,sofar) when isprime(p,sofar) -> nprime_aux(n-1,p+1,{*sofar,p});
 nprime_aux(n,p,sofar) -> nprime_aux(n,p+1,sofar);
 
-isprime(_,{}) -> true;
-isprime(n,{i,*_}) when i*i>n -> true;
 isprime(n,{i,*_}) when n%i==0 -> false;
+isprime(n,{i,*_}) when i*i>n -> true;
 isprime(n,{_,*rest}) -> isprime(n,rest);
+isprime(_,{}) -> true;
 ```
 
 `nprime_aux` is effectively a loop, trying increasing numbers one at a time against the list of primes found so far.

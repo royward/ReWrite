@@ -211,7 +211,7 @@ const ExprCallInternal=8;
 const ExprCallLibrary=9;
 const ExprError=10;
 
-const DerivedTypeArray = 2;
+const DerivedTypeArray=2;
 
 string_to_int_pos({},acc) -> acc;
 string_to_int_pos({c,*rest},acc) -> string_to_int_pos(rest,acc*10+(c-'0'));
@@ -417,72 +417,6 @@ parse_params(consts,bindings,params,rest) -> bindings,params,rest;
 parse_params1(consts,bindings,params,{{_,_,Comma,_},*rest}) -> parse_params(consts,bindings,params,rest);
 parse_params1(consts,bindings,params,rest) -> bindings,params,rest; // deal with no trailing comma
 
-calc_counts(table,bindings,{_,_,params},clauses,exprs)
-    match calc_counts_setup_bind(0,length(bindings),{}) => counts
-    update calc_counts_expr_map_rev(table,true,counts,exprs) => counts,exprs
-    update calc_counts_clause_map_rev(table,counts,clauses) => maydecline,counts,clauses
-    update calc_counts_param_map_rev(counts,params) => _,params
-    match calc_counts_maydecline(true,maydecline,counts) => pf1,pf2,_
-    -> {pf1,pf2,params},clauses,exprs;
-
-calc_counts_setup_bind(n,n,sofar) -> sofar;
-calc_counts_setup_bind(i,n,sofar) -> calc_counts_setup_bind(i+1,n,{*sofar,{0,false}});
-
-calc_counts_clear_touched(false,_,counts) -> counts;
-calc_counts_clear_touched(_,sofar,{}) -> sofar;
-calc_counts_clear_touched(_,sofar,{{count,false},*rest}) -> calc_counts_clear_touched(true,{*sofar,{count,false}},rest);
-calc_counts_clear_touched(_,sofar,{_,*rest}) -> calc_counts_clear_touched(true,{*sofar,{0,false}},rest);
-
-// 2 = may decline, 1=last may decline, apply refcounts at end, 0 = committed
-calc_counts_maydecline(true,0,counts) -> 1,counts,2;
-calc_counts_maydecline(_,n,_) -> n,{},n;
-
-calc_counts_expr(table,false,counts,{ExprId,{n,_,_}}) @match nth(n,counts) => {0,touched} -> nth_insert(n,{1,touched},counts),{ExprId,{n,0,1}}; // last use is borrow
-calc_counts_expr(table,consume,counts,{ExprId,{n,_,_}}) match nth(n,counts) => {count,touched} -> nth_insert(n,{count+if(consume,1,0),touched},counts),{ExprId,{n,count,0}};
-calc_counts_expr(table,consume,counts,{ExprCallInternal,op,args}) update calc_counts_expr_map_rev(table,false,counts,args) => counts,args2 -> counts,{ExprCallInternal,op,args2};
-calc_counts_expr(table,consume,counts,{ExprCall,op,args}) update calc_counts_expr_map_rev(table,true,counts,args) => counts,args2 -> counts,{ExprCall,op,args2};
-calc_counts_expr(table,consume,counts,{ExprList,args}) update calc_counts_expr_list_rev(table,false,counts,args) => counts,args2 -> counts,{ExprList,args2};
-calc_counts_expr(table,consume,counts,{ExprSplat,arg}) update calc_counts_expr(table,consume,counts,arg) => counts,arg2 -> counts,{ExprSplat,arg2};
-calc_counts_expr(table,consume,counts,x) -> counts,x;
-
-calc_counts_expr_list_rev(table,_,counts,{}) -> counts,{};
-calc_counts_expr_list_rev(table,false,counts,{{ExprSplat,{ExprId,{n,na,nb}}},*rest}) // consume on first splat in list
-    update calc_counts_expr_list_rev(table,true,counts,rest) => counts,rest2
-    update calc_counts_expr(table,true,counts,{ExprSplat,{ExprId,{n,na,nb}}}) => counts,expr2 -> counts,{expr2,*rest2};
-calc_counts_expr_list_rev(table,false,counts,{{ExprSplat,{ExprCall,op,args}},*rest}) // consume on first function returning at least one arg
-    @match nth(op,table) => {_,_,_,_,_,_,_,_,_,_,{_,*_},_} // results have at least one value
-    update calc_counts_expr_list_rev(table,true,counts,rest) => counts,rest2
-    update calc_counts_expr(table,true,counts,{ExprSplat,{ExprCall,op,args}}) => counts,expr2 -> counts,{expr2,*rest2};
-calc_counts_expr_list_rev(table,ffs,counts,{{ExprSplat,args},*rest}) // ignore empty splat, or borrow other splats (they are copied)
-    update calc_counts_expr_list_rev(table,ffs,counts,rest) => counts,rest2
-    update calc_counts_expr(table,false,counts,{ExprSplat,args}) => counts,expr2 -> counts,{expr2,*rest2};
-calc_counts_expr_list_rev(table,ffs,counts,{expr,*rest}) // single values are consumed
-    update calc_counts_expr_list_rev(table,ffs,counts,rest) => counts,rest2
-    update calc_counts_expr(table,true,counts,expr) => counts,expr2 -> counts,{expr2,*rest2};
-
-calc_counts_expr_map_rev(table,_,counts,{}) -> counts,{};
-calc_counts_expr_map_rev(table,consume,counts,{expr,*rest})
-    update calc_counts_expr_map_rev(table,consume,counts,rest) => counts,rest2
-    update calc_counts_expr(table,consume,counts,expr) => counts,expr2 -> counts,{expr2,*rest2};
-
-calc_counts_param(counts,{ParamId,{n,_}}) match nth(n,counts) => {count,_} -> nth_insert(n,{count+1,true},counts),{ParamId,{n,count}};
-calc_counts_param(counts,{ParamList,args}) update calc_counts_param_map_rev(counts,args) => counts,args2 -> counts,{ParamList,args2};
-calc_counts_param(counts,{ParamSplat,{n,_}}) match nth(n,counts) => {count,_} -> nth_insert(n,{count+1,true},counts),{ParamSplat,{n,count}};
-calc_counts_param(counts,x) -> counts,x;
-
-calc_counts_param_map_rev(counts,{}) -> counts,{};
-calc_counts_param_map_rev(counts,{param,*rest})
-    update calc_counts_param_map_rev(counts,rest) => counts,rest2 update calc_counts_param(counts,param) => counts,param2 -> counts,{param2,*rest2};
-
-calc_counts_clause_map_rev(types,counts,{}) -> 0,counts,{};
-calc_counts_clause_map_rev(types,counts,{{upd_flag,decline,{_,_,params},exprs},*rest})
-    update calc_counts_clause_map_rev(types,counts,rest) => maydecline,counts,rest
-    match calc_counts_maydecline(decline,maydecline,counts) => pf1,pf2,next_maydecline
-    update calc_counts_param_map_rev(counts,params) => counts,params
-    update calc_counts_clear_touched(upd_flag,{},counts) => counts
-    update calc_counts_expr_map_rev(types,true,counts,exprs) => counts,exprs
-    -> next_maydecline,counts,{{upd_flag,decline,{pf1,pf2,params},exprs},*rest};
-
 ///////////////////////////////////////////////////////////
 // Compiler
 ///////////////////////////////////////////////////////////
@@ -594,6 +528,72 @@ const OpCompareLessThanEqualBranch=247;
 const OpCompareEqualBranch=248;
 const OpGoto=254;
 const OpCall=255;
+
+calc_counts(table,bindings,{_,_,params},clauses,exprs)
+    match calc_counts_setup_bind(0,length(bindings),{}) => counts
+    update calc_counts_expr_map_rev(table,true,counts,exprs) => counts,exprs
+    update calc_counts_clause_map_rev(table,counts,clauses) => maydecline,counts,clauses
+    update calc_counts_param_map_rev(counts,params) => _,params
+    match calc_counts_maydecline(true,maydecline,counts) => pf1,pf2,_
+    -> {pf1,pf2,params},clauses,exprs;
+
+calc_counts_setup_bind(n,n,sofar) -> sofar;
+calc_counts_setup_bind(i,n,sofar) -> calc_counts_setup_bind(i+1,n,{*sofar,{0,false}});
+
+calc_counts_clear_touched(false,_,counts) -> counts;
+calc_counts_clear_touched(_,sofar,{}) -> sofar;
+calc_counts_clear_touched(_,sofar,{{count,false},*rest}) -> calc_counts_clear_touched(true,{*sofar,{count,false}},rest);
+calc_counts_clear_touched(_,sofar,{_,*rest}) -> calc_counts_clear_touched(true,{*sofar,{0,false}},rest);
+
+// 2 = may decline, 1=last may decline, apply refcounts at end, 0 = committed
+calc_counts_maydecline(true,0,counts) -> 1,counts,2;
+calc_counts_maydecline(_,n,_) -> n,{},n;
+
+calc_counts_expr(table,false,counts,{ExprId,{n,_,_}}) @match nth(n,counts) => {0,touched} -> nth_insert(n,{1,touched},counts),{ExprId,{n,0,2}}; // last use is borrow
+calc_counts_expr(table,consume,counts,{ExprId,{n,_,_}}) match nth(n,counts) => {count,touched} -> nth_insert(n,{count+if(consume,1,0),touched},counts),{ExprId,{n,count,if(consume,1,0)}};
+calc_counts_expr(table,consume,counts,{ExprCallInternal,op,args}) update calc_counts_expr_map_rev(table,false,counts,args) => counts,args2 -> counts,{ExprCallInternal,op,args2};
+calc_counts_expr(table,consume,counts,{ExprCall,op,args}) update calc_counts_expr_map_rev(table,true,counts,args) => counts,args2 -> counts,{ExprCall,op,args2};
+calc_counts_expr(table,consume,counts,{ExprList,args}) update calc_counts_expr_list_rev(table,false,counts,args) => counts,args2 -> counts,{ExprList,args2};
+calc_counts_expr(table,consume,counts,{ExprSplat,arg}) update calc_counts_expr(table,consume,counts,arg) => counts,arg2 -> counts,{ExprSplat,arg2};
+calc_counts_expr(table,consume,counts,x) -> counts,x;
+
+calc_counts_expr_list_rev(table,_,counts,{}) -> counts,{};
+calc_counts_expr_list_rev(table,false,counts,{{ExprSplat,{ExprId,{n,na,nb}}},*rest}) // consume on first splat in list
+    update calc_counts_expr_list_rev(table,true,counts,rest) => counts,rest2
+    update calc_counts_expr(table,true,counts,{ExprSplat,{ExprId,{n,na,nb}}}) => counts,expr2 -> counts,{expr2,*rest2};
+calc_counts_expr_list_rev(table,false,counts,{{ExprSplat,{ExprCall,op,args}},*rest}) // consume on first function returning at least one arg
+    @match nth(op,table) => {_,_,_,_,_,_,_,_,_,_,{_,*_},_} // results have at least one value
+    update calc_counts_expr_list_rev(table,true,counts,rest) => counts,rest2
+    update calc_counts_expr(table,true,counts,{ExprSplat,{ExprCall,op,args}}) => counts,expr2 -> counts,{expr2,*rest2};
+calc_counts_expr_list_rev(table,ffs,counts,{{ExprSplat,args},*rest}) // ignore empty splat, or borrow other splats (they are copied)
+    update calc_counts_expr_list_rev(table,ffs,counts,rest) => counts,rest2
+    update calc_counts_expr(table,false,counts,{ExprSplat,args}) => counts,expr2 -> counts,{expr2,*rest2};
+calc_counts_expr_list_rev(table,ffs,counts,{expr,*rest}) // single values are consumed
+    update calc_counts_expr_list_rev(table,ffs,counts,rest) => counts,rest2
+    update calc_counts_expr(table,true,counts,expr) => counts,expr2 -> counts,{expr2,*rest2};
+
+calc_counts_expr_map_rev(table,_,counts,{}) -> counts,{};
+calc_counts_expr_map_rev(table,consume,counts,{expr,*rest})
+    update calc_counts_expr_map_rev(table,consume,counts,rest) => counts,rest2
+    update calc_counts_expr(table,consume,counts,expr) => counts,expr2 -> counts,{expr2,*rest2};
+
+calc_counts_param(counts,{ParamId,{n,_}}) match nth(n,counts) => {count,_} -> nth_insert(n,{count+1,true},counts),{ParamId,{n,count}};
+calc_counts_param(counts,{ParamList,args}) update calc_counts_param_map_rev(counts,args) => counts,args2 -> counts,{ParamList,args2};
+calc_counts_param(counts,{ParamSplat,{n,_}}) match nth(n,counts) => {count,_} -> nth_insert(n,{count+1,true},counts),{ParamSplat,{n,count}};
+calc_counts_param(counts,x) -> counts,x;
+
+calc_counts_param_map_rev(counts,{}) -> counts,{};
+calc_counts_param_map_rev(counts,{param,*rest})
+    update calc_counts_param_map_rev(counts,rest) => counts,rest2 update calc_counts_param(counts,param) => counts,param2 -> counts,{param2,*rest2};
+
+calc_counts_clause_map_rev(types,counts,{}) -> 0,counts,{};
+calc_counts_clause_map_rev(types,counts,{{upd_flag,decline,{_,_,params},exprs},*rest})
+    update calc_counts_clause_map_rev(types,counts,rest) => maydecline,counts,rest
+    match calc_counts_maydecline(decline,maydecline,counts) => pf1,pf2,next_maydecline
+    update calc_counts_param_map_rev(counts,params) => counts,params
+    update calc_counts_clear_touched(upd_flag,{},counts) => counts
+    update calc_counts_expr_map_rev(types,true,counts,exprs) => counts,exprs
+    -> next_maydecline,counts,{{upd_flag,decline,{pf1,pf2,params},exprs},*rest};
 
 compile1(TargetVM,types,outfile,label_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVM,types,outfile,label_id,table,symtext,sofar);
 compile1(TargetVMLL,types,outfile,label_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVMLL,types,outfile,label_id,table,symtext,sofar);
@@ -923,7 +923,7 @@ generate_expr_code_aux(types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}})
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
     ctx,false,{{ctx_fnr(ctx),OpError,0,0,err,0,ctx_linerule(ctx),0,symoffset}},{{{{BindImm,err,DefaultSize}},TypeI64}};
-generate_expr_code_aux(types,ctx,stypes,{ExprList,elements}) match decompose_stypes(stypes) => stype,_ match nth(stype,types) => {_,_,{DerivedTypeArray,t},storage}
+generate_expr_code_aux(types,ctx,stypes,{ExprList,elements}) @match decompose_stypes(stypes) => stype,_ @match nth(stype,types) => {_,_,{DerivedTypeArray,t},storage}
     // Array - go get the elements then come back to allocate
     match nth(t,types) => {_,_,_,{_,sz}}
     update generate_expr_code_aux_map(types,ctx,{},{0,t},elements) => ctx,args_code
