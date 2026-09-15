@@ -455,6 +455,9 @@ compile_aux(target,outfile,rules,table,symtext,symsz,types)
 
 const MaxParamRegs=8;
 
+const Borrow=0;
+const Consume=1;
+
 annotate_table(types,sofar,{}) -> sofar;
 annotate_table(types,sofar,{{name,{exportx,fnlineno,symoffset,types_left,types_right,val_lhs,val_rhs}},*rest}) ->
     annotate_table(types,{*sofar,{exportx,fnlineno,symoffset,name,
@@ -462,7 +465,7 @@ annotate_table(types,sofar,{{name,{exportx,fnlineno,symoffset,types_left,types_r
         annotate_type_list_reg(types,0,0,{},create_start_annotated_list(types,{},types_right)),val_rhs}},rest);
 
 create_start_annotated_list(types,sofar,{}) -> sofar;
-create_start_annotated_list(types,sofar,{t,*rest}) match lookup_type_size_pri(t,types) => tps -> create_start_annotated_list(types,{*sofar,{create_empty_types({},tps),t}},rest);
+create_start_annotated_list(types,sofar,{t,*rest}) match lookup_type_size_pri(t,types) => tps -> create_start_annotated_list(types,{*sofar,{create_empty_types({},tps),t,Consume}},rest);
 
 create_empty_types(sofar,{}) -> sofar;
 create_empty_types(sofar,{_,_,*rest}) -> create_empty_types({*sofar,{}},rest);
@@ -477,21 +480,21 @@ const BindMem=5;
 
 annotate_type_list_reg(types,pri,max_reg,sofar,{}) -> max_reg,{},sofar;
 annotate_type_list_reg(types,pri,max_reg,sofar,todo) when max_reg==MaxParamRegs -> max_reg,annotate_type_list_stack(types,{},{},{*sofar,*todo});
-annotate_type_list_reg(types,pri,max_reg,sofar,{{{{}},t},*rest}) match lookup_type_size_pri(t,types) => {p,sz} when p<=pri ->
-    annotate_type_list_reg(types,pri,max_reg+1,{*sofar,{{{BindArgRet,max_reg,sz}},t}},rest);
-annotate_type_list_reg(types,pri,max_reg,sofar,{{{{},r},t},*rest}) match lookup_type_size_pri(t,types) => {p,sz,_,_} when p<=pri ->
-    annotate_type_list_reg(types,pri,max_reg+1,sofar,{{{{BindArgRet,max_reg,sz},r},t},*rest});
-annotate_type_list_reg(types,pri,max_reg,sofar,{{{r,{}},t},*rest}) match lookup_type_size_pri(t,types) => {_,_,p,sz} when p<=pri ->
-    annotate_type_list_reg(types,pri,max_reg+1,{*sofar,{{r,{BindArgRet,max_reg,sz}},t}},rest);
+annotate_type_list_reg(types,pri,max_reg,sofar,{{{{}},t,_},*rest}) match lookup_type_size_pri(t,types) => {p,sz} when p<=pri ->
+    annotate_type_list_reg(types,pri,max_reg+1,{*sofar,{{{BindArgRet,max_reg,sz}},t,Consume}},rest);
+annotate_type_list_reg(types,pri,max_reg,sofar,{{{{},r},t,_},*rest}) match lookup_type_size_pri(t,types) => {p,sz,_,_} when p<=pri ->
+    annotate_type_list_reg(types,pri,max_reg+1,sofar,{{{{BindArgRet,max_reg,sz},r},t,Consume},*rest});
+annotate_type_list_reg(types,pri,max_reg,sofar,{{{r,{}},t,_},*rest}) match lookup_type_size_pri(t,types) => {_,_,p,sz} when p<=pri ->
+    annotate_type_list_reg(types,pri,max_reg+1,{*sofar,{{r,{BindArgRet,max_reg,sz}},t,Consume}},rest);
 annotate_type_list_reg(types,pri,max_reg,sofar,todo) -> annotate_type_list_reg(types,pri+1,max_reg,sofar,todo);
 
 annotate_type_list_stack(types,stack,sofar,{}) -> stack,sofar;
 annotate_type_list_stack(types,stack,sofar,{{{{}},t},*rest}) match lookup_type_size_pri(t,types) => {p,sz} update get_aligned_bitmask(0,{},stack,min(sz>>3,1)) => stack,offset ->
-    annotate_type_list_stack(types,stack,{*sofar,{{{BindOverflow,offset,sz}},t}},rest);
+    annotate_type_list_stack(types,stack,{*sofar,{{{BindOverflow,offset,sz}},t,Consume}},rest);
 annotate_type_list_stack(types,stack,sofar,{{{{},r},t},*rest}) match lookup_type_size_pri(t,types) => {p,sz,_,_} update get_aligned_bitmask(0,{},stack,min(sz>>3,1)) => stack,offset ->
-    annotate_type_list_stack(types,stack,sofar,{{{{BindOverflow,offset,sz},r},t},*rest});
+    annotate_type_list_stack(types,stack,sofar,{{{{BindOverflow,offset,sz},r},t,Consume},*rest});
 annotate_type_list_stack(types,stack,sofar,{{{r,{}},t},*rest}) match lookup_type_size_pri(t,types) => {_,_,p,sz} update get_aligned_bitmask(0,{},stack,min(sz>>3,1)) => stack,offset ->
-    annotate_type_list_stack(types,stack,{*sofar,{{r,{BindOverflow,offset,sz}},t}},rest);
+    annotate_type_list_stack(types,stack,{*sofar,{{r,{BindOverflow,offset,sz}},t,Consume}},rest);
 annotate_type_list_stack(types,stack,sofar,{t,*rest}) -> annotate_type_list_stack(types,stack,{*sofar,t},rest);
 
 lookup_type_size_pri(t,types) match nth(t,types) => {_,_,_,size_pri} -> size_pri;
@@ -624,7 +627,8 @@ compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofa
 compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,regs_left,type_left,regs_right,type_right)
     match rule => {linerule,bindings,params,clauses,exprs}
     update calc_counts(table,bindings,params,clauses,exprs) => params,clauses,exprs
-    update println("rule"),compile_rule(target,types,linerule,{target,1,0,true,0,label_id,fn_id,rule_id,linerule,create_compiler_bindings({},bindings),reg_count,bitmask,{},table},{},params,clauses,exprs,regs_left,type_left,regs_right,type_right) => reg_count,active,oldlblnext,label_id,code
+    update println_any({"rule",type_right}) =>
+    update compile_rule(target,types,linerule,{target,1,0,true,0,label_id,fn_id,rule_id,linerule,create_compiler_bindings({},bindings),reg_count,bitmask,{},table},{},params,clauses,exprs,regs_left,type_left,regs_right,type_right) => reg_count,active,oldlblnext,label_id,code
     update {*sofar,*code,*code_or_not(active,{{fn_id,rule_id,OpLabel,0,BindLabel,oldlblnext}})} => code
     update compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id+1,code,rest,dummy,bitmask,regs_left,type_left,regs_right,type_right) => label_id,code
     -> label_id,code;
@@ -694,7 +698,7 @@ compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type
         {*code,{ctx_fnr(ctx),OpGoto,0,BindLabel,call_id,0,0,0,callctr}});
 
 extract_types(sofar,{}) -> {1,*sofar};
-extract_types(sofar,{{_,tp},*rest}) -> extract_types({*sofar,tp},rest);
+extract_types(sofar,{{_,tp,consume},*rest}) -> extract_types({*sofar,tp,consume},rest);
 
 generate_params_clauses(target,types,ctx,{pf1,pf2,params},clauses,exprs,regs_left,type_left,regs_right)
     update generate_llvm_alloc_code(target,ctx_fnr(ctx),{},0,max(regs_left,regs_right)) => code
@@ -716,6 +720,8 @@ update_bind_level(bind_level,_) -> bind_level+1,bind_level;
 
 generate_clause_code_aux(types,bind_level,post_arrow,ctx,code0,code1,expr,{pf1,pf2,matchx})
     update generate_expr_code_untyped(types,ctx,code0,{},expr) => ctx,etypes,code0
+    match println_any({111,types,expr}) =>
+    match println_any({112,etypes}) =>
     update generate_param_code(types,post_arrow,bind_level,{},ctx,code0,code1,etypes,matchx) => ctx,code0,code1,
     match println_any({65,pf1,pf2}) =>
     update generate_commit_cleanup(types,ctx,pf1,pf2) => ctx,cleanup_code
@@ -724,8 +730,10 @@ generate_clause_code_aux(types,bind_level,post_arrow,ctx,code0,code1,expr,{pf1,p
 generate_expr_code_untyped(types,ctx,code,etypes,{}) -> ctx,etypes,code;
 // TODO deal with lists and splats first
 generate_expr_code_untyped(types,ctx,sofar,etypes,{expr,*rest})
-    update generate_expr_code_aux(types,ctx,{0,0},expr) => ctx,false,newcode,callout_ret ->
-    generate_expr_code_untyped(types,ctx,{*sofar,*newcode},{*etypes,*callout_ret},rest);
+    update generate_expr_code_aux(types,ctx,{0,0},expr) => ctx,false,newcode,callout_ret
+    match println_any({113,types,ctx,expr}) =>
+    match println_any({114,callout_ret}) =>
+    -> generate_expr_code_untyped(types,ctx,{*sofar,*newcode},{*etypes,*callout_ret},rest);
 
 generate_commit_cleanup(types,ctx,1,cleanup) -> generate_commit_cleanup_aux(types,ctx,{},ctx_bindings(ctx),cleanup);
 generate_commit_cleanup(_,ctx,_,_) -> ctx,{};
@@ -744,16 +752,16 @@ generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2
     //match gen_types_deref_free(types,ctx,tp,{{src_flag1,src1,32},{src_flag2,src2,32}}) => codefree
     -> ctx,sofar0,sofar1;
 generate_param_code(types,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
-    match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp},type_left
+    match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp,_},type_left
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,BindImm,val) => lblnext,ctx,code
     update ctx_set_lblnext(ctx,lblnext) => ctx ->
     generate_param_code(types,false,bindlevel,newstride,ctx,{*sofar0,*code},sofar1,type_left,rest);
 generate_param_code(types,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
-    match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp},type_left
+    match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp,_},type_left
     update generate_conditional_rhs(ctx,sofar0,tp,{{src_flag,src,sz},{BindImm,val,sz}}) => ctx,code ->
     generate_param_code(types,true,bindlevel,newstride,ctx,code,sofar1,type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
-    match gen_param_code_next_type(stride,typex) => newstride,{storage,tp},type_left
+    match gen_param_code_next_type(stride,typex) => newstride,{storage,tp,_},type_left
     update ctx_bindings(ctx) => bindings
     update nth(id,bindings) => bind
     update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,storage,tp,bind) => ctx,newbind,code0,code1
@@ -763,7 +771,7 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     match gen_param_code_next_type(stride,typex) => newstride,_,type_left ->
     generate_param_code(types,post_arrow,bindlevel,newstride,ctx,sofar0,sofar1,type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,{}},*rest})
-    match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp},type_left
+    match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,pend
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,TypeU32,32,src_flag2,src2,BindReg,pend) => lblnext,ctx,code
@@ -774,7 +782,7 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
         {ctx_fnr(ctx),OpMove+3,0,BindReg,pend,BindMem,parray+(8<<32)},*code},
         {*sofar1,*codefree},type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,elements},*rest})
-    match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp},type_left
+    match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
     match nth(tp,types) => {_,_,{2,sub_type},{0,32,0,32}}
     match nth(sub_type,types) => {_,_,_,sub_alloc}
     match sum_sub_alloc(0,sub_alloc) => substride
@@ -786,17 +794,17 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),if(splatcount!=0,OpCompareLessThanBranch,OpCompareNotEqualBranch),TypeU32,32,BindReg,len,BindImm,min_size) => lblnext,ctx,code
     update ctx_set_lblnext(ctx,lblnext) => ctx
     update gen_types_deref_free(splatcount==0,types,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
-    update generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,(substride>>3),0,min_size+splatcount},ctx,{},{},{{{{BindMem,pbegin+(16<<32),substride}},sub_type}},elements) => ctx,code1,code2 ->
+    update generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,(substride>>3),0,min_size+splatcount},ctx,{},{},{{{{BindMem,pbegin+(16<<32),substride}},sub_type,Consume}},elements) => ctx,code1,code2 ->
     generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
         {ctx_fnr(ctx),OpLea,0,BindReg,parray,src_flag1,src1},
         {ctx_fnr(ctx),OpMove+3,0,BindReg,pend,BindMem,parray+(8<<32)},
         {ctx_fnr(ctx),OpMinus,TypeU32,BindReg,len,BindReg,pend,src_flag2,src2},*code,
         {ctx_fnr(ctx),OpLeaScale,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,substride>>3},
         *code1},{*sofar1,*codefree,*code2},type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{{{BindMem,p,sz}},t},*_},{{ParamSplatWild,{}}}) // note: no rest here
+generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{{{BindMem,p,sz}},t,_},*_},{{ParamSplatWild,{}}}) // note: no rest here
     match gen_types_deref_free(true,types,ctx,tp,{{src_flag1,src1,32},{src_flag2,src2,32}}) => codefree
     -> ctx,sofar0,{*sofar1,*codefree};
-generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{{{BindMem,p,sz}},t},*_},{{ParamSplat,{id,count}}}) // note: no rest here
+generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{{{BindMem,p,sz}},t,_},*_},{{ParamSplat,{id,count}}}) // note: no rest here
     update ctx_bindings(ctx) => bindings
     update ctx_newreg(ctx,32) => ctx,start
     update nth(id,bindings) => bind
@@ -805,8 +813,10 @@ generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2
     -> ctx,{*sofar0,{ctx_fnr(ctx),OpPlus,TypeU32,BindReg,start,src_flag2,src2,BindImm,pos},*code0},{*sofar1,*code1};
 
 gen_param_code_next_type({},{a,*rest}) -> {},a,rest;
-gen_param_code_next_type({tp,src_flag1,src1,src_flag2,src2,s,pos,len},{{{{BindMem,p,sz}},t},*rest}) when pos==len-1 -> {tp,src_flag1,src1,src_flag2,src2,s,pos,len},{{{BindMem,p,sz}},t},{};
-gen_param_code_next_type({tp,src_flag1,src1,src_flag2,src2,s,pos,len},{{{{BindMem,p,sz}},t},*rest}) -> {tp,src_flag1,src1,src_flag2,src2,s,pos+1,len},{{{BindMem,p,sz}},t},{{{{BindMem,p+(s<<32),sz}},t},*rest};
+gen_param_code_next_type({tp,src_flag1,src1,src_flag2,src2,s,pos,len},{{{{BindMem,p,sz}},t,consume},*rest}) when pos==len-1
+    -> {tp,src_flag1,src1,src_flag2,src2,s,pos,len},{{{BindMem,p,sz}},t,consume},{};
+gen_param_code_next_type({tp,src_flag1,src1,src_flag2,src2,s,pos,len},{{{{BindMem,p,sz}},t,consume},*rest})
+    -> {tp,src_flag1,src1,src_flag2,src2,s,pos+1,len},{{{BindMem,p,sz}},t,consume},{{{{BindMem,p+(s<<32),sz}},t,consume},*rest};
 
 generate_list_min_size(n,m,{}) -> n,m;
 generate_list_min_size(n,m,{e,*rest}) match generate_list_min_size_aux(e) => dn,dm -> generate_list_min_size(n+dn,m+dm,rest);
@@ -859,7 +869,7 @@ generate_llvm_alloc_code(target,l1,l2,sofar,i,n) -> generate_llvm_alloc_code(tar
 generate_llvm_store_code(TargetVM,_,_,sofar,_,_) -> sofar;
 generate_llvm_store_code(_,_,x,sofar,_,_) when x!=0 -> sofar;
 generate_llvm_store_code(target,l1,l2,sofar,n,{}) -> sofar;
-generate_llvm_store_code(target,l1,l2,sofar,i,{{_,tp},*rest}) -> generate_llvm_store_code(target,l1,l2,{*sofar,{l1,l2,OpLLStore,tp,0,i}},i+1,rest);
+generate_llvm_store_code(target,l1,l2,sofar,i,{{_,tp,_},*rest}) -> generate_llvm_store_code(target,l1,l2,{*sofar,{l1,l2,OpLLStore,tp,0,i}},i+1,rest);
 
 if(false,_,y) -> y;
 if(true,x,_) -> x;
@@ -900,14 +910,15 @@ generate_expr_code(types,callctr,ctx,sofar1,sofar2,typelist,{expr,*rest})
 
 //generate_expr_code_aux(types,ctx,stypes,_) -> println_any(stypes),#error(12);
 generate_expr_code_aux(types,ctx,stypes,{Const,{tp,val}}) match lookup_type_size_pri(tp,types) => {_,sz} ->
-    ctx,false,{},{{{{BindImm,val,sz}},tp}};
-generate_expr_code_aux(types,ctx,stypes,{ExprId,{id,count,lastborrow}})
+    ctx,false,{},{{{{BindImm,val,sz}},tp,Consume}};
+generate_expr_code_aux(types,ctx,stypes,{ExprId,{id,count,consumed}})
     update use_binding(ctx,id) => ctx,tp,storage ->
-    ctx,false,{},{{storage,tp}};
+    ctx,false,{},{{storage,tp,consumed}};
 generate_expr_code_aux(types,ctx,stypes,{ExprCallInternal,op,args})
     match decompose_stypes(stypes) => typex,_
     match op_infer(op,typex,args) => infer_types
     update generate_expr_code_aux_map(types,ctx,{},infer_types,args) => ctx,args_code
+    match println_any({888,args_code}) =>
     update generate_expr_code_infix(types,ctx,op,args_code) => ctx,code,x ->
     ctx,false,code,x;
 generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
@@ -922,7 +933,7 @@ generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args}) match ctx_get_fn_
 generate_expr_code_aux(types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}})
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
-    ctx,false,{{ctx_fnr(ctx),OpError,0,0,err,0,ctx_linerule(ctx),0,symoffset}},{{{{BindImm,err,DefaultSize}},TypeI64}};
+    ctx,false,{{ctx_fnr(ctx),OpError,0,0,err,0,ctx_linerule(ctx),0,symoffset}},{{{{BindImm,err,DefaultSize}},TypeI64,Consume}};
 generate_expr_code_aux(types,ctx,stypes,{ExprList,elements}) @match decompose_stypes(stypes) => stype,_ @match nth(stype,types) => {_,_,{DerivedTypeArray,t},storage}
     // Array - go get the elements then come back to allocate
     match nth(t,types) => {_,_,_,{_,sz}}
@@ -938,8 +949,8 @@ generate_expr_code_list(ctx,sz,stype,args_code,{},{}) // no splats
     update ctx_newreg(ctx,64) => ctx,parray
     update array_fixed_elt_assign(ctx,parray,0,{},args_code) => c,code
     -> ctx,false,{{ctx_fnr(ctx),OpAlloc,0,BindReg,array,BindImm,sz>>3,BindImm,c},{ctx_fnr(ctx),OpLea,0,BindReg,parray,BindReg,array},*code,{ctx_fnr(ctx),OpMove+3,0,BindMem,parray,BindImm,c,0,0,8}},
-    {{{{BindReg,array,32},{BindImm,0,32}},stype}};
-generate_expr_code_list(ctx,sz,stype,{},{{true,precode,{{{array_flag,array,32},{start_flag,start,32}},stype}}},post_splat) // first splat at start - check for append
+    {{{{BindReg,array,32},{BindImm,0,32}},stype,Consume}};
+generate_expr_code_list(ctx,sz,stype,{},{{true,precode,{{{array_flag,array,32},{start_flag,start,32}},stype,_}}},post_splat) // first splat at start - check for append
     update get_post_splat_alloc_size(ctx,0,{},BindImm,0,post_splat) => ctx,sum_const,sum_code,sum_src_flag,sum_src
     update ctx_newreg(ctx,32) => ctx,newarray
     update ctx_newreg(ctx,32) => ctx,newstart
@@ -947,7 +958,7 @@ generate_expr_code_list(ctx,sz,stype,{},{{true,precode,{{{array_flag,array,32},{
     -> ctx,false,
         {*precode,*sum_code,{ctx_fnr(ctx),OpRealloc,0,BindReg,newarray,array_flag,array,BindImm,sz>>3,0},
         {ctx_fnr(ctx),OpCont,0,BindReg,newstart,start_flag,start,sum_src_flag,sum_src,sum_const},*code},
-    {{{{BindReg,newarray,32},{BindReg,newstart,32}},stype}};
+    {{{{BindReg,newarray,32},{BindReg,newstart,32}},stype,Consume}};
 generate_expr_code_list(ctx,sz,stype,pre_splat,splat,post_splat) // first splat in middle - check for prepend and append
     -> println_any(pre_splat),#error(13);
 
@@ -969,7 +980,7 @@ split_splat_aux(sofar,{{splatflag,partcode,{r,*r1}},*rest}) -> split_splat_aux({
 
 get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{}) -> ctx,sum,sum_code,sum_src_flag,sum_src;
 get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{{false,partcode,_},*rest}) -> get_post_splat_alloc_size(ctx,sum+1,{*sum_code,*partcode},sum_src_flag,sum_src,rest);
-get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{{true,partcode,{{{arrayf,array,sz},{startf,start,sz}},_}},*rest})
+get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{{true,partcode,{{{arrayf,array,sz},{startf,start,sz}},_,_}},*rest})
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,64) => ctx,end
     update ctx_newreg(ctx,32) => ctx,len
@@ -983,12 +994,12 @@ splat_sum(ctx,code,BindImm,0,len) -> ctx,code,len;
 splat_sum(ctx,code,src_flag,src,len) update ctx_newreg(ctx,32) => ctx,t -> ctx,{{ctx_fnr(ctx),OpPlus,TypeU32,BindReg,t,BindReg,len,src_flag,src}},t;
 
 array_fixed_elt_assign(ctx,mem,c,code,{}) -> c,code;
-array_fixed_elt_assign(ctx,mem,c,code,{{false,partcode,{{{src_flag,src,sz}},tp}},*rest}) -> array_fixed_elt_assign(ctx,mem,c+1,{*code,*partcode,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindMem,mem,src_flag,src,0,0,16+(c*sz>>3)}},rest);
+array_fixed_elt_assign(ctx,mem,c,code,{{false,partcode,{{{src_flag,src,sz}},tp,_}},*rest}) -> array_fixed_elt_assign(ctx,mem,c+1,{*code,*partcode,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindMem,mem,src_flag,src,0,0,16+(c*sz>>3)}},rest);
 
 array_var_elt_assign(ctx,arrayf,array,startf,start,code,{}) -> code;
-array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{false,_,{{{src_flag,src,sz}},tp}},*rest})
+array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{false,_,{{{src_flag,src,sz}},tp,_}},*rest})
     -> array_var_elt_assign(ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),OpAppend,0,arrayf,array,src_flag,src,0,0,sz}},rest);
-array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{true,_,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp}},*rest})
+array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{true,_,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,_}},*rest})
     -> array_var_elt_assign(ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),OpAppendArray,0,arrayf,array,src_flag1,src1,src_flag2,src2,sz}},rest);
 
 decompose_stypes({0,n}) -> n,{0,n};
@@ -999,34 +1010,34 @@ match_types({a,*rest2},{0,*rest1}) -> match_types(rest1,{0,*rest2});
 match_types({a,*rest1},{a,*rest2}) -> match_types(rest1,rest2);
 
 generate_callout_bindings(ctx,sofar,{}) -> ctx,sofar;
-generate_callout_bindings(ctx,sofar,{{{{ret_flags,ret,sz}},tp},*rest})
+generate_callout_bindings(ctx,sofar,{{{{ret_flags,ret,sz}},tp,consume},*rest})
     update ctx_newreg(ctx,1<<sz) => ctx,newreg
     -> generate_callout_bindings(ctx,{*sofar,{{newreg},{{ret_flags,ret,sz}},tp}},rest);
-generate_callout_bindings(ctx,sofar,{{{{ret_flags1,ret1,sz},{ret_flags2,ret2,sz}},tp},*rest})
+generate_callout_bindings(ctx,sofar,{{{{ret_flags1,ret1,sz},{ret_flags2,ret2,sz}},tp,consume},*rest})
     update ctx_newreg(ctx,1<<sz) => ctx,newreg1
     update ctx_newreg(ctx,1<<sz) => ctx,newreg2
     -> generate_callout_bindings(ctx,{*sofar,{{newreg1,newreg2},{{ret_flags1,ret1,sz},{ret_flags2,ret2,sz}},tp}},rest);
 
-generate_expr_code_infix(types,ctx,op,{{false,code1,{{{{src_flag1,src1,sz1}},tp1}}},{false,code2,{{{{src_flag2,src2,sz2}},tp2}}}})
+generate_expr_code_infix(types,ctx,op,{{false,code1,{{{{src_flag1,src1,sz1}},tp1,_}}},{false,code2,{{{{src_flag2,src2,sz2}},tp2,_}}}})
     @match binop(tp1,tp2,op) => true,swap,tp_res,machine_op
     match nth(tp_res,types) => {_,_,_,{_,sz_res}}
     match get_size_scale(sz_res) => sz
     update ctx_newreg(ctx,1<<sz) => ctx,newreg
-    -> ctx,{*code1,*code2,{ctx_fnr(ctx),machine_op,tp1,BindReg,newreg,opt_swap_sources(swap,src_flag1,src1,src_flag2,src2)}},{{{{BindReg,newreg,sz_res}},tp_res}};
-generate_expr_code_infix(types,ctx,EqualEqual,{{false,code1,{{storage1,tp}}},{false,code2,{{storage2,tp}}}})
+    -> ctx,{*code1,*code2,{ctx_fnr(ctx),machine_op,tp1,BindReg,newreg,opt_swap_sources(swap,src_flag1,src1,src_flag2,src2)}},{{{{BindReg,newreg,sz_res}},tp_res,Consume}};
+generate_expr_code_infix(types,ctx,EqualEqual,{{false,code1,{{storage1,tp,_}}},{false,code2,{{storage2,tp,_}}}})
     update ctx_newreg(ctx,1) => ctx,result
     update gen_types_do_compare(false,types,ctx,result,tp,storage1,storage2) => ctx,compare
-    -> ctx,{*code1,*code2,*compare},{{{{BindReg,result,1}},TypeBool}};
-generate_expr_code_infix(types,ctx,NotEqual,{{false,code1,{{storage1,tp}}},{false,code2,{{storage2,tp}}}})
+    -> ctx,{*code1,*code2,*compare},{{{{BindReg,result,1}},TypeBool,Consume}};
+generate_expr_code_infix(types,ctx,NotEqual,{{false,code1,{{storage1,tp,_}}},{false,code2,{{storage2,tp,_}}}})
     update ctx_newreg(ctx,1) => ctx,result
     update gen_types_do_compare(true,types,ctx,result,tp,storage1,storage2) => ctx,compare
-    -> ctx,{*code1,*code2,*compare},{{{{BindReg,result,1}},TypeBool}};
+    -> ctx,{*code1,*code2,*compare},{{{{BindReg,result,1}},TypeBool,Consume}};
 
 opt_swap_sources(false,src_flag1,src1,src_flag2,src2) -> src_flag1,src1,src_flag2,src2;
 opt_swap_sources(_,src_flag1,src1,src_flag2,src2) -> src_flag2,src2,src_flag1,src1;
 
 callout_insert(l1,l2,callctr,sofar,{},type_left_rest) -> sofar,type_left_rest;
-callout_insert(l1,l2,callctr,sofar,{{src_triples,tp},*rest0},{{dst_triples,tp},*rest1}) ->
+callout_insert(l1,l2,callctr,sofar,{{src_triples,tp,_},*rest0},{{dst_triples,tp,_},*rest1}) ->
     callout_insert(l1,l2,callctr,{*sofar,*callout_insert_aux(l1,l2,callctr,{},src_triples,dst_triples)},rest0,rest1);
 
 callout_insert_aux(_,_,_,sofar,{},{}) -> sofar;
@@ -1039,8 +1050,8 @@ callout_extract(l1,l2,callctr,sofar,{{{newreg,*reg1},{{ret_flags,ret,sz},*st1},t
     callout_extract(l1,l2,callctr,{*sofar,{l1,l2,if(callctr!=0,OpExtract,OpMove)+get_size_scale(sz),0,BindReg,newreg,ret_flags,ret,0,callctr}},{{reg1,st1,tp},*rest});
 
 callout_ret(sofar,{}) -> sofar;
-callout_ret(sofar,{{{newreg},{{ret_flags,ret,sz}},tp},*rest}) -> callout_ret({*sofar,{{{BindReg,newreg,sz}},tp}},rest);
-callout_ret(sofar,{{{nr1,nr2},{{ret_flags1,ret1,sz},{ret_flags2,ret2,sz}},tp},*rest}) -> callout_ret({*sofar,{{{BindReg,nr1,sz},{BindReg,nr2,sz}},tp}},rest);
+callout_ret(sofar,{{{newreg},{{ret_flags,ret,sz}},tp},*rest}) -> callout_ret({*sofar,{{{BindReg,newreg,sz}},tp,Consume}},rest);
+callout_ret(sofar,{{{nr1,nr2},{{ret_flags1,ret1,sz},{ret_flags2,ret2,sz}},tp},*rest}) -> callout_ret({*sofar,{{{BindReg,nr1,sz},{BindReg,nr2,sz}},tp,Consume}},rest);
 
 binop(t1,t1,Plus) -> true,false,t1,OpPlus;
 binop(TypeChar,t1,Plus) -> true,false,TypeChar,OpPlus;
@@ -1116,11 +1127,11 @@ convert_to_ll_fn(target,small_table,table,fnid,code)
     '}\n'};
 
 ll_build_epilog1(n,{},sofar) -> sofar;
-ll_build_epilog1(i,{{_,tp},*rest},sofar) -> ll_build_epilog1(i+1,rest,{*sofar,'\t%p','0'+i,'=load ',*ll_tp(tp),',ptr %x','0'+i,'\n'});
+ll_build_epilog1(i,{{_,tp,_},*rest},sofar) -> ll_build_epilog1(i+1,rest,{*sofar,'\t%p','0'+i,'=load ',*ll_tp(tp),',ptr %x','0'+i,'\n'});
 
 ll_build_epilog2(n,{},sofar) -> sofar;
-ll_build_epilog2(i,{{_,tp},*rest},sofar) @match ll_tp(tp) => "i64" -> ll_build_epilog2(i+1,rest,{*sofar,'\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %p','0'+i,',','0'+i,'\n'});
-ll_build_epilog2(i,{{_,tp},*rest},sofar) -> ll_build_epilog2(i+1,rest,{*sofar,
+ll_build_epilog2(i,{{_,tp,_},*rest},sofar) @match ll_tp(tp) => "i64" -> ll_build_epilog2(i+1,rest,{*sofar,'\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %p','0'+i,',','0'+i,'\n'});
+ll_build_epilog2(i,{{_,tp,_},*rest},sofar) -> ll_build_epilog2(i+1,rest,{*sofar,
     '\t%pp','0'+i,'=zext ',*ll_tp(tp),' %p','0'+i,' to i64\n',
     '\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %pp','0'+i,',','0'+i,'\n'});
 
@@ -1245,18 +1256,18 @@ create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{_,_,_,name,
         fnid+1,new_lbl,rest);
 
 create_export_vm_code_in(types,_,_,sofar,{},{}) -> sofar;
-create_export_vm_code_in(types,new_lbl,n,sofar,{{regs,tp},*rest},{val_flag,*vrest})
+create_export_vm_code_in(types,new_lbl,n,sofar,{{regs,tp,_},*rest},{val_flag,*vrest})
     match create_export_vm_param(types,new_lbl,n,tp,{},regs) => newn,code ->
     create_export_vm_code_in(types,new_lbl,newn,{*sofar,*code},rest,vrest);
 
 create_export_vm_code_out(types,_,_,sofar,{},{}) -> sofar;
-create_export_vm_code_out(types,new_lbl,n,sofar,{{regs,tp},*rest},{val_flag,*vrest})
+create_export_vm_code_out(types,new_lbl,n,sofar,{{regs,tp,_},*rest},{val_flag,*vrest})
     match create_export_vm_ret(types,new_lbl,n,tp,{},regs) => newn,code ->
     create_export_vm_code_out(types,new_lbl,newn,{*sofar,*code},rest,vrest);
 
 reg_count(n,{}) -> n;
-reg_count(n,{{{},_},*rest}) -> reg_count(n,rest);
-reg_count(n,{{{_,*r1},tp},*rest}) -> reg_count(n+1,{{r1,tp},*rest});
+reg_count(n,{{{},_,_},*rest}) -> reg_count(n,rest);
+reg_count(n,{{{_,*r1},tp,consume},*rest}) -> reg_count(n+1,{{r1,tp,consume},*rest});
 
 create_export_vm_param(types,_,n,_,sofar,{}) -> n,sofar;
 create_export_vm_param(types,new_lbl,n,tp,sofar,{{flag,dst,sz},*rest}) -> create_export_vm_param(types,new_lbl,n+1,tp,{*sofar,{new_lbl,0,OpMove+get_size_scale(sz),0,flag,dst,BindInOut,n}},rest);
@@ -1265,7 +1276,7 @@ create_export_vm_ret(types,_,n,_,sofar,{}) -> n,sofar;
 create_export_vm_ret(types,new_lbl,n,tp,sofar,{{flag,dst,sz},*rest}) -> create_export_vm_ret(types,new_lbl,n+1,tp,{*sofar,{new_lbl,0,OpMove+get_size_scale(sz),0,BindInOut,n,flag,dst}},rest);
 
 create_export_vm_sigc(sofar,labeln,n,_,_,{}) -> n,sofar;
-create_export_vm_sigc(sofar,labeln,n,fill0,fill1,{{vals,tp},*rest}) -> create_export_vm_sigc({*sofar,',',*fill0,*c_type(tp),' ',*fill1,*int2s(labeln)},labeln+1,n+length(vals),fill0,fill1,rest);
+create_export_vm_sigc(sofar,labeln,n,fill0,fill1,{{vals,tp,_},*rest}) -> create_export_vm_sigc({*sofar,',',*fill0,*c_type(tp),' ',*fill1,*int2s(labeln)},labeln+1,n+length(vals),fill0,fill1,rest);
 
 c_type(TypeI64) -> "int64_t";
 c_type(TypeChar) -> "codepoint";
@@ -1276,7 +1287,7 @@ z_or_s(tp) when is_unsigned(tp) -> 'z';
 z_or_s(_) -> 's';
 
 create_export_vm_in(types,code,sofar,_,{},{}) -> code,sofar;
-create_export_vm_in(types,code,sofar,n,{{_,TypeString},*rest},{val,*vrest}) match val => true
+create_export_vm_in(types,code,sofar,n,{{_,TypeString,_},*rest},{val,*vrest}) match val => true
     match int2s(n) => i ->
     create_export_vm_in(types,{*code,
         '\tuint32_t dst',*i,'=0,len',*i,';\n',
@@ -1284,13 +1295,13 @@ create_export_vm_in(types,code,sofar,n,{{_,TypeString},*rest},{val,*vrest}) matc
         '\tif(err',*i,'!=0) return err',*i,';\n',
         '\trwu_set_len(a,dst',*i,',len',*i,');\n'},
         {*sofar,'(uint64_t)dst',*int2s(n),',0,'},n+1,rest,vrest);
-create_export_vm_in(types,code,sofar,n,{{_,tp},*rest},{_,*vrest}) -> create_export_vm_in(types,code,{*sofar,'(uint64_t)in',*int2s(n),','},n+1,rest,vrest);
+create_export_vm_in(types,code,sofar,n,{{_,tp,_},*rest},{_,*vrest}) -> create_export_vm_in(types,code,{*sofar,'(uint64_t)in',*int2s(n),','},n+1,rest,vrest);
 
 create_export_vm_inout0(sofar,l,r) when l<r -> create_export_vm_inout0({*sofar,'0,'},l+1,r);
 create_export_vm_inout0(sofar,_,_) -> sofar;
 
 create_export_vm_out(types,sofar,allocs,_,_,{},{}) -> sofar;
-create_export_vm_out(types,sofar,allocs,labeln,n,{{_,TypeString},*rest},{val,*vrest}) match val => true ->
+create_export_vm_out(types,sofar,allocs,labeln,n,{{_,TypeString,_},*rest},{val,*vrest}) match val => true ->
     create_export_vm_out(types,{*sofar,
         '\t{\n\t\tuint32_t* head=rwu_get_header(a,inout[',*int2s(n),']);\n',
         '\t\tuint32_t start=inout[',*int2s(n+1),'];\n',
@@ -1301,7 +1312,7 @@ create_export_vm_out(types,sofar,allocs,labeln,n,{{_,TypeString},*rest},{val,*vr
         '\t\t}\n',
         '\t\tderef_free(a,inout[',*int2s(n),']);\n',
         '\t}\n'},{*allocs,{'out',*int2s(labeln)}},labeln+1,n+2,rest,vrest);
-create_export_vm_out(types,sofar,allocs,labeln,n,{{_,tp},*rest},{_,*vrest}) ->
+create_export_vm_out(types,sofar,allocs,labeln,n,{{_,tp,_},*rest},{_,*vrest}) ->
     create_export_vm_out(types,{*sofar,'\t*out',*int2s(labeln),'=(',*c_type(tp),')inout[',*int2s(n),'];\n'},allocs,labeln+1,n+1,rest,vrest);
 
 create_export_free_and_null(sofar,f1,f2,{}) -> sofar;
@@ -1335,7 +1346,7 @@ create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{_,_,_,name,reg_left,
         fnid+1,rest);
 
 create_export_ll_sigc_in(sofar,regs,_,{}) -> sofar,regs;
-create_export_ll_sigc_in(sofar,regs,n,{{_,tp},*rest}) match {'in',*int2s36(n)} => reg ->
+create_export_ll_sigc_in(sofar,regs,n,{{_,tp,_},*rest}) match {'in',*int2s36(n)} => reg ->
     create_export_ll_sigc_in({*sofar,',',*ll_tp(tp),' %',*reg},{*regs,{reg,tp}},n+1,rest);
 
 create_export_ll_sigc_out(sofar,n,n) -> sofar;
@@ -1350,10 +1361,10 @@ create_export_ll_params(sofar,{}) -> sofar;
 create_export_ll_params(sofar,{reg,*rest}) -> create_export_ll_params({*sofar,'i64 %',*reg,','},rest);
 
 create_export_ll_post_call(types,code,_,{}) -> code;
-create_export_ll_post_call(types,code,n,{{reg,tp},*rest}) @match nth(tp,types) => {_,_,_,{_,64}}
+create_export_ll_post_call(types,code,n,{{reg,tp,_},*rest}) @match nth(tp,types) => {_,_,_,{_,64}}
     match int2s36(n) => ni ->
     create_export_ll_post_call(types,{*code,'\t%eo',*ni,'=extractvalue %R8 %z,',*int2s(n),'\n\tstore i64 %eo',*ni,',ptr %out',*ni,'\n'},n+1,rest);
-create_export_ll_post_call(types,code,n,{{reg,tp},*rest}) match nth(tp,types) => {_,_,_,{_,sz}}
+create_export_ll_post_call(types,code,n,{{reg,tp,_},*rest}) match nth(tp,types) => {_,_,_,{_,sz}}
     match int2s36(n) => ni ->
     create_export_ll_post_call(types,{*code,
         '\t%eo',*ni,'=extractvalue %R8 %z,',*int2s(n),'\n',
