@@ -72,8 +72,8 @@ int main(int argc, char** argv) {
 
     printf("hw:");
     exe->allocated=0;
-    ret_code=rw_hw(exe,&resultc1);
-    if(!ret_code && strcmp(resultc1,"hello world!hello world!")==0) { printf("success\n"); } else { printf("fail:%d \"%s\"\n",ret_code,resultc1); };
+    ret_code=rw_hw(exe," ",&resultc1,&resultc2);
+    if(!ret_code && strcmp(resultc1,"hello world! hello world!")==0 && strcmp(resultc2," ")==0) { printf("success\n"); } else { printf("fail:%d \"%s\"\n",ret_code,resultc1); };
     free(resultc1);
 
     printf("strdup:");
@@ -82,6 +82,16 @@ int main(int argc, char** argv) {
     if(!ret_code && strcmp(resultc1,"test")==0 && strcmp(resultc2,"test")==0) { printf("success\n"); } else { printf("fail:%d \"%s\" \"%s\"\n",ret_code,resultc1,resultc2); };
     free(resultc1);
     free(resultc2);
+
+    printf("string_to_int:");
+    exe->allocated=0;
+    ret_code=rw_string_to_int(exe,"-126",&result0);
+    if(!ret_code && result0==-126) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,result0); };
+
+    printf("roman_to_int:");
+    exe->allocated=0;
+    ret_code=rw_roman_to_int(exe,"mcmxciv",&result0);
+    if(!ret_code && result0==1994) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,result0); };
 
     printf("testprime:");
     exe->allocated=0;

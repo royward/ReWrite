@@ -27,14 +27,15 @@
 #define OP_LEA 0x28
 #define OP_LEA_SCALE 0x29
 #define OP_EXTRACT_LL 0x30
+#define OP_UNARY_MINUS 0x38
 #define OP_EQUAL 0x40
 #define OP_NOT_EQUAL 0x48
 #define OP_ALLOC 0xC0
 #define OP_DEREF_FREE 0xC1
 #define OP_REALLOC 0xC2
 #define OP_APPEND 0xC4
-#define OP_APPEND_ARRAY 0xC6
-#define OP_APPEND_ARRAY_CONSUME 0xC7
+#define OP_APPEND_SPLAT 0xC6
+#define OP_APPEND_SPLAT_CONSUME 0xC7
 #define OP_CONTINUATION 0xCF
 #define OP_CMP_NE_BRANCH 0xF0
 #define OP_CMP_LT_BRANCH 0xF6
@@ -273,6 +274,13 @@ const char* display_binop(uint8_t op) {
     }
 }
 
+const char* display_unop(uint8_t op) {
+    switch(op) {
+        case OP_MINUS: return "-"; break;
+        default: return "(unknown)";
+    }
+}
+
 void program_disassemble(Program* program, FILE* out) {
     fprintf(out,"  line func:rule op\n");
     for(uint32_t i=1;i<program->instr_max;i++) {
@@ -359,8 +367,17 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out,") <- ");
                 display_operand(out,operation->flags_src1,operation->src1);
             } break;
-            case OP_APPEND_ARRAY: {
-                fprintf(out,"append_array.%d (",operation->fdst.b);
+            case OP_APPEND_SPLAT: {
+                fprintf(out,"append_splat.%d (",operation->fdst.b);
+                display_operand(out,operation->flags_dst,operation->dst);
+                fprintf(out,") <- (");
+                display_operand(out,operation->flags_src1,operation->src1);
+                fprintf(out,",");
+                display_operand(out,operation->flags_src2,operation->src2);
+                fprintf(out,")");
+            } break;
+            case OP_APPEND_SPLAT_CONSUME: {
+                fprintf(out,"append_splat_consume.%d (",operation->fdst.b);
                 display_operand(out,operation->flags_dst,operation->dst);
                 fprintf(out,") <- (");
                 display_operand(out,operation->flags_src1,operation->src1);
@@ -445,6 +462,13 @@ void program_disassemble(Program* program, FILE* out) {
                 display_operand(out,operation->flags_src2,operation->src2);
                 fprintf(out," goto ");
                 program_display_label_both(program,out,operation);
+            } break;
+            case OP_UNARY_MINUS: {
+                fprintf(out,"let.%s ",display_type(operation->type));
+                display_operand(out,operation->flags_dst,operation->dst);
+                fprintf(out," = ");
+                fprintf(out," %s ",display_unop(op));
+                display_operand(out,operation->flags_src1,operation->src1);
             } break;
             case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
                 fprintf(out,"let.%s ",display_type(operation->type));
@@ -671,7 +695,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
                 } break;
             } break;
-            case OP_APPEND_ARRAY: {
+            case OP_APPEND_SPLAT: {
                 uint32_t dstarray=operand_load(exe,32,operation->flags_dst,operation->dst,sp);
                 uint32_t array=operand_load(exe,32,operation->flags_src1, operation->src1, sp);
                 uint32_t start=operand_load(exe,32,operation->flags_src2, operation->src2, sp);
@@ -685,6 +709,22 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint32_t len=end-start;
                 memcpy(dstaddr,addr,len*stride);
                 pdstarray[2]=dstend+len;
+            } break;
+            case OP_APPEND_SPLAT_CONSUME: {
+                uint32_t dstarray=operand_load(exe,32,operation->flags_dst,operation->dst,sp);
+                uint32_t array=operand_load(exe,32,operation->flags_src1, operation->src1, sp);
+                uint32_t start=operand_load(exe,32,operation->flags_src2, operation->src2, sp);
+                uint32_t* pdstarray=rwu_get_header(exe,dstarray);
+                uint32_t* parray=rwu_get_header(exe,array);
+                uint32_t dstend=pdstarray[2];
+                uint32_t end=parray[2];
+                uint32_t stride=operation->fdst.b>>3;
+                uint8_t* dstaddr=((uint8_t*)pdstarray)+16+dstend*(operation->fdst.b>>3);
+                uint8_t* addr=((uint8_t*)parray)+16+start*(operation->fdst.b>>3);
+                uint32_t len=end-start;
+                memcpy(dstaddr,addr,len*stride);
+                pdstarray[2]=dstend+len;
+                deref_free(exe,array);
             } break;
             case OP_DEREF_FREE: {
                 deref_free(exe,operand_load(exe, 64, operation->flags_src1, operation->src1, sp));
@@ -767,6 +807,15 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
                 uint64_t src2 = operand_load(exe, sz, operation->flags_src2, operation->src2, sp);
                 operand_store(exe, operation, src1==src2, 1, sp);
+            } break;
+            case OP_UNARY_MINUS: {
+                uint32_t sz = type_to_size(operation->type);
+                uint64_t src1 = operand_load(exe, sz, operation->flags_src1, operation->src1, sp);
+                uint64_t dst;
+                switch(op) {
+                    case OP_UNARY_MINUS: dst = -src1; break;
+                }
+                operand_store(exe, operation, dst, sz, sp);
             } break;
             case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
                 uint32_t sz = type_to_size(operation->type);

@@ -358,7 +358,7 @@ parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Identifier,id},*rest})
     parse_exprs1(consts,fnnames,bindings,sofar,{ExprId,{bindnum,0,0}},pri,rest);
 parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,tok,_},*rest}) match prefix_binding_power(tok) => pre_pri when pre_pri>0
     update parse_exprs(consts,fnnames,bindings,{},pre_pri,rest) => fnnames,bindings,{arg},rest ->
-    parse_exprs1(consts,fnnames,bindings,sofar,{tok,arg},pri,rest);
+    parse_exprs1(consts,fnnames,bindings,sofar,{ExprCallInternal,tok,{arg}},pri,rest);
 parse_exprs(consts,fnnames,bindings,sofar,_,rest) -> fnnames,bindings,sofar,rest;
 
 parse_exprs1(consts,fnnames,bindings,sofar,this,1,{{_,_,Comma,_},*rest}) -> parse_exprs(consts,fnnames,bindings,{*sofar,this},1,rest);
@@ -516,6 +516,7 @@ const OpInsert=32;
 const OpLea=40;
 const OpLeaScale=41;
 const OpExtract=48;
+const OpUnaryMinus=56;
 const OpEqual=64;
 const OpNotEqual=72;
 const OpAlloc=192;
@@ -749,7 +750,6 @@ generate_commit_cleanup_aux(types,ctx,code,{{_,tp,storage,_},*bindrest},{{n,_},*
 
 generate_param_code(types,post_arrow,bindlevel,{},ctx,sofar0,sofar1,{},{}) -> ctx,sofar0,sofar1;
 generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,_,_,_},ctx,sofar0,sofar1,{},{})
-    //match gen_types_deref_free(types,ctx,tp,{{src_flag1,src1,32},{src_flag2,src2,32}}) => codefree
     -> ctx,sofar0,sofar1;
 generate_param_code(types,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp,_},type_left
@@ -915,8 +915,10 @@ generate_expr_code_aux(types,ctx,stypes,{ExprId,{id,count,consumed}})
     update use_binding(ctx,id) => ctx,tp,storage ->
     ctx,false,{},{{storage,tp,consumed}};
 generate_expr_code_aux(types,ctx,stypes,{ExprCallInternal,op,args})
+    match println_any({333,op,args}) =>
     match decompose_stypes(stypes) => typex,_
     match op_infer(op,typex,args) => infer_types
+    match println_any({334,infer_types}) =>
     update generate_expr_code_aux_map(types,ctx,{},infer_types,args) => ctx,args_code
     match println_any({888,args_code}) =>
     update generate_expr_code_infix(types,ctx,op,args_code) => ctx,code,x ->
@@ -999,8 +1001,8 @@ array_fixed_elt_assign(ctx,mem,c,code,{{false,partcode,{{{src_flag,src,sz}},tp,_
 array_var_elt_assign(ctx,arrayf,array,startf,start,code,{}) -> code;
 array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{false,_,{{{src_flag,src,sz}},tp,_}},*rest})
     -> array_var_elt_assign(ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),OpAppend,0,arrayf,array,src_flag,src,0,0,sz}},rest);
-array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{true,_,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,_}},*rest})
-    -> array_var_elt_assign(ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),OpAppendArray,0,arrayf,array,src_flag1,src1,src_flag2,src2,sz}},rest);
+array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{true,_,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,consume}},*rest})
+    -> array_var_elt_assign(ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),if(consume==Consume,OpAppendArrayConsume,OpAppendArray),0,arrayf,array,src_flag1,src1,src_flag2,src2,sz}},rest);
 
 decompose_stypes({0,n}) -> n,{0,n};
 decompose_stypes({1,a,*rest}) -> a,{1,*rest};
@@ -1018,6 +1020,12 @@ generate_callout_bindings(ctx,sofar,{{{{ret_flags1,ret1,sz},{ret_flags2,ret2,sz}
     update ctx_newreg(ctx,1<<sz) => ctx,newreg2
     -> generate_callout_bindings(ctx,{*sofar,{{newreg1,newreg2},{{ret_flags1,ret1,sz},{ret_flags2,ret2,sz}},tp}},rest);
 
+generate_expr_code_infix(types,ctx,op,{{false,code1,{{{{src_flag1,src1,sz1}},tp1,_}}}})
+    @match unop(tp1,op) => true,tp_res,machine_op
+    match nth(tp_res,types) => {_,_,_,{_,sz_res}}
+    match get_size_scale(sz_res) => sz
+    update ctx_newreg(ctx,1<<sz) => ctx,newreg
+    -> ctx,{*code1,{ctx_fnr(ctx),machine_op,tp1,BindReg,newreg,src_flag1,src1}},{{{{BindReg,newreg,sz_res}},tp_res,Consume}};
 generate_expr_code_infix(types,ctx,op,{{false,code1,{{{{src_flag1,src1,sz1}},tp1,_}}},{false,code2,{{{{src_flag2,src2,sz2}},tp2,_}}}})
     @match binop(tp1,tp2,op) => true,swap,tp_res,machine_op
     match nth(tp_res,types) => {_,_,_,{_,sz_res}}
@@ -1055,6 +1063,7 @@ callout_ret(sofar,{{{nr1,nr2},{{ret_flags1,ret1,sz},{ret_flags2,ret2,sz}},tp},*r
 
 binop(t1,t1,Plus) -> true,false,t1,OpPlus;
 binop(TypeChar,t1,Plus) -> true,false,TypeChar,OpPlus;
+binop(TypeChar,TypeChar,Minus) -> true,false,TypeI64,OpMinus;
 binop(t1,t1,Minus) -> true,false,t1,OpMinus;
 binop(TypeChar,t1,Minus) -> true,false,TypeChar,OpMinus;
 binop(t1,t1,Star) -> true,false,t1,OpTimes;
@@ -1066,7 +1075,11 @@ binop(t1,t1,Greater) -> true,true,TypeBool,OpLessThan;
 binop(t1,t1,GreaterEqual) -> true,true,TypeBool,OpLessThanEqual;
 binop(_,_,_) -> false,false,0,0;
 
-op_infer(op,t,_) @match binop(t,t,op) => true,_,_,_ -> {1,t,t};
+unop(t1,Minus) -> true,t1,OpUnaryMinus;
+unop(_,_) -> false,0,0;
+
+op_infer(op,t,{_,_}) @match binop(t,t,op) => true,_,_,_ -> {1,t,t};
+op_infer(op,t,{_}) @match unop(t,op) => true,_,_ -> {1,t};
 op_infer(EqualEqual,t,_) -> {1,t,t};
 op_infer(NotEqual,t,_) -> {1,t,t};
 

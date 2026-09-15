@@ -43,11 +43,57 @@ listn(n) -> {*listn(n-1),'a'+n-1};
 :- hw_aux() -> string,string,string;
 hw_aux() -> "hello ","world","!";
 
-:- export hw() -> value string;
-hw() -> {*hw_aux(),*hw_aux()};
+:- export hw(value string) -> value string,value string;
+hw(s) -> {*hw_aux(),*s,*hw_aux()},s;
 
 :- export strdup(value string) -> value string,value string;
 strdup(x) -> x,x;
+
+:- export string_to_int(value string) -> i64;
+string_to_int({'-',*rest}) -> -string_to_int_pos(rest,0);
+string_to_int(s) -> string_to_int_pos(s,0);
+
+:- string_to_int_pos(string, i64) -> i64;
+string_to_int_pos({},acc) -> acc;
+string_to_int_pos({c,*rest},acc) -> string_to_int_pos(rest,acc*10+(c-'0'));
+
+:- export int_to_roman(i64) -> value string;
+// int_to_roman(i) when i>=1000 -> {'M',*int_to_roman(i-1000)};
+// int_to_roman(i) when i>=900 -> {'CM',*int_to_roman(i-900)};
+// int_to_roman(i) when i>=500 -> {'D',*int_to_roman(i-500)};
+// int_to_roman(i) when i>=400 -> {'CD',*int_to_roman(i-400)};
+// int_to_roman(i) when i>=100 -> {'C',*int_to_roman(i-100)};
+// int_to_roman(i) when i>=90 -> {'XC',*int_to_roman(i-90)};
+// int_to_roman(i) when i>=50 -> {'L',*int_to_roman(i-50)};
+// int_to_roman(i) when i>=40 -> {'XL',*int_to_roman(i-40)};
+// int_to_roman(i) when i>=10 -> {'X',*int_to_roman(i-10)};
+// int_to_roman(i) when i>=9 -> {'IX',*int_to_roman(i-9)};
+// int_to_roman(i) when i>=5 -> {'V',*int_to_roman(i-5)};
+// int_to_roman(i) when i>=4 -> {'IV',*int_to_roman(i-4)};
+// int_to_roman(i) when i>=1 -> {'I',*int_to_roman(i-1)};
+int_to_roman(_) -> "";
+
+:- to_uppercase(char) -> char;
+to_uppercase(c) when c>='a' when c<='z' -> c-32;
+to_uppercase(c) -> c;
+
+:- roman_to_int_convert(char) -> i64;
+roman_to_int_convert('I') -> 1;
+roman_to_int_convert('V') -> 5;
+roman_to_int_convert('X') -> 10;
+roman_to_int_convert('L') -> 50;
+roman_to_int_convert('C') -> 100;
+roman_to_int_convert('D') -> 500;
+roman_to_int_convert('M') -> 1000;
+
+:- roman_to_int_convert_case(char) -> i64;
+roman_to_int_convert_case(x) -> roman_to_int_convert(to_uppercase(x));
+
+:- export roman_to_int(value string) -> i64;
+roman_to_int("") -> 0;
+roman_to_int({a,b,*rest}) when roman_to_int_convert_case(a)<roman_to_int_convert_case(b) ->
+    roman_to_int_convert_case(b)-roman_to_int_convert_case(a)+roman_to_int(rest);
+roman_to_int({a,*rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
 
 :- isprime(i64,[i64]) -> bool;
 isprime(n,{i,*_}) when i*i>n -> true;

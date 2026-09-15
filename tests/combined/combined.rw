@@ -60,7 +60,6 @@ fib(n) -> fib(n-2)+fib(n-1);
 //nqueens.rw
 //reverse.rw
 //roman_numerals.rw
-//string_to_int.rw
 
 :- export swap(value i64,i64) -> i64,value i64;
 swap(x,y) -> y,x;
