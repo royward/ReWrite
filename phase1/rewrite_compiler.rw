@@ -471,9 +471,7 @@ create_empty_types(sofar,{_,_,*rest}) -> create_empty_types({*sofar,{}},rest);
 const BindImm=0;
 const BindReg=1;
 const BindMem=2;
-const BindOverflow=3;
-const BindInOut=4;
-const BindArgRet=5; // never occurs in output
+const BindArgRet=3; // never occurs in output
 
 annotate_type_list_reg(types,pri,max_reg,sofar,{}) -> max_reg,{},sofar;
 annotate_type_list_reg(types,pri,max_reg,sofar,{{{{}},t,_},*rest}) match lookup_type_size_pri(t,types) => {p,sz} when p<=pri ->
@@ -1264,25 +1262,9 @@ create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{_,_,_,name,
             '\treturn 0;\n}\n'},
         fnid+1,new_lbl,rest);
 
-create_export_vm_code_in(types,_,_,sofar,{},{}) -> sofar;
-create_export_vm_code_in(types,new_lbl,n,sofar,{{regs,tp,_},*rest},{val_flag,*vrest})
-    match create_export_vm_param(types,new_lbl,n,tp,{},regs) => newn,code ->
-    create_export_vm_code_in(types,new_lbl,newn,{*sofar,*code},rest,vrest);
-
-create_export_vm_code_out(types,_,_,sofar,{},{}) -> sofar;
-create_export_vm_code_out(types,new_lbl,n,sofar,{{regs,tp,_},*rest},{val_flag,*vrest})
-    match create_export_vm_ret(types,new_lbl,n,tp,{},regs) => newn,code ->
-    create_export_vm_code_out(types,new_lbl,newn,{*sofar,*code},rest,vrest);
-
 reg_count(n,{}) -> n;
 reg_count(n,{{{},_,_},*rest}) -> reg_count(n,rest);
 reg_count(n,{{{_,*r1},tp,consume},*rest}) -> reg_count(n+1,{{r1,tp,consume},*rest});
-
-create_export_vm_param(types,_,n,_,sofar,{}) -> n,sofar;
-create_export_vm_param(types,new_lbl,n,tp,sofar,{{flag,dst,sz},*rest}) -> create_export_vm_param(types,new_lbl,n+1,tp,{*sofar,{new_lbl,0,OpMove+get_size_scale(sz),0,flag,dst,BindInOut,n}},rest);
-
-create_export_vm_ret(types,_,n,_,sofar,{}) -> n,sofar;
-create_export_vm_ret(types,new_lbl,n,tp,sofar,{{flag,dst,sz},*rest}) -> create_export_vm_ret(types,new_lbl,n+1,tp,{*sofar,{new_lbl,0,OpMove+get_size_scale(sz),0,BindInOut,n,flag,dst}},rest);
 
 create_export_vm_sigc(sofar,labeln,n,_,_,{}) -> n,sofar;
 create_export_vm_sigc(sofar,labeln,n,fill0,fill1,{{vals,tp,_},*rest}) -> create_export_vm_sigc({*sofar,',',*fill0,*c_type(tp),' ',*fill1,*int2s(labeln)},labeln+1,n+length(vals),fill0,fill1,rest);
