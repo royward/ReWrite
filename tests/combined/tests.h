@@ -1,7 +1,7 @@
-    int64_t result0;
-    int64_t result1;
-    bool resultb;
-    codepoint resultc;
+    int64_t result0=-1;
+    int64_t result1=-1;
+    bool resultb=false;
+    codepoint resultc=-1;
     int ret_code;
 
     printf("fact:");

@@ -86,12 +86,12 @@ int main(int argc, char** argv) {
     printf("string_to_int:");
     exe->allocated=0;
     ret_code=rw_string_to_int(exe,"-126",&result0);
-    if(!ret_code && result0==-126) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,result0); };
+    if(!ret_code && result0==-126) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
     printf("roman_to_int:");
     exe->allocated=0;
     ret_code=rw_roman_to_int(exe,"mcmxciv",&result0);
-    if(!ret_code && result0==1994) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,result0); };
+    if(!ret_code && result0==1994) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
     printf("testprime:");
     exe->allocated=0;

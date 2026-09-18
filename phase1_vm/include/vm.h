@@ -50,7 +50,6 @@ struct ExecutionState {
     uint32_t sp;
     uint32_t end_of_heap;
     uint64_t* registers;
-    uint8_t* overflow;
     Program* program;
     uint32_t errtype;
     uint32_t errline;
@@ -58,6 +57,8 @@ struct ExecutionState {
     const char* errsym;
     uint64_t argret[ARGREG_NO];
     uint64_t* heap8;
+    int32_t* callio_out;
+    uint32_t callio_ret;
 };
 
 typedef struct ExecutionState RWInstance;
