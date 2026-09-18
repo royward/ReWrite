@@ -682,25 +682,26 @@ compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type
     @match ctx_get_tail(ctx) => 0
     update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
     update generate_expr_code(types,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
-    match slice_iolist((ctx_get_reg_count(ctx)<<4)+15,6,{},{},{*outlist,-1}) => {first_slice,*slices}
+    match slice_iolist((ctx_get_reg_count(ctx)<<4)+15,5,{},{},outlist) => {first_slice,*slices}
     -> ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ctx_get_lblnext(ctx),ctx_lbl(ctx),
-        code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_ret_exit(ctx_fnr(ctx),length(slices),first_slice),*slices});
+        code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_ret_exit(ctx_fnr(ctx),length(slices),regs_right,first_slice),*slices});
 compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type_left,regs_right,type_right)
     match ctx_get_tail(ctx)-1 => call_id
     update ctx_get_fn_sig(ctx,call_id) => {_,_,_,_,regs_right,_,type_right,_,_,_,_,_}
     update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
     update ctx_update_get_callctr(ctx,max(regs_right,1)) => ctx,callctr
     update generate_expr_code(types,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
-    match slice_iolist((ctx_get_reg_count(ctx)<<4)+15,4,{},{},{*outlist,-1}) => {first_slice,*slices}
+    match slice_iolist((ctx_get_reg_count(ctx)<<4)+15,3,{},{},outlist) => {first_slice,*slices}
     -> ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ctx_get_lblnext(ctx),ctx_lbl(ctx),
-    code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_goto(ctx_fnr(ctx),length(slices),call_id,callctr,first_slice),*slices});
+    code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_goto(ctx_fnr(ctx),length(slices),call_id,callctr,regs_right,first_slice),*slices});
 
-slice_build_ret_exit(fn_id,rule_id,len,first_slice) -> {OpBuildIOList,OpRetExit+(fn_id<<16),(rule_id&255)+(len<<8),*first_slice};
-slice_build_goto(fn_id,rule_id,len,call_id,callctr,first_slice) -> {OpBuildIOList,OpGotoExit+(fn_id<<16),(rule_id&255)+(len<<8),call_id,callctr,*first_slice};
-slice_build_call(fn_id,rule_id,len,call_id,callctr,spinc,first_slice) -> {OpBuildIOList,OpCallEnterExit+(fn_id<<16),(rule_id&255)+(len<<8),call_id,callctr,spinc,*first_slice};
+slice_build_ret_exit(fn_id,rule_id,len,regs_right,first_slice) -> {OpBuildIOList,OpRetExit+(fn_id<<16),(rule_id&255)+(len<<8),regs_right,*first_slice};
+slice_build_goto(fn_id,rule_id,len,call_id,callctr,regs_right,first_slice) -> {OpBuildIOList,OpGotoExit+(fn_id<<16),(rule_id&255)+(len<<8),call_id,callctr,regs_right,*first_slice};
+slice_build_call(fn_id,rule_id,len,call_id,callctr,spinc,regleft,regright,first_slice)
+    -> {OpBuildIOList,OpCallEnterExit+(fn_id<<16),(rule_id&255)+(len<<8)+(spinc<<16),call_id,callctr,regleft,regright,*first_slice};
 slice_build_call_io(fn_id,rule_id,len,call_id,first_slice) -> {OpBuildIOList,OpCallIO+(fn_id<<16),(rule_id&255)+(len<<8),call_id,*first_slice};
 
-slice_iolist(maxreg,_,sofar,{},{}) -> sofar;
+//slice_iolist(maxreg,_,sofar,{},{}) -> sofar;
 slice_iolist(maxreg,_,sofar,part,{}) -> {*sofar,part};
 slice_iolist(maxreg,0,sofar,part,rest) -> slice_iolist(maxreg,8,{*sofar,part},{OpBuildIOList},rest);
 slice_iolist(maxreg,n,sofar,part,{-2,*rest}) -> slice_iolist(maxreg,n-1,sofar,{*part,maxreg},rest);
@@ -942,14 +943,15 @@ generate_expr_code_aux(types,ctx,stypes,{ExprCallInternal,op,args})
     update generate_expr_code_aux_map(types,ctx,{},infer_types,args) => ctx,args_code
     update generate_expr_code_infix(types,ctx,op,args_code) => ctx,code,x ->
     ctx,false,code,x;
-generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args}) match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
+generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args})
+    match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
     update ctx_update_get_callctr(ctx,max(regleft,1)) => ctx,callctr
     update generate_expr_code(types,ctx,listnv(regleft,-2),{},{},params_left,args) => ctx,inlist,args_code
     match ctx_get_reg_count(ctx)+1 => spinc
     update callout_enter(spinc-1,listnv(regright,-2),{},type_right) => newreg_count,outlist,newtyperight
-    update ctx_put_reg_count(ctx,newreg_count) => ctx
-    match slice_iolist((ctx_get_reg_count(ctx)<<4)+15,3,{},{},{*inlist,-1,*outlist,-1}) => {first_slice,*slices}
-    -> ctx,false,{*args_code,slice_build_call(ctx_fnr(ctx),length(slices),fn_id,callctr,spinc,first_slice),*slices},newtyperight;
+    update ctx_put_reg_count(ctx,spinc-1+regright) => ctx
+    match slice_iolist((ctx_get_reg_count(ctx)<<4)+15,2,{},{},inlist) => {first_slice,*slices}
+    -> ctx,false,{*args_code,slice_build_call(ctx_fnr(ctx),length(slices),fn_id,callctr,spinc,regleft,regright,first_slice),*slices},newtyperight;
 generate_expr_code_aux(types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}})
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
@@ -972,7 +974,7 @@ generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,args_code,{},{}) /
     -> ctx,false,{{ctx_fnr(ctx),OpAlloc,0,BindReg,newarray,BindImm,sz>>3,BindImm,c},{ctx_fnr(ctx),OpLea,0,BindReg,parray,BindReg,newarray},*code,{ctx_fnr(ctx),OpMove+3,0,BindMem,parray,BindImm,c,0,0,8}},
     {{{{BindReg,newarray,32},{BindImm,0,32}},stype,Consume}};
 generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,{},{{true,precode,{{{array_flag,array,32},{start_flag,start,32}},stype,_}}},post_splat) // first splat at start - check for append
-    update get_post_splat_alloc_size(ctx,0,{},BindImm,0,post_splat) => ctx,sum_const,sum_code,sum_src_flag,sum_src
+    update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,post_splat) => ctx,sum_const,sum_code,sum_src_flag,sum_src
     update array_var_elt_assign(ctx,BindReg,newarray,BindReg,newstart,{},post_splat) => code
     -> ctx,false,
         {*precode,*sum_code,{ctx_fnr(ctx),OpRealloc,0,BindReg,newarray,array_flag,array,BindImm,sz>>3,0},
@@ -997,14 +999,14 @@ split_splat_aux(sofar,{}) -> sofar;
 split_splat_aux(sofar,{{_,{},{}},*rest}) -> split_splat_aux(sofar,rest);
 split_splat_aux(sofar,{{splatflag,partcode,{r,*r1}},*rest}) -> split_splat_aux({*sofar,{splatflag,partcode,r}},{{splatflag,{},r1},*rest});
 
-get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{}) -> ctx,sum,sum_code,sum_src_flag,sum_src;
-get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{{false,partcode,_},*rest}) -> get_post_splat_alloc_size(ctx,sum+1,{*sum_code,*partcode},sum_src_flag,sum_src,rest);
-get_post_splat_alloc_size(ctx,sum,sum_code,sum_src_flag,sum_src,{{true,partcode,{{{arrayf,array,sz},{startf,start,sz}},_,_}},*rest})
+get_post_splat_alloc_size(ctx,sum,part_code,sum_code,sum_src_flag,sum_src,{}) -> ctx,sum,{*part_code,*sum_code},sum_src_flag,sum_src;
+get_post_splat_alloc_size(ctx,sum,part_code,sum_code,sum_src_flag,sum_src,{{false,part,_},*rest}) -> get_post_splat_alloc_size(ctx,sum+1,{*part_code,*part},sum_code,sum_src_flag,sum_src,rest);
+get_post_splat_alloc_size(ctx,sum,part_code,sum_code,sum_src_flag,sum_src,{{true,part,{{{arrayf,array,sz},{startf,start,sz}},_,_}},*rest})
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,64) => ctx,end
     update ctx_newreg(ctx,32) => ctx,len
     update splat_sum(ctx,{},sum_src_flag,sum_src,len) => ctx,new_sum_code,newlen
-    -> get_post_splat_alloc_size(ctx,sum,{*sum_code,*partcode,
+    -> get_post_splat_alloc_size(ctx,sum,{*part_code,*part},{*sum_code,
         {ctx_fnr(ctx),OpLea,0,BindReg,parray,BindReg,array},
         {ctx_fnr(ctx),OpMove+3,0,BindReg,end,BindMem,parray+(8<<32)},
         {ctx_fnr(ctx),OpMinus,TypeU32,BindReg,len,BindReg,end,startf,start},*new_sum_code},BindReg,newlen,rest);

@@ -62,7 +62,7 @@ int program_link(Program* program) {
         if(op==OP_LABEL) {
             labels[operation->fdst.a]=i;
         }
-        if(op==OP_RET_EXIT || op==OP_ENTER || op==OP_CALL_ENTER_EXIT || op==OP_CALL_IO_RET || op==OP_GOTO_EXIT) {
+        if(op==OP_RET_EXIT || op==OP_CALL_ENTER_EXIT || op==OP_CALL_IO_RET || op==OP_GOTO_EXIT) {
             i+=operation->flags_dst;
         }
 
@@ -76,7 +76,7 @@ int program_link(Program* program) {
                 operation->fdst.b=labels[operation->fdst.b]+1;
             }
         }
-        if(op==OP_RET_EXIT || op==OP_ENTER || op==OP_CALL_ENTER_EXIT || op==OP_CALL_IO_RET || op==OP_GOTO_EXIT) {
+        if(op==OP_RET_EXIT || op==OP_CALL_ENTER_EXIT || op==OP_CALL_IO_RET || op==OP_GOTO_EXIT) {
             i+=operation->flags_dst;
         }
     }
@@ -284,6 +284,21 @@ int32_t* display_xreg_assignments(FILE* out, bool outx, const char* r, int32_t* 
     return &p[index+1];
 }
 
+void display_xreg_assignments2(FILE* out, bool outx, const char* r, uint32_t sz, int32_t* p) {
+    for(uint32_t i=0;i<sz;i++) {
+        uint32_t v=p[i];
+        uint32_t sz=(v&7)==0?1:(8<<((v-1)&7));
+        fprintf(out," ");
+        if(outx)fprintf(out,"x%d=",i);
+        if((v&15)==15) {
+            fprintf(out,"UNDEF");
+        } else {
+            fprintf(out,"%s%d.%d",r,v>>4,sz);
+        }
+        if(!outx)fprintf(out,"=x%d",i);
+    }
+}
+
 void program_disassemble(Program* program, FILE* out) {
     fprintf(out,"  line func:rule op\n");
     for(uint32_t i=1;i<program->instr_max;i++) {
@@ -308,7 +323,7 @@ void program_disassemble(Program* program, FILE* out) {
             case OP_RET_EXIT: {
                 uint32_t pc_inc=operation->flags_dst;
                 fprintf(out,"ret_exit");
-                display_xreg_assignments(out,true,"r",(int32_t*)(&operation->dst));
+                display_xreg_assignments2(out,true,"r",operation->fdst.a,(int32_t*)(&operation->fdst.b));
                 i+=pc_inc;
             } break;
             case OP_ENTER: {
@@ -318,16 +333,15 @@ void program_disassemble(Program* program, FILE* out) {
             } break;
             case OP_CALL_ENTER_EXIT: {
                 uint32_t pc_inc=operation->flags_dst;
-                fprintf(out,"call_enter_exit (sp+=%d) ",(int32_t)operation->fsrc1.a);
+                fprintf(out,"call_enter_exit (sp+=%d) ",(int32_t)operation->offset16);
                 program_display_label(program,out,operation);
                 //fprintf(out," (pc+%d)",pc_inc);
                 if((int32_t)operation->fdst.b>0) {
                     fprintf(out," (o=%d)",(uint32_t)operation->fdst.b);
                 }
                 fprintf(out,"  in:");
-                int32_t* p=display_xreg_assignments(out,true,"r",(int32_t*)(&operation->fsrc1.b));
-                fprintf(out,"  out:");
-                display_xreg_assignments(out,false,"r",p);
+                display_xreg_assignments2(out,true,"r",operation->fsrc1.a,(int32_t*)(&operation->fsrc2.a));
+                fprintf(out,"  out: %d+off_%d",operation->fsrc1.b,operation->offset16-1);
                 i+=pc_inc;
             } break;
             case OP_CALL_IO_RET: {
@@ -348,7 +362,7 @@ void program_disassemble(Program* program, FILE* out) {
                 if((int32_t)operation->fdst.b>0) {
                     fprintf(out," (o=%d)",(uint32_t)operation->fdst.b);
                 }
-                display_xreg_assignments(out,true,"r",(int32_t*)(&operation->src1));
+                display_xreg_assignments2(out,true,"r",operation->fsrc1.a,(int32_t*)(&operation->fsrc1.b));
                 i+=pc_inc;
             } break;
             case OP_LEA: {
@@ -609,7 +623,6 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
     uint32_t sp=1; // make sure we are start, even if it was run before
     uint32_t pc=program->labels[in_lbl];
     while(true) {
-        //printf("%d\n",pc);
         Operation* operation=&program->code[pc];
         uint8_t op=operation->op;
         switch(op) {
@@ -626,11 +639,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 return exe->errtype;
             };
             case OP_RET_EXIT: {
-                int32_t* p0=(int32_t*)(&operation->dst);
-                uint32_t index0=0;
-                while(p0[index0]!=-1) {
-                    exe->argret[index0]=exe->registers[(p0[index0]>>4)+sp];
-                    index0++;
+                int32_t* p=(int32_t*)(&operation->fdst.b);
+                for(uint32_t index=0;index<operation->fdst.a;index++) {
+                    exe->argret[index]=exe->registers[(p[index]>>4)+sp];
                 }
                 if(sp==1) {
                     pc=exe->callio_ret;
@@ -644,13 +655,10 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 } else {
                     uint32_t* r=(uint32_t*)(&exe->registers[sp-1]);
                     pc=r[0];
-                    sp-=program->code[pc].fsrc1.a; // restore the stack to the old value
-                    int32_t* p=(int32_t*)(&program->code[pc])+r[1];
-                    uint32_t index=0;
-                    while(p[index]!=-1) {
-                        exe->registers[(p[0]>>4)+index+sp]=exe->argret[index];
-                        index++;
+                    for(uint32_t index=0;index<program->code[pc].fsrc1.b;index++) {
+                        exe->registers[index+sp-1]=exe->argret[index];
                     }
+                    sp-=program->code[pc].offset16; // restore the stack to the old value
                     pc+=program->code[pc].flags_dst;
                 }
             } break;
@@ -660,16 +668,13 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 }
             } break;
             case OP_CALL_ENTER_EXIT: {
-                int32_t* p=(int32_t*)(&operation->fsrc1.b);
-                uint32_t index=0;
-                while(p[index]!=-1) {
+                int32_t* p=(int32_t*)(&operation->fsrc2.a);
+                for(uint32_t index=0;index<operation->fsrc1.a;index++) {
                     exe->argret[index]=exe->registers[(p[index]>>4)+sp];
-                    index++;
                 }
-                sp+=(int32_t)operation->fsrc1.a;
+                sp+=(int32_t)operation->offset16;
                 uint32_t* r=(uint32_t*)(&exe->registers[sp-1]);
                 r[0]=pc;
-                r[1]=(&p[index+1] - (int32_t*)operation);
                 pc = operation->fdst.a-1;
             } break;
             case OP_CALL_IO_RET: {
@@ -684,11 +689,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 pc = operation->fdst.a-1;
             } break;
             case OP_GOTO_EXIT: {
-                int32_t* p=(int32_t*)(&operation->fsrc1.a);
-                uint32_t index=0;
-                while(p[index]!=-1) {
+                int32_t* p=(int32_t*)(&operation->fsrc1.b);
+                for(uint32_t index=0;index<operation->fsrc1.a;index++) {
                     exe->argret[index]=exe->registers[(p[index]>>4)+sp];
-                    index++;
                 }
                 pc = operation->fdst.a-1;
             } break;
