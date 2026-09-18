@@ -61,8 +61,6 @@ struct ExecutionState {
     const char* errsym;
     uint64_t argret[ARGREG_NO];
     uint64_t* heap8;
-    int32_t* callio_out;
-    uint32_t callio_ret;
 };
 
 typedef struct ExecutionState RWInstance;

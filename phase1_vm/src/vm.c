@@ -601,7 +601,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
     exe->errtype=0;
     exe->errline=0;
     exe->errsym=NULL;
-    uint32_t sp=1; // make sure we are start, even if it was run before
+    uint32_t sp=2; // make sure we are start, even if it was run before
     uint32_t pc=program->labels[in_lbl];
     while(true) {
         Operation* operation=&program->code[pc];
@@ -624,8 +624,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 for(uint32_t index=0;index<operation->fdst.a;index++) {
                     exe->argret[index]=exe->registers[(p[index]>>4)+sp];
                 }
-                if(sp==1) {
-                    pc=exe->callio_ret;
+                if(sp==2) {
+                    pc=exe->registers[1];
                     int32_t* p=(int32_t*)(&program->code[pc].fsrc1.b)+program->code[pc].fdst.b;
                     for(uint32_t index=0;index<program->code[pc].fsrc1.a;index++) {
                         ((uint64_t*)exe->registers[0])[p[index]>>4]=exe->argret[index];
@@ -657,14 +657,11 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 pc = operation->fdst.a-1;
             } break;
             case OP_CALL_IO_RET: {
-                // display_xreg_assignments(out,true,"*r0+",operation->fdst.b,(int32_t*)(&operation->fsrc1.b));
-                // fprintf(out,"  out:");
-                // display_xreg_assignments(out,false,"*r0+",operation->fsrc1.a,(int32_t*)(&operation->fsrc1.b)+operation->fdst.b);
                 int32_t* p=(int32_t*)(&operation->fsrc1.b);
                 for(uint32_t index=0;index<operation->fdst.b;index++) {
                     exe->argret[index]=((uint64_t*)exe->registers[0])[p[index]>>4];
                 }
-                exe->callio_ret=pc;
+                exe->registers[1]=pc;
                 pc = operation->fdst.a-1;
             } break;
             case OP_GOTO_EXIT: {
