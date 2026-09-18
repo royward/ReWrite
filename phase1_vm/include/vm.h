@@ -6,7 +6,9 @@
 
 #define ARGREG_NO 8
 
-typedef struct { uint32_t a, b; } fparts;
+typedef struct { uint32_t a, b; } fparts64;
+
+typedef struct { uint8_t a, b; } fparts16;
 
 typedef struct {
 // 0
@@ -16,22 +18,24 @@ typedef struct {
 // 4
     uint8_t rule_id;
     uint8_t flags_dst;
-    uint8_t flags_src1;
-    uint8_t flags_src2;
+    union {
+        uint16_t flag16;
+        fparts16 flags_src;
+    };
 // 8
     union {
         uint64_t dst;
-        fparts fdst;
+        fparts64 fdst;
     };
 // 16
     union {
         uint64_t src1;
-        fparts fsrc1;
+        fparts64 fsrc1;
     };
 // 24
     union {
         uint64_t src2;
-        fparts fsrc2;
+        fparts64 fsrc2;
     };
 // 32
 } Operation;
