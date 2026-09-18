@@ -313,8 +313,7 @@ void program_disassemble(Program* program, FILE* out) {
             } break;
             case OP_ENTER: {
                 uint32_t pc_inc=operation->flags_dst;
-                fprintf(out,"enter");
-                display_xreg_assignments(out,false,"r",(int32_t*)(&operation->dst));
+                fprintf(out,"enter %d",operation->fdst.a);
                 i+=pc_inc;
             } break;
             case OP_CALL_ENTER_EXIT: {
@@ -656,13 +655,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 }
             } break;
             case OP_ENTER: {
-                int32_t* p0=(int32_t*)(&operation->dst);
-                uint32_t index0=0;
-                while(p0[index0]!=-1) {
-                    exe->registers[index0+sp]=exe->argret[index0];
-                    index0++;
+                for(uint32_t index=0;index<operation->fdst.a;index++) {
+                    exe->registers[index+sp]=exe->argret[index];
                 }
-                pc+=operation->flags_dst;
             } break;
             case OP_CALL_ENTER_EXIT: {
                 int32_t* p=(int32_t*)(&operation->fsrc1.b);

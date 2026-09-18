@@ -597,10 +597,10 @@ compile1(target,types,outfile,label_id,_,table,symtext,symsz,sofar,{})
     save_c_header(target,outfile,wrapperh);
 compile1(target,types,outfile,label_id,n,table,symtext,symsz,sofar,{rules,*rest})
     match nth(n,table) => {_,_,_,name,reg_count1,bitmask1,type_left,regs_left,reg_count2,bitmask2,type_right,_}
-    update callout_enter(0,listnv(reg_count1,-2),{},type_left) => reg_count,outlist,type_left
-    match slice_iolist((reg_count<<4)+15,6,{},{},{*outlist,-1}) => {first_slice,*slices}
-    update compile_function(types,target,reg_count,true,label_id,n,table,0,
-        {{n,0,OpLabel,0,0,n},slice_build_enter(n,0,length(slices),first_slice),*slices},
+    //update callout_enter(0,listnv(reg_count1,-2),{},type_left) => reg_count,outlist,type_left
+    //match slice_iolist((reg_count<<4)+15,6,{},{},{*outlist,-1}) => {first_slice,*slices}
+    update compile_function(types,target,reg_count1,true,label_id,n,table,0,
+        {{n,0,OpLabel,0,0,n},{n,0,OpEnter,0,0,reg_count1}},
         rules,0,bitmask_or({},bitmask1,bitmask2),reg_count1,type_left,reg_count2,type_right) => label_id,code
     -> compile1(target,types,outfile,label_id,n+1,table,symtext,symsz,{*sofar,{n,code}},rest);
 
@@ -696,7 +696,6 @@ compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type
     code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_goto(ctx_fnr(ctx),length(slices),call_id,callctr,first_slice),*slices});
 
 slice_build_ret_exit(fn_id,rule_id,len,first_slice) -> {OpBuildIOList,OpRetExit+(fn_id<<16),(rule_id&255)+(len<<8),*first_slice};
-slice_build_enter(fn_id,rule_id,len,first_slice) -> {OpBuildIOList,OpEnter+(fn_id<<16),(rule_id&255)+(len<<8),*first_slice};
 slice_build_goto(fn_id,rule_id,len,call_id,callctr,first_slice) -> {OpBuildIOList,OpGotoExit+(fn_id<<16),(rule_id&255)+(len<<8),call_id,callctr,*first_slice};
 slice_build_call(fn_id,rule_id,len,call_id,callctr,spinc,first_slice) -> {OpBuildIOList,OpCallEnterExit+(fn_id<<16),(rule_id&255)+(len<<8),call_id,callctr,spinc,*first_slice};
 slice_build_call_io(fn_id,rule_id,len,call_id,first_slice) -> {OpBuildIOList,OpCallIO+(fn_id<<16),(rule_id&255)+(len<<8),call_id,*first_slice};
