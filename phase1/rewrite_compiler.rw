@@ -895,20 +895,13 @@ generate_conditional(ctx,TargetVM,_,0,label_id,op,tp,sz,src_flag,src,src_flag2,s
     label_id+1,ctx_set_label_id(ctx,label_id+1),{{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,label_id+1,src_flag,src,src_flag2,src2}};
 generate_conditional(ctx,TargetVM,_,lblnext,label_id,op,tp,sz,src_flag,src,src_flag2,src2) -> lblnext,ctx,{{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,lblnext,src_flag,src,src_flag2,src2}};
 generate_conditional(ctx,_,_,0,label_id,op,tp,sz,src_flag,src,src_flag2,src2)
-    update generate_conditional_extractx(ctx,tp,sz,src_flag,src) => ctx,newbind,newreg,code ->
-    label_id+1,ctx_set_label_id(ctx,label_id+2),{*code,{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,label_id+1,newbind,newreg,src_flag2,src2,label_id+2},{ctx_fnr(ctx),OpLabel,0,0,label_id+2}};
+    -> label_id+1,ctx_set_label_id(ctx,label_id+2),{{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,label_id+1,src_flag,src,src_flag2,src2,label_id+2},{ctx_fnr(ctx),OpLabel,0,0,label_id+2}};
 generate_conditional(ctx,_,_,lblnext,label_id,op,tp,sz,src_flag,src,src_flag2,src2)
-    update generate_conditional_extractx(ctx,tp,sz,src_flag,src) => ctx,newbind,newreg,code ->
-    lblnext,ctx_set_label_id(ctx,label_id+1),{*code,{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,lblnext,newbind,newreg,src_flag2,src2,label_id+1},{ctx_fnr(ctx),OpLabel,0,0,label_id+1}};
+    -> lblnext,ctx_set_label_id(ctx,label_id+1),{{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,lblnext,src_flag,src,src_flag2,src2,label_id+1},{ctx_fnr(ctx),OpLabel,0,0,label_id+1}};
 
 gen_cond_op(OpCompareNotEqualBranch,tp,sz) -> OpCompareNotEqualBranch+get_size_scale(sz),0;
 gen_cond_op(OpCompareEqualBranch,tp,sz) -> OpCompareEqualBranch+get_size_scale(sz),0;
 gen_cond_op(op,tp,sz) -> op,tp;
-
-generate_conditional_extractx(ctx,tp,sz,BindArgRet,src)
-    update ctx_newreg(ctx,1<<get_size_scale(sz)) => ctx,newreg ->
-    ctx,BindReg,newreg,{{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindReg,newreg,BindArgRet,src}};
-generate_conditional_extractx(ctx,tp,sz,src_flag,src) -> ctx,src_flag,src,{};
 
 use_binding(ctx,id) match nth(id,ctx_bindings(ctx)) => {bind_level,tp,storage,name} -> ctx_newbindings(ctx,nth_insert(id,{bind_level,tp,storage,name},ctx_bindings(ctx))),tp,storage;
 
