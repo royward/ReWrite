@@ -19,7 +19,7 @@ typedef struct {
     uint8_t rule_id;
     uint8_t flags_dst;
     union {
-        uint16_t flag16;
+        uint16_t offset16;
         fparts16 flags_src;
     };
 // 8
