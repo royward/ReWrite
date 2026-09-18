@@ -699,7 +699,7 @@ slice_build_ret_exit(fn_id,rule_id,len,regs_right,first_slice) -> {OpBuildIOList
 slice_build_goto(fn_id,rule_id,len,call_id,callctr,regs_right,first_slice) -> {OpBuildIOList,OpGotoExit+(fn_id<<16),(rule_id&255)+(len<<8),call_id,callctr,regs_right,*first_slice};
 slice_build_call(fn_id,rule_id,len,call_id,callctr,spinc,regleft,regright,first_slice)
     -> {OpBuildIOList,OpCallEnterExit+(fn_id<<16),(rule_id&255)+(len<<8)+(spinc<<16),call_id,callctr,regleft,regright,*first_slice};
-slice_build_call_io(fn_id,rule_id,len,call_id,first_slice) -> {OpBuildIOList,OpCallIO+(fn_id<<16),(rule_id&255)+(len<<8),call_id,*first_slice};
+slice_build_call_io(fn_id,rule_id,len,call_id,reg_left,reg_right,first_slice) -> {OpBuildIOList,OpCallIO+(fn_id<<16),(rule_id&255)+(len<<8),call_id,reg_left,reg_right,*first_slice};
 
 //slice_iolist(maxreg,_,sofar,{},{}) -> sofar;
 slice_iolist(maxreg,_,sofar,part,{}) -> {*sofar,part};
@@ -848,9 +848,6 @@ generate_conditional_rhs(ctx,code,tp,{{src_flag,src,sz},{src_flag2,src2,sz}})
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
     ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset},{ctx_fnr(ctx),OpLabel,0,0,label_id}};
 
-//generate_bind_variable_rem_last(types,ctx,tp,storage,0) -> {};
-//generate_bind_variable_rem_last(types,ctx,tp,storage,0) -> gen_types_deref_free(types,ctx,tp,storage);
-
 // TODO have comparison deal with non-scalars, and reduce refcount where appropriate
 //generate_bind_variable(types,0,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
 //    -> ctx,{bindlevel,tp,{},name},{},{}; // gen_types_deref_free(types,ctx,tp,storage);
@@ -948,7 +945,7 @@ generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args})
     update ctx_update_get_callctr(ctx,max(regleft,1)) => ctx,callctr
     update generate_expr_code(types,ctx,listnv(regleft,-2),{},{},params_left,args) => ctx,inlist,args_code
     match ctx_get_reg_count(ctx)+1 => spinc
-    update callout_enter(spinc-1,listnv(regright,-2),{},type_right) => newreg_count,outlist,newtyperight
+    update callout_enter(spinc-1,listnv(regright,-2),{},type_right) => _,_,newtyperight
     update ctx_put_reg_count(ctx,spinc-1+regright) => ctx
     match slice_iolist((ctx_get_reg_count(ctx)<<4)+15,2,{},{},inlist) => {first_slice,*slices}
     -> ctx,false,{*args_code,slice_build_call(ctx_fnr(ctx),length(slices),fn_id,callctr,spinc,regleft,regright,first_slice),*slices},newtyperight;
@@ -1253,16 +1250,11 @@ create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{_,_,_,name,
     match create_export_vm_inout0({},reg_count(0,left),reg_count(0,right)) => outarray
     match callout_enter(0,listnv(reg_left,-2),{},left) => _,cleft,_
     match callout_enter(0,listnv(reg_right,-2),{},right) => _,cright,_
-    match slice_iolist((8<<4)+15,5,{},{},{*cleft,-1,*cright,-1}) => {first_slice,*slices}
+    match slice_iolist((8<<4)+15,3,{},{},{*cleft,*cright}) => {first_slice,*slices}
     -> create_export_wrappers_vm(target,types,
         {*sofarc,
         {new_lbl,{{new_lbl,0,OpLabel,0,0,new_lbl},
-            //println_any({987,callout_enter(0,listnv(reg_left,-2),{},left),callout_enter(0,listnv(reg_right,-2),{},right)}),
-            //*create_export_vm_code_in(types,new_lbl,0,{},left,values_left),
-            slice_build_call_io(new_lbl,0,length(slices),fnid,first_slice),*slices,
-            //{new_lbl,0,OpCall,0,0,fnid,0,2},
-            //*create_export_vm_code_out(types,new_lbl,0,{},right,values_right),
-            }}},
+            slice_build_call_io(new_lbl,0,length(slices),fnid,reg_left,reg_right,first_slice),*slices}}},
         {*sofarh,'\nstatic inline int32_t rw_',*name,'(RWInstance* a',*sig1,*sig2,') {\n',
             *incode,
             '\tuint64_t inout[',*int2s(max(n1,n2)),']={',*inarray,*outarray,'};\n',
