@@ -477,11 +477,11 @@ const BindArgRet=5; // never occurs in output
 
 annotate_type_list_reg(types,pri,max_reg,sofar,{}) -> max_reg,{},sofar;
 annotate_type_list_reg(types,pri,max_reg,sofar,{{{{}},t,_},*rest}) match lookup_type_size_pri(t,types) => {p,sz} when p<=pri ->
-    annotate_type_list_reg(types,pri,max_reg+1,{*sofar,{{{BindArgRet,max_reg,sz}},t,Consume}},rest);
+    annotate_type_list_reg(types,pri,max_reg+1,{*sofar,{{{BindReg,max_reg,sz}},t,Consume}},rest);
 annotate_type_list_reg(types,pri,max_reg,sofar,{{{{},r},t,_},*rest}) match lookup_type_size_pri(t,types) => {p,sz,_,_} when p<=pri ->
-    annotate_type_list_reg(types,pri,max_reg+1,sofar,{{{{BindArgRet,max_reg,sz},r},t,Consume},*rest});
+    annotate_type_list_reg(types,pri,max_reg+1,sofar,{{{{BindReg,max_reg,sz},r},t,Consume},*rest});
 annotate_type_list_reg(types,pri,max_reg,sofar,{{{r,{}},t,_},*rest}) match lookup_type_size_pri(t,types) => {_,_,p,sz} when p<=pri ->
-    annotate_type_list_reg(types,pri,max_reg+1,{*sofar,{{r,{BindArgRet,max_reg,sz}},t,Consume}},rest);
+    annotate_type_list_reg(types,pri,max_reg+1,{*sofar,{{r,{BindReg,max_reg,sz}},t,Consume}},rest);
 annotate_type_list_reg(types,pri,max_reg,sofar,todo) -> annotate_type_list_reg(types,pri+1,max_reg,sofar,todo);
 
 lookup_type_size_pri(t,types) match nth(t,types) => {_,_,_,size_pri} -> size_pri;
@@ -913,10 +913,10 @@ generate_expr_code(types,ctx,outlist,sofar1,sofar2,typelist,{expr,*rest})
 
 callout_insert(ctx,outlist,sofar,{},type_left_rest) -> ctx,outlist,sofar,type_left_rest;
 callout_insert(ctx,outlist,sofar,{{{},_,_},*rest0},{{{},_,_},*rest1}) -> callout_insert(ctx,outlist,sofar,rest0,rest1);
-callout_insert(ctx,outlist,sofar,{{{{BindReg,src,sz},*rs},tp,c1},*rest0},{{{{BindArgRet,dst,sz},*rd},tp,c2},*rest1})
+callout_insert(ctx,outlist,sofar,{{{{BindReg,src,sz},*rs},tp,c1},*rest0},{{{{BindReg,dst,sz},*rd},tp,c2},*rest1})
     update nth_insert(dst,(src<<4)+get_size_scale(sz),outlist) => outlist
     -> callout_insert(ctx,outlist,sofar,{{rs,tp,c1},*rest0},{{rd,tp,c2},*rest1});
-callout_insert(ctx,outlist,sofar,{{{{src_flag,src,sz},*rs},tp,c1},*rest0},{{{{BindArgRet,dst,sz},*rd},tp,c2},*rest1})
+callout_insert(ctx,outlist,sofar,{{{{src_flag,src,sz},*rs},tp,c1},*rest0},{{{{BindReg,dst,sz},*rd},tp,c2},*rest1})
     update ctx_newreg(ctx,sz) => ctx,reg
     -> callout_insert(ctx,nth_insert(dst,(reg<<4)+get_size_scale(sz),outlist),{*sofar,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindReg,reg,src_flag,src}},{{rs,tp,c1},*rest0},{{rd,tp,c2},*rest1});
 
@@ -927,7 +927,7 @@ callout_enter(reg_count,outlist,sofar,{{triples,tp,c},*rest})
     -> callout_enter(reg_count,outlist,{*sofar,{sofarsub,tp,c}},rest);
 
 callout_enter_aux(reg_count,outlist,sofar,{}) -> reg_count,outlist,sofar;
-callout_enter_aux(reg_count,outlist,sofar,{{BindArgRet,dst,sz},*rest})
+callout_enter_aux(reg_count,outlist,sofar,{{BindReg,dst,sz},*rest})
     -> callout_enter_aux(reg_count+1,nth_insert(dst,(reg_count<<4)+get_size_scale(sz),outlist),{*sofar,{BindReg,reg_count,sz}},rest);
 callout_enter_aux(reg_count,outlist,sofar,{x,*rest})
     -> callout_enter_aux(reg_count,outlist,{*sofar,x},rest);
