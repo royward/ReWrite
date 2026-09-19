@@ -4,8 +4,6 @@
 #include <inttypes.h>
 #include <stdlib.h>
 
-#define ARGREG_NO 8
-
 typedef struct { uint32_t a, b; } fparts64;
 
 typedef struct { uint8_t a, b; } fparts16;
@@ -59,7 +57,6 @@ struct ExecutionState {
     uint32_t errline;
     int32_t allocated;
     const char* errsym;
-    uint64_t argret[ARGREG_NO];
     uint64_t* heap8;
 };
 
