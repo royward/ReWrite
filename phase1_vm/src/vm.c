@@ -620,22 +620,25 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 return exe->errtype;
             };
             case OP_RET_EXIT: {
-                int32_t* p=(int32_t*)(&operation->fdst.b);
-                for(uint32_t index=0;index<operation->fdst.a;index++) {
-                    exe->argret[index]=exe->registers[(p[index]>>4)+sp];
-                }
+                int32_t* p0=(int32_t*)(&operation->fdst.b);
                 if(sp==2) {
+                    for(uint32_t index0=0;index0<operation->fdst.a;index0++) {
+                        exe->argret[index0]=exe->registers[(p0[index0]>>4)+sp];
+                    }
                     pc=exe->registers[1];
-                    int32_t* p=(int32_t*)(&program->code[pc].fsrc1.b)+program->code[pc].fdst.b;
-                    for(uint32_t index=0;index<program->code[pc].fsrc1.a;index++) {
-                        ((uint64_t*)exe->registers[0])[p[index]>>4]=exe->argret[index];
+                    int32_t* p1=(int32_t*)(&program->code[pc].fsrc1.b)+program->code[pc].fdst.b;
+                    for(uint32_t index1=0;index1<program->code[pc].fsrc1.a;index1++) {
+                        ((uint64_t*)exe->registers[0])[p1[index1]>>4]=exe->argret[index1];
                     }
                     return 0;
                 } else {
+                    for(uint32_t index0=0;index0<operation->fdst.a;index0++) {
+                        exe->argret[index0]=exe->registers[(p0[index0]>>4)+sp];
+                    }
                     uint32_t* r=(uint32_t*)(&exe->registers[sp-1]);
                     pc=r[0];
-                    for(uint32_t index=0;index<program->code[pc].fsrc1.b;index++) {
-                        exe->registers[index+sp-1]=exe->argret[index];
+                    for(uint32_t index1=0;index1<program->code[pc].fsrc1.b;index1++) {
+                        exe->registers[index1+sp]=exe->argret[index1];
                     }
                     sp-=program->code[pc].offset16; // restore the stack to the old value
                     pc+=program->code[pc].flags_dst;

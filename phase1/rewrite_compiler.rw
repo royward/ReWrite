@@ -943,8 +943,8 @@ generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args})
     update ctx_update_get_callctr(ctx,max(regleft,1)) => ctx,callctr
     update generate_expr_code(types,ctx,listnv(regleft,-2),{},{},params_left,args) => ctx,inlist,args_code
     match ctx_get_reg_count(ctx)+1 => spinc
-    update callout_enter(spinc-1,listnv(regright,-2),{},type_right) => _,_,newtyperight
-    update ctx_put_reg_count(ctx,spinc-1+regright) => ctx
+    update callout_enter(spinc,listnv(regright,-2),{},type_right) => _,_,newtyperight
+    update ctx_put_reg_count(ctx,spinc+regright) => ctx
     match slice_iolist((ctx_get_reg_count(ctx)<<4)+15,2,{},{},inlist) => {first_slice,*slices}
     -> ctx,false,{*args_code,slice_build_call(ctx_fnr(ctx),length(slices),fn_id,callctr,spinc,regleft,regright,first_slice),*slices},newtyperight;
 generate_expr_code_aux(types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}})
