@@ -488,8 +488,8 @@ const OpLabel=1;
 const OpError=2;
 //const OpEnter=4;
 const OpRetExit=5;
-const OpLLAlloc=14;
-const OpLLStore=15;
+//const OpLLAlloc=14;
+//const OpLLStore=15;
 const OpMove=16;
 const OpPlus=24;
 const OpMinus=25;
@@ -591,12 +591,12 @@ compile1(TargetVM,types,outfile,label_id,_,table,symtext,_,sofar,{}) -> compile1
 compile1(TargetVMLL,types,outfile,label_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVMLL,types,outfile,label_id,table,symtext,sofar);
 compile1(target,types,outfile,label_id,_,table,symtext,symsz,sofar,{})
     match create_export_wrappers_ll(target,types,{},{},label_id,table) => wrapper_code,wrapperh ->
-    save_text_file({*outfile,'.ll'},{*convert_to_llvm(target,minify_table({},table),table,symtext,symsz,{},sofar),*wrapper_code,*ll_boilerplate_end()}),
+    save_text_file({*outfile,'.ll'},{*convert_to_llvm(target,table,symtext,symsz,{},sofar),*wrapper_code,*ll_boilerplate_end()}),
     save_c_header(target,outfile,wrapperh);
 compile1(target,types,outfile,label_id,n,table,symtext,symsz,sofar,{rules,*rest})
     match nth(n,table) => {_,_,_,name,reg_count1,bitmask1,type_left,regs_left,reg_count2,bitmask2,type_right,_}
     //update callout_enter(0,listnv(reg_count1,-2),{},type_left) => reg_count,outlist,type_left
-    //match slice_iolist((reg_count<<4)+15,6,{},{},{*outlist,-1}) => {first_slice,*slices}
+    //match slice_iolist(reg_count,6,{},{},{*outlist,-1}) => {first_slice,*slices}
     update compile_function(types,target,reg_count1,true,label_id,n,table,0,
         {{n,0,OpLabel,0,0,n}
         //,{n,0,OpEnter,0,0,reg_count1}
@@ -622,7 +622,6 @@ compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofa
 compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,regs_left,type_left,regs_right,type_right)
     match rule => {linerule,bindings,params,clauses,exprs}
     update calc_counts(table,bindings,params,clauses,exprs) => params,clauses,exprs
-    update println_any({"rule",type_right}) =>
     update compile_rule(target,types,linerule,{target,1,0,true,0,label_id,fn_id,rule_id,linerule,create_compiler_bindings({},bindings),reg_count,bitmask,{},table},{},params,clauses,exprs,regs_left,type_left,regs_right,type_right) => reg_count,active,oldlblnext,label_id,code
     update {*sofar,*code,*code_or_not(active,{{fn_id,rule_id,OpLabel,0,0,oldlblnext}})} => code
     update compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id+1,code,rest,dummy,bitmask,regs_left,type_left,regs_right,type_right) => label_id,code
@@ -682,7 +681,7 @@ compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type
     @match ctx_get_tail(ctx) => 0
     update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
     update generate_expr_code(types,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
-    match slice_iolist((ctx_get_reg_count(ctx)<<4)+15,5,{},{},outlist) => {first_slice,*slices}
+    match slice_iolist(ctx_get_reg_count(ctx),5,{},{},outlist) => {first_slice,*slices}
     -> ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ctx_get_lblnext(ctx),ctx_lbl(ctx),
         code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_ret_exit(ctx_fnr(ctx),length(slices),regs_right,first_slice),*slices});
 compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type_left,regs_right,type_right)
@@ -691,19 +690,20 @@ compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type
     update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
     update ctx_update_get_callctr(ctx,max(regs_right,1)) => ctx,callctr
     update generate_expr_code(types,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
-    match slice_iolist((ctx_get_reg_count(ctx)<<4)+15,3,{},{},outlist) => {first_slice,*slices}
+    match slice_iolist(ctx_get_reg_count(ctx),3,{},{},outlist) => {first_slice,*slices}
     -> ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ctx_get_lblnext(ctx),ctx_lbl(ctx),
     code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_goto(ctx_fnr(ctx),length(slices),call_id,callctr,regs_right,first_slice),*slices});
 
-slice_build_ret_exit(fn_id,rule_id,len,regs_right,first_slice) -> {OpBuildIOList,OpRetExit+(fn_id<<16),(rule_id&255)+(len<<8),regs_right,*first_slice};
-slice_build_goto(fn_id,rule_id,len,call_id,callctr,regs_right,first_slice) -> {OpBuildIOList,OpGotoExit+(fn_id<<16),(rule_id&255)+(len<<8),call_id,callctr,regs_right,*first_slice};
+slice_build_ret_exit(fn_id,rule_id,len,regs_right,first_slice) -> {OpBuildIOList,OpRetExit,OpRetExit+(fn_id<<16),(rule_id&255)+(len<<8),regs_right,*first_slice};
+slice_build_goto(fn_id,rule_id,len,call_id,callctr,regs_right,first_slice) -> {OpBuildIOList,OpGotoExit,OpGotoExit+(fn_id<<16),(rule_id&255)+(len<<8),call_id,callctr,regs_right,*first_slice};
 slice_build_call(fn_id,rule_id,len,call_id,callctr,spinc,regleft,regright,first_slice)
-    -> {OpBuildIOList,OpCallEnterExit+(fn_id<<16),(rule_id&255)+(len<<8)+(spinc<<16),call_id,callctr,regleft,regright,*first_slice};
-slice_build_call_io(fn_id,rule_id,len,call_id,reg_left,reg_right,first_slice) -> {OpBuildIOList,OpCallIO+(fn_id<<16),(rule_id&255)+(len<<8),call_id,reg_left,reg_right,*first_slice};
+    -> {OpBuildIOList,OpCallEnterExit,OpCallEnterExit+(fn_id<<16),(rule_id&255)+(len<<8)+(spinc<<16),call_id,callctr,regleft,regright,*first_slice};
+slice_build_call_io(fn_id,rule_id,len,call_id,reg_left,reg_right,first_slice) -> {OpBuildIOList,OpCallIO,OpCallIO+(fn_id<<16),(rule_id&255)+(len<<8),call_id,reg_left,reg_right,*first_slice};
 
 //slice_iolist(maxreg,_,sofar,{},{}) -> sofar;
 slice_iolist(maxreg,_,sofar,part,{}) -> {*sofar,part};
-slice_iolist(maxreg,0,sofar,part,rest) -> slice_iolist(maxreg,8,{*sofar,part},{OpBuildIOList},rest);
+slice_iolist(maxreg,0,{},part,rest) -> slice_iolist(maxreg,8,{{*part,*rest}},{OpBuildIOList,0},rest); // add the rest onto the first part, to make LLVM IR easier
+slice_iolist(maxreg,0,sofar,part,rest) -> slice_iolist(maxreg,8,{*sofar,part},{OpBuildIOList,0},rest);
 slice_iolist(maxreg,n,sofar,part,{-2,*rest}) -> slice_iolist(maxreg,n-1,sofar,{*part,maxreg},rest);
 slice_iolist(maxreg,n,sofar,part,{a,*rest}) -> slice_iolist(maxreg,n-1,sofar,{*part,a},rest);
 
@@ -711,10 +711,9 @@ extract_types(sofar,{}) -> {1,*sofar};
 extract_types(sofar,{{_,tp,consume},*rest}) -> extract_types({*sofar,tp,consume},rest);
 
 generate_params_clauses(target,types,ctx,{pf1,pf2,params},clauses,exprs,regs_left,type_left,regs_right)
-    update generate_llvm_alloc_code(target,ctx_fnr(ctx),{},0,max(regs_left,regs_right)) => code
-    update generate_llvm_store_code(target,ctx_fnr(ctx),code,0,type_left) => code
-    update generate_param_code(types,false,1,{},ctx,code,{},type_left,params) => ctx,code0,code1
-    match println_any({65,pf1,pf2}) =>
+    //update generate_llvm_alloc_code(target,ctx_fnr(ctx),{},0,max(regs_left,regs_right)) => code
+    //update generate_llvm_store_code(target,ctx_fnr(ctx),code,0,type_left) => code
+    update generate_param_code(types,false,1,{},ctx,{},{},type_left,params) => ctx,code0,code1
     update generate_commit_cleanup(types,ctx,pf1,pf2) => ctx,cleanup_code
     update generate_clause_code(types,2,ctx,code0,{*code1,*cleanup_code},clauses) => ctx,code0,code1 ->
     ctx,{*code0,*code1};
@@ -730,10 +729,7 @@ update_bind_level(bind_level,_) -> bind_level+1,bind_level;
 
 generate_clause_code_aux(types,bind_level,post_arrow,ctx,code0,code1,expr,{pf1,pf2,matchx})
     update generate_expr_code_untyped(types,ctx,code0,{},expr) => ctx,etypes,code0
-    match println_any({111,types,expr}) =>
-    match println_any({112,etypes}) =>
     update generate_param_code(types,post_arrow,bind_level,{},ctx,code0,code1,etypes,matchx) => ctx,code0,code1,
-    match println_any({65,pf1,pf2}) =>
     update generate_commit_cleanup(types,ctx,pf1,pf2) => ctx,cleanup_code
     -> ctx,{*code0,*cleanup_code},code1;
 
@@ -741,8 +737,6 @@ generate_expr_code_untyped(types,ctx,code,etypes,{}) -> ctx,etypes,code;
 // TODO deal with lists and splats first
 generate_expr_code_untyped(types,ctx,sofar,etypes,{expr,*rest})
     update generate_expr_code_aux(types,ctx,{0,0},expr) => ctx,false,newcode,callout_ret
-    match println_any({113,types,ctx,expr}) =>
-    match println_any({114,callout_ret}) =>
     -> generate_expr_code_untyped(types,ctx,{*sofar,*newcode},{*etypes,*callout_ret},rest);
 
 generate_commit_cleanup(types,ctx,1,cleanup) -> generate_commit_cleanup_aux(types,ctx,{},ctx_bindings(ctx),cleanup);
@@ -786,7 +780,7 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,TypeU32,32,src_flag2,src2,BindReg,pend) => lblnext,ctx,code
     update ctx_set_lblnext(ctx,lblnext) => ctx
     update gen_types_deref_free(true,types,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
-    -> println_any({44444,codefree}),generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
+    -> generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
         {ctx_fnr(ctx),OpLea,0,BindReg,parray,src_flag1,src1},
         {ctx_fnr(ctx),OpMove+3,0,BindReg,pend,BindMem,parray+(8<<32)},*code},
         {*sofar1,*codefree},type_left,rest);
@@ -868,15 +862,15 @@ generate_bind_variable_aux(ctx,bind,code,{{src_flag,src,sz},*rest})
     update ctx_newreg(ctx,1<<get_size_scale(sz)) => ctx,newreg
     -> generate_bind_variable_aux(ctx,{*bind,{BindReg,newreg,sz}},{*code,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindReg,newreg,src_flag,src}},rest);
 
-generate_llvm_alloc_code(TargetVM,_,_,sofar,_,_) -> sofar;
-generate_llvm_alloc_code(_,_,x,sofar,_,_) when x!=0 -> sofar;
-generate_llvm_alloc_code(target,l1,l2,sofar,n,n) -> sofar;
-generate_llvm_alloc_code(target,l1,l2,sofar,i,n) -> generate_llvm_alloc_code(target,l1,l2,{*sofar,{l1,l2,OpLLAlloc,0,0,i}},i+1,n);
-
-generate_llvm_store_code(TargetVM,_,_,sofar,_,_) -> sofar;
-generate_llvm_store_code(_,_,x,sofar,_,_) when x!=0 -> sofar;
-generate_llvm_store_code(target,l1,l2,sofar,n,{}) -> sofar;
-generate_llvm_store_code(target,l1,l2,sofar,i,{{_,tp,_},*rest}) -> generate_llvm_store_code(target,l1,l2,{*sofar,{l1,l2,OpLLStore,tp,0,i}},i+1,rest);
+// generate_llvm_alloc_code(TargetVM,_,_,sofar,_,_) -> sofar;
+// generate_llvm_alloc_code(_,_,x,sofar,_,_) when x!=0 -> sofar;
+// generate_llvm_alloc_code(target,l1,l2,sofar,n,n) -> sofar;
+// generate_llvm_alloc_code(target,l1,l2,sofar,i,n) -> generate_llvm_alloc_code(target,l1,l2,{*sofar,{l1,l2,OpLLAlloc,0,0,i}},i+1,n);
+//
+// generate_llvm_store_code(TargetVM,_,_,sofar,_,_) -> sofar;
+// generate_llvm_store_code(_,_,x,sofar,_,_) when x!=0 -> sofar;
+// generate_llvm_store_code(target,l1,l2,sofar,n,{}) -> sofar;
+// generate_llvm_store_code(target,l1,l2,sofar,i,{{_,tp,_},*rest}) -> generate_llvm_store_code(target,l1,l2,{*sofar,{l1,l2,OpLLStore,tp,0,i}},i+1,rest);
 
 if(false,_,y) -> y;
 if(true,x,_) -> x;
@@ -911,11 +905,11 @@ generate_expr_code(types,ctx,outlist,sofar1,sofar2,typelist,{expr,*rest})
 callout_insert(ctx,outlist,sofar,{},type_left_rest) -> ctx,outlist,sofar,type_left_rest;
 callout_insert(ctx,outlist,sofar,{{{},_,_},*rest0},{{{},_,_},*rest1}) -> callout_insert(ctx,outlist,sofar,rest0,rest1);
 callout_insert(ctx,outlist,sofar,{{{{BindReg,src,sz},*rs},tp,c1},*rest0},{{{{BindReg,dst,sz},*rd},tp,c2},*rest1})
-    update nth_insert(dst,(src<<4)+get_size_scale(sz),outlist) => outlist
+    update nth_insert(dst,src,outlist) => outlist
     -> callout_insert(ctx,outlist,sofar,{{rs,tp,c1},*rest0},{{rd,tp,c2},*rest1});
 callout_insert(ctx,outlist,sofar,{{{{src_flag,src,sz},*rs},tp,c1},*rest0},{{{{BindReg,dst,sz},*rd},tp,c2},*rest1})
     update ctx_newreg(ctx,sz) => ctx,reg
-    -> callout_insert(ctx,nth_insert(dst,(reg<<4)+get_size_scale(sz),outlist),{*sofar,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindReg,reg,src_flag,src}},{{rs,tp,c1},*rest0},{{rd,tp,c2},*rest1});
+    -> callout_insert(ctx,nth_insert(dst,reg,outlist),{*sofar,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindReg,reg,src_flag,src}},{{rs,tp,c1},*rest0},{{rd,tp,c2},*rest1});
 
 callout_enter(reg_count,outlist,sofar,{}) -> reg_count,outlist,sofar;
 callout_enter(reg_count,outlist,sofar,{{{},_,_},*rest}) -> callout_enter(reg_count,outlist,sofar,rest);
@@ -925,7 +919,7 @@ callout_enter(reg_count,outlist,sofar,{{triples,tp,c},*rest})
 
 callout_enter_aux(reg_count,outlist,sofar,{}) -> reg_count,outlist,sofar;
 callout_enter_aux(reg_count,outlist,sofar,{{BindReg,dst,sz},*rest})
-    -> callout_enter_aux(reg_count+1,nth_insert(dst,(reg_count<<4)+get_size_scale(sz),outlist),{*sofar,{BindReg,reg_count,sz}},rest);
+    -> callout_enter_aux(reg_count+1,nth_insert(dst,reg_count,outlist),{*sofar,{BindReg,reg_count,sz}},rest);
 callout_enter_aux(reg_count,outlist,sofar,{x,*rest})
     -> callout_enter_aux(reg_count,outlist,{*sofar,x},rest);
 
@@ -947,7 +941,7 @@ generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args})
     match ctx_get_reg_count(ctx)+1 => spinc
     update callout_enter(spinc,listnv(regright,-2),{},type_right) => _,_,newtyperight
     update ctx_put_reg_count(ctx,spinc+regright) => ctx
-    match slice_iolist((ctx_get_reg_count(ctx)<<4)+15,2,{},{},inlist) => {first_slice,*slices}
+    match slice_iolist(ctx_get_reg_count(ctx),2,{},{},inlist) => {first_slice,*slices}
     -> ctx,false,{*args_code,slice_build_call(ctx_fnr(ctx),length(slices),fn_id,callctr,spinc,regleft,regright,first_slice),*slices},newtyperight;
 generate_expr_code_aux(types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}})
     match ctx_fnr(ctx) => fn_id,_
@@ -1083,7 +1077,7 @@ convert_to_binary(sofar,{{fnid,code},*rest}) -> convert_to_binary({*sofar,*conve
 convert_to_binary_aux(sofar,{}) -> sofar;
 convert_to_binary_aux(sofar,{instr,*rest}) -> convert_to_binary_aux({*sofar,*emit_instruction(instr)},rest);
 
-emit_instruction({OpBuildIOList,*a}) -> {*emit_instruction_build({},a),*listnv((8-length(a))*4,0)};
+emit_instruction({OpBuildIOList,_,*a}) -> {*emit_instruction_build({},8,a)};
 emit_instruction({fn_id,rule_id,op,tp}) -> emit_instruction({fn_id,rule_id,op,tp,0,0,0,0,0,0});
 emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst}) -> emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,0,0,0,0});
 emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1}) -> emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1,0,0});
@@ -1092,8 +1086,9 @@ emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1,flags_src2,s
 emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1,flags_src2,src2,lbl2}) ->
     {op,tp,*emitb(2,fn_id),rule_id&255,flags_dst&255,flags_src1&255,flags_src2&255,*emitb(4,dst),*emitb(4,lbl2),*emitb(8,src1),*emitb(8,src2)};
 
-emit_instruction_build(sofar,{}) -> sofar;
-emit_instruction_build(sofar,{a,*rest}) -> emit_instruction_build({*sofar,*emitb(4,a)},rest);
+emit_instruction_build(sofar,0,_) -> sofar;
+emit_instruction_build(sofar,n,{}) -> emit_instruction_build({*sofar,*emitb(4,0)},n-1,{});
+emit_instruction_build(sofar,n,{a,*rest}) -> emit_instruction_build({*sofar,*emitb(4,a)},n-1,rest);
 
 emitb(n,v) -> emitb_aux(n,{},v);
 
@@ -1112,7 +1107,7 @@ ll_boilerplate() -> {
     ';File generated by ReWrite compiler 0.0.7. Please do not alter.\n',
     'target datalayout="e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"\n',
     'target triple="x86_64-pc-linux-gnu"\n',
-    '%R8=type{i64,i64,i64,i64,i64,i64,i64,i64}\n',
+    //'%R8=type{i64,i64,i64,i64,i64,i64,i64,i64}\n',
     '%struct.VMContext=type{i64,i32,i32,i32,i32,ptr,ptr}\n',
     'declare i32 @setjmp(ptr) #0\n',
     'declare void @__rw__error(ptr,i32,i32,i32,ptr) noreturn\n\n',
@@ -1121,34 +1116,35 @@ ll_boilerplate() -> {
 
 ll_boilerplate_end() -> "\nattributes #0={returns_twice}\n";
 
-convert_to_llvm(target,small_table,table,symtext,symsz,sofar,{}) -> {*ll_boilerplate(),*int2s(symsz),'x i8] c"',*symtext,'"\n',*sofar};
-convert_to_llvm(target,small_table,table,symtext,symsz,sofar,{{fnid,code},*rest}) ->
-    convert_to_llvm(target,small_table,table,symtext,symsz,{*sofar,*convert_to_ll_fn(target,small_table,table,fnid,code)},rest);
+convert_to_llvm(target,table,symtext,symsz,sofar,{}) -> {*ll_boilerplate(),*int2s(symsz),'x i8] c"',*symtext,'"\n',*sofar};
+convert_to_llvm(target,table,symtext,symsz,sofar,{{fnid,code},*rest}) ->
+    convert_to_llvm(target,table,symtext,symsz,{*sofar,*convert_to_ll_fn(target,table,fnid,code)},rest);
 
-convert_to_ll_fn(target,small_table,table,fnid,code)
-    match nth(fnid,table) => {_,_,_,name,reg_count1,bitmask1,type_left,_,reg_count2,bitmask2,type_right,_} ->
-    {'\ndefine private x86_regcallcc %R8 @__rw.',*name,'(i64 %s0,i64 %s1,i64 %s2,i64 %s3,i64 %s4,i64 %s5,i64 %s6,i64 %s7, ptr %A) {\n',
-    *ll_emit_instructions(small_table,{},code),
-    'exit:\n',
-    *ll_build_epilog1(0,type_right,{}),
-    *ll_build_epilog2(0,type_right,{}),
-    *ll_ret(reg_count2),
+convert_to_ll_fn(target,table,fnid,code)
+    match nth(fnid,table) => {_,_,_,name,reg_count1,bitmask1,type_left,_,reg_count2,bitmask2,type_right,_}
+    match ll_emit_param_list(listnv(reg_count1,""),{},type_left) => text_args,args_code
+    -> {'\ndefine private x86_regcallcc ',*ll_ret_type(reg_count2),' @__rw.',*name,'(',*text_args,'ptr %A) {\n',
+    *ll_emit_instructions(table,{},code),
+    // 'exit:\n',
+    // *ll_build_epilog1(0,type_right,{}),
+    // *ll_build_epilog2(0,type_right,{}),
+    // *ll_ret(reg_count2),
     '}\n'};
 
-ll_build_epilog1(n,{},sofar) -> sofar;
-ll_build_epilog1(i,{{_,tp,_},*rest},sofar) -> ll_build_epilog1(i+1,rest,{*sofar,'\t%p','0'+i,'=load ',*ll_tp(tp),',ptr %x','0'+i,'\n'});
+ll_emit_param_list(text_arg_list,code,{}) -> {**text_arg_list},code;
+ll_emit_param_list(text_arg_list,code,{{storage,_,_},*rest}) -> ll_emit_param_list(ll_emit_param_list_aux(text_arg_list,code,storage),rest);
 
-ll_build_epilog2(n,{},sofar) -> sofar;
-ll_build_epilog2(i,{{_,tp,_},*rest},sofar) @match ll_tp(tp) => "i64" -> ll_build_epilog2(i+1,rest,{*sofar,'\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %p','0'+i,',','0'+i,'\n'});
-ll_build_epilog2(i,{{_,tp,_},*rest},sofar) -> ll_build_epilog2(i+1,rest,{*sofar,
-    '\t%pp','0'+i,'=zext ',*ll_tp(tp),' %p','0'+i,' to i64\n',
-    '\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %pp','0'+i,',','0'+i,'\n'});
+ll_emit_param_list_aux(text_arg_list,code,{}) -> text_arg_list,code;
+ll_emit_param_list_aux(text_arg_list,code,{{BindReg,reg,64},*rest}) -> ll_emit_param_list_aux(nth_insert(reg,{'i64 %t',*int2s36(reg),','},text_arg_list),code,rest);
+ll_emit_param_list_aux(text_arg_list,code,{{BindReg,reg,sz},*rest}) match int2s36(reg) => rn
+    -> ll_emit_param_list_aux(nth_insert(reg,{'i64 %pt',*rn,','},text_arg_list),{*code,{'\t%ss',*rn,'=trunc i64 %s',*rn,' to i',int2s(sz),'\n'}},rest);
 
-ll_lastp(0) -> "undef";
-ll_lastp(i) -> {'%m','0'+i-1};
+ll_ret_type(0) -> "void";
+ll_ret_type(1) -> "i64";
+ll_ret_type(n) -> {'i64,',*ll_ret_type_aux({},n),'}'};
 
-ll_ret(0) -> {'\tret %R8 undef\n'};
-ll_ret(n) -> {'\tret %R8 %m','0'+n-1,'\n'};
+ll_ret_type_aux(sofar,0) -> sofar;
+ll_ret_type_aux(sofar,n) -> {*sofar,',i64'};
 
 ll_emit_instructions(table,sofar,{}) -> sofar;
 ll_emit_instructions(table,sofar,{instr,*rest}) -> ll_emit_instructions(table,{*sofar,*add_newline(ll_emit_instruction(table,instr))},rest);
@@ -1157,41 +1153,80 @@ add_newline("") -> "";
 add_newline(str) -> {*str,'\n'};
 
 ll_emit_instruction(_,{_,_,OpLabel,_,_,dst}) -> {'L',*int2s36(dst),':'};
-ll_emit_instruction(_,{_,_,OpRet,_}) -> "\tbr label %exit";
-ll_emit_instruction(_,{_,_,op,_,BindReg,dst,BindArgRet,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\t%t',*int2s36(dst),'=load ',*intsize(op-OpMove),',',*ll_emit_arg(BindArgRet,src)};
-ll_emit_instruction(_,{_,_,op,_,BindArgRet,dst,flag_src,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\tstore ',*intsize(op-OpMove),' ',*ll_emit_arg(flag_src,src),',ptr %x','0'+dst};
-ll_emit_instruction(_,{_,_,op,_,BindReg,dst,flag_src,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\t%t',*int2s36(dst),'=or ',*intsize(op-OpMove),' ','%t',*int2s36(src),',0'};
-ll_emit_instruction(_,{_,_,op,_,BindArgRet,dst,flag_src,src,_,off}) when op>=OpInsert when op<OpInsert+5 ->
-    {'\tstore ',*intsize(op-OpInsert),' ',*ll_emit_arg(flag_src,src),',ptr %x','0'+dst,'\n\t%a',*int2s36(dst+off),'=load ',*intsize(op-OpInsert),',ptr %x','0'+dst};
-ll_emit_instruction(_,{_,tp,op,_,BindReg,dst,BindArgRet,src,_,off}) when op==OpExtract+4 ->
-    {'\t',*ll_emit_arg(BindReg,dst),'=extractvalue %R8 %z',*int2s36(off),',',*int2s(src)};
-ll_emit_instruction(_,{_,tp,op,_,BindReg,dst,BindArgRet,src,_,off}) when op>=OpExtract when op<OpExtract+5 ->
-    {'\t%zz',*int2s36(off),'_',*int2s(src),'=extractvalue %R8 %z',*int2s36(off),',',*int2s(src),'\n',
-    '\t',*ll_emit_arg(BindReg,dst),'=trunc i64 %zz',*int2s36(off),'_',*int2s(src),' to ',*intsize(op-OpExtract)};
+// ll_emit_instruction(_,{_,_,OpRet,_}) -> "\tbr label %exit";
+ll_emit_instruction(_,{_,_,op,_,BindReg,dst,BindReg,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\t%t',*int2s36(dst),'=or ',*intsize(op-OpMove),' ','%t',*int2s36(src),',0'};
+ll_emit_instruction(_,{_,_,op,_,BindReg,dst,BindImm,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\t%t',*int2s36(dst),'=bitcast ',*intsize(op-OpMove),' ',*int2s(src),' to ',*intsize(op-OpMove)};
+// //ll_emit_instruction(_,{_,_,op,_,BindArgRet,dst,flag_src,src,*_}) when op>=OpMove when op<OpMove+5 -> {'\tstore ',*intsize(op-OpMove),' ',*ll_emit_arg(flag_src,src),',ptr %x','0'+dst};
+// //ll_emit_instruction(_,{_,_,op,_,BindArgRet,dst,flag_src,src,_,off}) when op>=OpInsert when op<OpInsert+5 ->
+// //    {'\tstore ',*intsize(op-OpInsert),' ',*ll_emit_arg(flag_src,src),',ptr %x','0'+dst,'\n\t%a',*int2s36(dst+off),'=load ',*intsize(op-OpInsert),',ptr %x','0'+dst};
+// //ll_emit_instruction(_,{_,tp,op,_,BindReg,dst,BindArgRet,src,_,off}) when op==OpExtract+4 ->
+// //    {'\t',*ll_emit_arg(BindReg,dst),'=extractvalue %R8 %z',*int2s36(off),',',*int2s(src)};
+// //ll_emit_instruction(_,{_,tp,op,_,BindReg,dst,BindArgRet,src,_,off}) when op>=OpExtract when op<OpExtract+5 ->
+// //    {'\t%zz',*int2s36(off),'_',*int2s(src),'=extractvalue %R8 %z',*int2s36(off),',',*int2s(src),'\n',
+// //    '\t',*ll_emit_arg(BindReg,dst),'=trunc i64 %zz',*int2s36(off),'_',*int2s(src),' to ',*intsize(op-OpExtract)};
 ll_emit_instruction(_,{_,_,op,_,_,lbl,flag_src,src,flag_src2,src2,lbl2}) when op>=OpCompareNotEqualBranch when op<OpCompareNotEqualBranch+5 match int2s36(lbl2) => id ->
     {'\t%c',*id,'=icmp ne ',*intsize(op-OpCompareNotEqualBranch),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2),'\n\tbr i1 %c',*id,',label %L',*int2s36(lbl),',label %L',*id};
 ll_emit_instruction(_,{_,_,op,_,_,lbl,flag_src,src,flag_src2,src2,lbl2}) when op>=OpCompareEqualBranch when op<OpCompareEqualBranch+5 match int2s36(lbl2) => id ->
     {'\t%c',*id,'=icmp eq ',*intsize(op-OpCompareEqualBranch),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2),'\n\tbr i1 %c',*id,',label %L',*int2s36(lbl),',label %L',*id};
 ll_emit_instruction(_,{_,_,op,tp,BindReg,dst,flag_src,src,flag_src2,src2}) when op>=OpPlus when op<=OpLessThanEqual ->
     {'\t',*ll_emit_arg(BindReg,dst),'=',*ll_binop(op,tp),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2)};
-ll_emit_instruction(table,{_,_,OpCall,_,_,label,_,_,_,off}) match nth(label,table) => {name,_,_,arity} ->
-    {'\t%z',*int2s36(off),'=call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)'};
-ll_emit_instruction(table,{_,_,OpGotoExit,_,_,label,_,off}) match nth(label,table) => {name,_,_,arity} ->
-    {'\t%z',*int2s36(off),'=musttail call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,arity+off),*output_undef({},arity,8),'ptr %A)\n\tret %R8 %z',*int2s36(off)};
-ll_emit_instruction(_,{_,_,OpError,_,0,code,_,line,_,sym}) ->
-    {'\tcall void @__rw__error(ptr %A,i32 ',*int2s(code),',i32 ',*int2s(line),',i32 ',*int2s(sym),',ptr @.fn.syms)\n\tunreachable'};
-ll_emit_instruction(_,{_,_,OpLLAlloc,_,_,dst}) -> {'\t%x','0'+dst,'=alloca i64'};
-ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) @match ll_tp(tp) => "i64" -> {'\tstore i64 %s','0'+dst,',ptr %x','0'+dst};
-ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) -> {'\t%ss','0'+dst,'=trunc i64 %s','0'+dst,' to ',*ll_tp(tp),'\n\tstore ',*ll_tp(tp),' %ss','0'+dst,',ptr %x','0'+dst};
+// ll_emit_instruction(table,{_,_,OpCall,_,_,label,_,_,_,off}) match nth(label,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_} ->
+//     {'\t%z',*int2s36(off),'=call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,regleft+off),*output_undef({},regleft,8),'ptr %A)'};
+// ll_emit_instruction(table,{_,_,OpGotoExit,_,_,label,_,off}) match nth(label,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_} ->
+//     {'\t%z',*int2s36(off),'=musttail call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,regleft+off),*output_undef({},regleft,8),'ptr %A)\n\tret %R8 %z',*int2s36(off)};
+// //ll_emit_instruction(_,{_,_,OpError,_,0,code,_,line,_,sym}) ->
+// //    {'\tcall void @__rw__error(ptr %A,i32 ',*int2s(code),',i32 ',*int2s(line),',i32 ',*int2s(sym),',ptr @.fn.syms)\n\tunreachable'};
+// //ll_emit_instruction(_,{_,_,OpLLAlloc,_,_,dst}) -> {'\t%x','0'+dst,'=alloca i64'};
+// //ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) @match ll_tp(tp) => "i64" -> {'\tstore i64 %s','0'+dst,',ptr %x','0'+dst};
+// //ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) -> {'\t%ss','0'+dst,'=trunc i64 %s','0'+dst,' to ',*ll_tp(tp),'\n\tstore ',*ll_tp(tp),' %ss','0'+dst,',ptr %x','0'+dst};
+ll_emit_instruction(_,{OpBuildIOList,0,*_}) -> "";
+ll_emit_instruction(_,{OpBuildIOList,OpRetExit,_,_,0}) -> "ret void";
+ll_emit_instruction(_,{OpBuildIOList,OpRetExit,_,_,1,v}) match ll_emit_ret1(v>>4,v&15) => code,arg -> {*code,'\tret i64 ',*arg};
+ll_emit_instruction(table,{OpBuildIOList,OpCallEnterExit,_,_,callid,callctr,rleft,rright,*rest})
+    match ll_ret_type(rright) => retname
+    match split_list({},rleft,rest) => lpart,rpart
+    match nth(callid,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
+    match ll_emit_call_retpart(callctr,lpart) => prefix,postfix
+    -> {'\t',*prefix,'call x86_regcallcc ',*retname,' @__rw.',*name,'(XXX)',*postfix};
 ll_emit_instruction(_,{_,_,op,*_}) -> {'\tunknown:',*int2s(op)};
 
-output_lbls(sofar,n,n) -> sofar;
-output_lbls(sofar,i,n) -> output_lbls({*sofar,'i64 %a',*int2s36(i),','},i+1,n);
+split_list(sofar,0,rest) -> sofar,rest;
+split_list(sofar,n,{a,*rest}) -> split_list({*sofar,a},n-1,rest);
 
+ll_emit_call_retpart(_,{}) -> {},{};
+ll_emit_call_retpart(ctr,{v}) match ll_emit_trunc(ctr,v>>4,v&15) => pre,post -> {*pre,'='},post;
+
+ll_emit_trunc(ctr,v,4) -> {'%t',*int2s36(v)},{};
+ll_emit_trunc(ctr,v,sz) match int2s36(v),int2s36(ctr) => id,c -> {'%t',*id,'_',*c},{'\n\t%t',*id,'=trunc i64 %t',*id,'_',*c,' to ',*intsize(sz)};
+
+ll_emit_ret1(v,4) -> {},{'%t',*int2s36(v)};
+ll_emit_ret1(v,sz) -> {'%qt',*int2s36(v),'\tzext ',*intsize(sz),' %t',*int2s36(v),' to i64\n'},{'%qt',*int2s36(v)};
+
+
+// {1000000,239,239,262145,0,1,1,1,36})
+
+// ll_build_epilog1(n,{},sofar) -> sofar;
+// ll_build_epilog1(i,{{_,tp,_},*rest},sofar) -> ll_build_epilog1(i+1,rest,{*sofar,'\t%p','0'+i,'=load ',*ll_tp(tp),',ptr %x','0'+i,'\n'});
+//
+// ll_build_epilog2(n,{},sofar) -> sofar;
+// ll_build_epilog2(i,{{_,tp,_},*rest},sofar) @match ll_tp(tp) => "i64" -> ll_build_epilog2(i+1,rest,{*sofar,'\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %p','0'+i,',','0'+i,'\n'});
+// ll_build_epilog2(i,{{_,tp,_},*rest},sofar) -> ll_build_epilog2(i+1,rest,{*sofar,
+//     '\t%pp','0'+i,'=zext ',*ll_tp(tp),' %p','0'+i,' to i64\n',
+//     '\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %pp','0'+i,',','0'+i,'\n'});
+//
+// ll_lastp(0) -> "undef";
+// ll_lastp(i) -> {'%m','0'+i-1};
+//
+// ll_ret(0) -> {'\tret %R8 undef\n'};
+// ll_ret(n) -> {'\tret %R8 %m','0'+n-1,'\n'};
+//
+//
+// output_lbls(sofar,n,n) -> sofar;
+// output_lbls(sofar,i,n) -> output_lbls({*sofar,'i64 %a',*int2s36(i),','},i+1,n);
+//
 output_undef(sofar,n,n) -> sofar;
 output_undef(sofar,i,n) -> output_undef({*sofar,'i64 undef,'},i+1,n);
 
-ll_emit_arg(BindArgRet,src) -> {'ptr %x','0'+src};
 ll_emit_arg(BindReg,src) -> {'%t',*int2s36(src)};
 ll_emit_arg(BindImm,src) -> int2s(src);
 
@@ -1250,7 +1285,7 @@ create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{_,_,_,name,
     match create_export_vm_inout0({},reg_count(0,left),reg_count(0,right)) => outarray
     match callout_enter(0,listnv(reg_left,-2),{},left) => _,cleft,_
     match callout_enter(0,listnv(reg_right,-2),{},right) => _,cright,_
-    match slice_iolist((8<<4)+15,3,{},{},{*cleft,*cright}) => {first_slice,*slices}
+    match slice_iolist(8,3,{},{},{*cleft,*cright}) => {first_slice,*slices}
     -> create_export_wrappers_vm(target,types,
         {*sofarc,
         {new_lbl,{{new_lbl,0,OpLabel,0,0,new_lbl},

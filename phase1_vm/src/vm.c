@@ -194,14 +194,14 @@ void program_display_label_both(Program* program, FILE* out, Operation* operatio
     }
     uint32_t label=0;
     for(uint32_t i=0;i<program->label_count;i++) {
-        if(program->labels[i]==operation->fdst.a) {
+        if(program->labels[i]==operation->fdst.a-1) {
             label=i;
             break;
         }
     }
     uint32_t label2=0;
     for(uint32_t i=0;i<program->label_count;i++) {
-        if(program->labels[i]==operation->fdst.b) {
+        if(program->labels[i]==operation->fdst.b-1) {
             label2=i;
             break;
         }
@@ -274,7 +274,7 @@ void display_xreg_assignments(FILE* out, bool outx, const char* r, uint32_t sz, 
         if((v&15)==15) {
             fprintf(out,"UNDEF");
         } else {
-            fprintf(out,"%s%d.%d",r,v>>4,sz);
+            fprintf(out,"%s%d.%d",r,v,sz);
         }
         if(!outx)fprintf(out,"=x%d",i);
     }
@@ -619,12 +619,12 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     pc=exe->registers[1];
                     int32_t* p1=(int32_t*)(&program->code[pc].fsrc1.b)+program->code[pc].fdst.b;
                     for(uint32_t index1=0;index1<program->code[pc].fsrc1.a;index1++) {
-                        ((uint64_t*)exe->registers[0])[p1[index1]>>4]=exe->registers[(p0[index1]>>4)+sp];
+                        ((uint64_t*)exe->registers[0])[p1[index1]]=exe->registers[(p0[index1])+sp];
                     }
                     return 0;
                 } else {
                     for(uint32_t index0=0;index0<operation->fdst.a;index0++) {
-                        exe->registers[index0+sp+1000]=exe->registers[(p0[index0]>>4)+sp];
+                        exe->registers[index0+sp+1000]=exe->registers[(p0[index0])+sp];
                     }
                     uint32_t* r=(uint32_t*)(&exe->registers[sp-1]);
                     pc=r[0];
@@ -639,7 +639,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint32_t newsp=sp+(int32_t)operation->offset16;
                 int32_t* p=(int32_t*)(&operation->fsrc2.a);
                 for(uint32_t index=0;index<operation->fsrc1.a;index++) {
-                    exe->registers[index+newsp]=exe->registers[(p[index]>>4)+sp];
+                    exe->registers[index+newsp]=exe->registers[(p[index])+sp];
                 }
                 sp=newsp;
                 uint32_t* r=(uint32_t*)(&exe->registers[sp-1]);
@@ -649,7 +649,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_CALL_IO_RET: {
                 int32_t* p=(int32_t*)(&operation->fsrc1.b);
                 for(uint32_t index=0;index<operation->fdst.b;index++) {
-                    exe->registers[index+sp]=((uint64_t*)exe->registers[0])[p[index]>>4];
+                    exe->registers[index+sp]=((uint64_t*)exe->registers[0])[p[index]];
                 }
                 exe->registers[1]=pc;
                 pc = operation->fdst.a-1;
@@ -657,7 +657,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_GOTO_EXIT: {
                 int32_t* p=(int32_t*)(&operation->fsrc1.b);
                 for(uint32_t index=0;index<operation->fsrc1.a;index++) {
-                    exe->registers[index+sp+1000]=exe->registers[(p[index]>>4)+sp];
+                    exe->registers[index+sp+1000]=exe->registers[(p[index])+sp];
                 }
                 for(uint32_t index=0;index<operation->fsrc1.a;index++) {
                     exe->registers[index+sp]=exe->registers[index+sp+1000];
