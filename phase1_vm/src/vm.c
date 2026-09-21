@@ -303,22 +303,16 @@ void program_disassemble(Program* program, FILE* out) {
             case OP_RET_EXIT: {
                 uint32_t pc_inc=operation->flags_dst;
                 fprintf(out,"ret_exit");
-                if((int32_t)operation->fdst.b>0) {
-                    fprintf(out," (o=%d)",(uint32_t)operation->fdst.a);
-                }
-                display_xreg_assignments(out,true,"r",operation->fdst.b,(int32_t*)(&operation->fsrc1.a));
+                display_xreg_assignments(out,true,"r",operation->fdst.a,(int32_t*)(&operation->fdst.b));
                 i+=pc_inc;
             } break;
             case OP_CALL_ENTER_EXIT: {
                 uint32_t pc_inc=operation->flags_dst;
                 fprintf(out,"call_enter_exit (sp+=%d) ",(int32_t)operation->offset16);
                 program_display_label(program,out,operation);
-                if((int32_t)operation->fdst.b>0) {
-                    fprintf(out," (o=%d)",(uint32_t)operation->fdst.b);
-                }
                 fprintf(out,"  in:");
-                display_xreg_assignments(out,true,"r",operation->fsrc1.a,(int32_t*)(&operation->fsrc2.a));
-                fprintf(out,"  out: %d+off_%d",operation->fsrc1.b,operation->offset16);
+                display_xreg_assignments(out,true,"r",operation->fdst.b,(int32_t*)(&operation->fsrc1.b));
+                fprintf(out,"  out: %d+off_%d",operation->fsrc1.a,operation->offset16);
                 i+=pc_inc;
             } break;
             case OP_CALL_IO_RET: {
@@ -335,11 +329,7 @@ void program_disassemble(Program* program, FILE* out) {
                 uint32_t pc_inc=operation->flags_dst;
                 fprintf(out,"goto ");
                 program_display_label(program,out,operation);
-                //fprintf(out," (pc+%d)",pc_inc);
-                if((int32_t)operation->fdst.b>0) {
-                    fprintf(out," (o=%d)",(uint32_t)operation->fdst.b);
-                }
-                display_xreg_assignments(out,true,"r",operation->fsrc1.a,(int32_t*)(&operation->fsrc1.b));
+                display_xreg_assignments(out,true,"r",operation->fdst.b,(int32_t*)(&operation->fsrc1.a));
                 i+=pc_inc;
             } break;
             case OP_LEA: {
@@ -616,7 +606,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 return exe->errtype;
             };
             case OP_RET_EXIT: {
-                int32_t* p0=(int32_t*)(&operation->fsrc1.a);
+                int32_t* p0=(int32_t*)(&operation->fdst.b);
                 if(sp==2) {
                     pc=exe->registers[1];
                     int32_t* p1=(int32_t*)(&program->code[pc].fsrc1.b)+program->code[pc].fdst.b;
@@ -625,12 +615,12 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     }
                     return 0;
                 } else {
-                    for(uint32_t index0=0;index0<operation->fdst.b;index0++) {
+                    for(uint32_t index0=0;index0<operation->fdst.a;index0++) {
                         exe->registers[index0+sp+1000]=exe->registers[(p0[index0])+sp];
                     }
                     uint32_t* r=(uint32_t*)(&exe->registers[sp-1]);
                     pc=r[0];
-                    for(uint32_t index1=0;index1<program->code[pc].fsrc1.b;index1++) {
+                    for(uint32_t index1=0;index1<program->code[pc].fsrc1.a;index1++) {
                         exe->registers[index1+sp]=exe->registers[index1+sp+1000];
                     }
                     sp-=program->code[pc].offset16; // restore the stack to the old value
@@ -639,8 +629,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             } break;
             case OP_CALL_ENTER_EXIT: {
                 uint32_t newsp=sp+(int32_t)operation->offset16;
-                int32_t* p=(int32_t*)(&operation->fsrc2.a);
-                for(uint32_t index=0;index<operation->fsrc1.a;index++) {
+                int32_t* p=(int32_t*)(&operation->fsrc1.b);
+                for(uint32_t index=0;index<operation->fdst.b;index++) {
                     exe->registers[index+newsp]=exe->registers[(p[index])+sp];
                 }
                 sp=newsp;
@@ -657,11 +647,11 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 pc = operation->fdst.a-1;
             } break;
             case OP_GOTO_EXIT: {
-                int32_t* p=(int32_t*)(&operation->fsrc1.b);
-                for(uint32_t index=0;index<operation->fsrc1.a;index++) {
+                int32_t* p=(int32_t*)(&operation->fsrc1.a);
+                for(uint32_t index=0;index<operation->fdst.b;index++) {
                     exe->registers[index+sp+1000]=exe->registers[(p[index])+sp];
                 }
-                for(uint32_t index=0;index<operation->fsrc1.a;index++) {
+                for(uint32_t index=0;index<operation->fdst.b;index++) {
                     exe->registers[index+sp]=exe->registers[index+sp+1000];
                 }
                 pc = operation->fdst.a-1;
