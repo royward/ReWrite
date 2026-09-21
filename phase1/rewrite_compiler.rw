@@ -681,20 +681,21 @@ compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type
     @match ctx_get_tail(ctx) => 0
     update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
     update generate_expr_code(types,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
-    match slice_iolist(ctx_get_reg_count(ctx),5,{},{},outlist) => {first_slice,*slices}
+    match slice_iolist(ctx_get_reg_count(ctx),4,{},{},outlist) => {first_slice,*slices}
+    update ctx_update_get_callctr(ctx,1) => ctx,callctr
     -> ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ctx_get_lblnext(ctx),ctx_lbl(ctx),
-        code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_ret_exit(ctx_fnr(ctx),length(slices),regs_right,first_slice),*slices});
+        code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_ret_exit(ctx_fnr(ctx),length(slices),callctr,regs_right,first_slice),*slices});
 compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type_left,regs_right,type_right)
     match ctx_get_tail(ctx)-1 => call_id
     update ctx_get_fn_sig(ctx,call_id) => {_,_,_,_,regs_right,_,type_right,_,_,_,_,_}
     update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
-    update ctx_update_get_callctr(ctx,max(regs_right,1)) => ctx,callctr
+    update ctx_update_get_callctr(ctx,1) => ctx,callctr
     update generate_expr_code(types,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
     match slice_iolist(ctx_get_reg_count(ctx),3,{},{},outlist) => {first_slice,*slices}
     -> ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ctx_get_lblnext(ctx),ctx_lbl(ctx),
     code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_goto(ctx_fnr(ctx),length(slices),call_id,callctr,regs_right,first_slice),*slices});
 
-slice_build_ret_exit(fn_id,rule_id,len,regs_right,first_slice) -> {OpBuildIOList,OpRetExit,OpRetExit+(fn_id<<16),(rule_id&255)+(len<<8),regs_right,*first_slice};
+slice_build_ret_exit(fn_id,rule_id,len,callctr,regs_right,first_slice) -> {OpBuildIOList,OpRetExit,OpRetExit+(fn_id<<16),(rule_id&255)+(len<<8),callctr,regs_right,*first_slice};
 slice_build_goto(fn_id,rule_id,len,call_id,callctr,regs_right,first_slice) -> {OpBuildIOList,OpGotoExit,OpGotoExit+(fn_id<<16),(rule_id&255)+(len<<8),call_id,callctr,regs_right,*first_slice};
 slice_build_call(fn_id,rule_id,len,call_id,callctr,spinc,regleft,regright,first_slice)
     -> {OpBuildIOList,OpCallEnterExit,OpCallEnterExit+(fn_id<<16),(rule_id&255)+(len<<8)+(spinc<<16),call_id,callctr,regleft,regright,*first_slice};
@@ -911,7 +912,7 @@ callout_insert(ctx,outlist,sofar,{{{{src_flag,src,sz},*rs},tp,c1},*rest0},{{{{Bi
     update ctx_newreg(ctx,sz) => ctx,reg
     -> callout_insert(ctx,nth_insert(dst,reg,outlist),{*sofar,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindReg,reg,src_flag,src}},{{rs,tp,c1},*rest0},{{rd,tp,c2},*rest1});
 
-callout_enter(reg_count,outlist,sofar,{}) -> reg_count,outlist,sofar;
+callout_enter(reg_count,outlist,sofar,{}) -> outlist,sofar;
 callout_enter(reg_count,outlist,sofar,{{{},_,_},*rest}) -> callout_enter(reg_count,outlist,sofar,rest);
 callout_enter(reg_count,outlist,sofar,{{triples,tp,c},*rest})
     update callout_enter_aux(reg_count,outlist,{},triples) => reg_count,outlist,sofarsub
@@ -936,10 +937,10 @@ generate_expr_code_aux(types,ctx,stypes,{ExprCallInternal,op,args})
     ctx,false,code,x;
 generate_expr_code_aux(types,ctx,stypes,{ExprCall,fn_id,args})
     match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
-    update ctx_update_get_callctr(ctx,max(regleft,1)) => ctx,callctr
+    update ctx_update_get_callctr(ctx,1) => ctx,callctr
     update generate_expr_code(types,ctx,listnv(regleft,-2),{},{},params_left,args) => ctx,inlist,args_code
     match ctx_get_reg_count(ctx)+1 => spinc
-    update callout_enter(spinc,listnv(regright,-2),{},type_right) => _,_,newtyperight
+    update callout_enter(spinc,listnv(regright,-2),{},type_right) => _,newtyperight
     update ctx_put_reg_count(ctx,spinc+regright) => ctx
     match slice_iolist(ctx_get_reg_count(ctx),2,{},{},inlist) => {first_slice,*slices}
     -> ctx,false,{*args_code,slice_build_call(ctx_fnr(ctx),length(slices),fn_id,callctr,spinc,regleft,regright,first_slice),*slices},newtyperight;
@@ -1141,7 +1142,7 @@ ll_emit_param_list_aux(text_arg_list,code,{{BindReg,reg,sz},*rest}) match int2s3
 
 ll_ret_type(0) -> "void";
 ll_ret_type(1) -> "i64";
-ll_ret_type(n) -> {'i64,',*ll_ret_type_aux({},n),'}'};
+ll_ret_type(n) -> {'{i64',*ll_ret_type_aux({},n),'}'};
 
 ll_ret_type_aux(sofar,0) -> sofar;
 ll_ret_type_aux(sofar,n) -> {*sofar,',i64'};
@@ -1180,28 +1181,53 @@ ll_emit_instruction(_,{_,_,op,tp,BindReg,dst,flag_src,src,flag_src2,src2}) when 
 // //ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) @match ll_tp(tp) => "i64" -> {'\tstore i64 %s','0'+dst,',ptr %x','0'+dst};
 // //ll_emit_instruction(_,{_,_,OpLLStore,tp,_,dst}) -> {'\t%ss','0'+dst,'=trunc i64 %s','0'+dst,' to ',*ll_tp(tp),'\n\tstore ',*ll_tp(tp),' %ss','0'+dst,',ptr %x','0'+dst};
 ll_emit_instruction(_,{OpBuildIOList,0,*_}) -> "";
-ll_emit_instruction(_,{OpBuildIOList,OpRetExit,_,_,0}) -> "ret void";
-ll_emit_instruction(_,{OpBuildIOList,OpRetExit,_,_,1,v}) match ll_emit_ret1(v>>4,v&15) => code,arg -> {*code,'\tret i64 ',*arg};
-ll_emit_instruction(table,{OpBuildIOList,OpCallEnterExit,_,_,callid,callctr,rleft,rright,*rest})
-    match ll_ret_type(rright) => retname
-    match split_list({},rleft,rest) => lpart,rpart
+ll_emit_instruction(_,{OpBuildIOList,OpRetExit,_,_,_,0}) -> "ret void";
+ll_emit_instruction(table,{OpBuildIOList,OpRetExit,fnid16,_,callctr,1,v})
+    match nth(fnid16>>16,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
+    match ll_get_sizelist(listnv(regright,999),type_right) => {sz}
+    match ll_emit_ret1(v,sz) => code,arg -> {*code,'\tret i64 ',*arg};
+ll_emit_instruction(table,{OpBuildIOList,OpRetExit,fnid16,_,callctr,_,*rest})
+    match nth(fnid16>>16,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
+    match ll_get_sizelist(listnv(regright,999),type_right) => sizes
+    match ll_emit_ret({},rest,sizes) => code,arg -> {*code,'\tret i64 ',*arg};
+ll_emit_instruction(table,{OpBuildIOList,OpCallEnterExit,_,spinc16,callid,callctr,rleft,rright,*rest})
     match nth(callid,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
-    match ll_emit_call_retpart(callctr,lpart) => prefix,postfix
-    -> {'\t',*prefix,'call x86_regcallcc ',*retname,' @__rw.',*name,'(XXX)',*postfix};
+    -> ll_handle_call('t','t',name,regleft,params_left,regright,type_right,spinc16>>16,callid,int2s36(callctr),rest);
 ll_emit_instruction(_,{_,_,op,*_}) -> {'\tunknown:',*int2s(op)};
 
-split_list(sofar,0,rest) -> sofar,rest;
-split_list(sofar,n,{a,*rest}) -> split_list({*sofar,a},n-1,rest);
+ll_handle_call(c,d,name,regleft,params_left,regright,type_right,spinc,callid,callctr,rest)
+    match ll_ret_type(regright) => retname
+    match ll_get_sizelist(listnv(regleft,999),params_left) => sizeleft
+    match ll_get_sizelist(listnv(regright,999),type_right) => sizeright
+    match ll_emit_call_retpart(c,callctr,spinc,0,sizeright) => rprefix,rpostfix
+    match ll_emit_call_parampart(d,callctr,{},{},rest,sizeleft) => pprefix,ppostfix
+    -> {*pprefix,'\t',*rprefix,'call x86_regcallcc ',*retname,' @__rw.',*name,'(',*ppostfix,'ptr %A)',*rpostfix};
 
-ll_emit_call_retpart(_,{}) -> {},{};
-ll_emit_call_retpart(ctr,{v}) match ll_emit_trunc(ctr,v>>4,v&15) => pre,post -> {*pre,'='},post;
+ll_get_sizelist(outlist,{}) -> outlist;
+ll_get_sizelist(outlist,{{{},_,_},*rest}) -> ll_get_sizelist(outlist,rest);
+ll_get_sizelist(outlist,{{triples,tp,c},*rest}) update ll_get_sizelist_aux(outlist,triples) => outlist -> ll_get_sizelist(outlist,rest);
 
-ll_emit_trunc(ctr,v,4) -> {'%t',*int2s36(v)},{};
-ll_emit_trunc(ctr,v,sz) match int2s36(v),int2s36(ctr) => id,c -> {'%t',*id,'_',*c},{'\n\t%t',*id,'=trunc i64 %t',*id,'_',*c,' to ',*intsize(sz)};
+ll_get_sizelist_aux(outlist,{}) -> outlist;
+ll_get_sizelist_aux(outlist,{{BindReg,dst,sz},*rest}) -> ll_get_sizelist_aux(nth_insert(dst,sz,outlist),rest);
+ll_get_sizelist_aux(outlist,{x,*rest}) -> ll_get_sizelist_aux(outlist,rest);
 
-ll_emit_ret1(v,4) -> {},{'%t',*int2s36(v)};
-ll_emit_ret1(v,sz) -> {'%qt',*int2s36(v),'\tzext ',*intsize(sz),' %t',*int2s36(v),' to i64\n'},{'%qt',*int2s36(v)};
+ll_emit_call_retpart(_,_,_,_,{}) -> {},{};
+ll_emit_call_retpart(c,ctr,spinc,_,{sz}) match ll_emit_trunc(c,ctr,spinc,sz) => pre,post -> {*pre,'='},post;
+ll_emit_call_retpart(c,ctr,spinc,_,sizes) -> {'%z',*ctr,'='},ll_emit_call_retpart_aux({},c,ctr,spinc,sizes);
 
+ll_emit_call_retpart_aux(sofar,c,ctr,spinc,{}) -> sofar;
+ll_emit_call_retpart_aux(sofar,c,ctr,spinc,_) -> sofar;
+
+ll_emit_call_parampart(c,callctr,pprefix,ppostfix,{},{}) -> pprefix,ppostfix;
+ll_emit_call_parampart(c,callctr,pprefix,ppostfix,{v,*vr},{64,*szr}) -> ll_emit_call_parampart(c,callctr,pprefix,{*ppostfix,'i64 %',c,*int2s36(v),','},vr,szr);
+
+ll_emit_trunc(c,ctr,v,64) -> {'%',c,*int2s36(v)},{};
+ll_emit_trunc(c,ctr,v,sz) match int2s36(v) => id -> {'%t',*id,'_',*ctr},{'\n\t%',c,*id,'=trunc i64 %t',*id,'_',*ctr,' to i',*int2s(sz)};
+
+ll_emit_ret1(v,64) -> {},{'%t',*int2s36(v)};
+ll_emit_ret1(v,sz) match int2s36(v) => id -> {'\t%qt',*id,'=zext i',*int2s(sz),' %t',*id,' to i64\n'},{'%qt',*id};
+
+ll_emit_ret(_,_,_) -> {},{};
 
 // {1000000,239,239,262145,0,1,1,1,36})
 
@@ -1283,8 +1309,8 @@ create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{_,_,_,name,
     match create_export_vm_sigc({},0,0,"","*out",right) => n2,sig2
     match create_export_vm_in(types,{},{},0,left,values_left) => incode,inarray
     match create_export_vm_inout0({},reg_count(0,left),reg_count(0,right)) => outarray
-    match callout_enter(0,listnv(reg_left,-2),{},left) => _,cleft,_
-    match callout_enter(0,listnv(reg_right,-2),{},right) => _,cright,_
+    match callout_enter(0,listnv(reg_left,-2),{},left) => cleft,_
+    match callout_enter(0,listnv(reg_right,-2),{},right) => cright,_
     match slice_iolist(8,3,{},{},{*cleft,*cright}) => {first_slice,*slices}
     -> create_export_wrappers_vm(target,types,
         {*sofarc,
@@ -1364,8 +1390,9 @@ create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{_,_,_,name,reg_left,
         '\t%is_initial = icmp eq i32 %status, 0\n',
         '\tbr i1 %is_initial, label %body, label %fail\n',
         'body:\n',
-        '\t%z=call x86_regcallcc %R8 @__rw.',*name,'(',*create_export_ll_params({},inregs2),*output_undef({},reg_left,8),'ptr %A)\n',
+        *ll_handle_call('q','p',name,reg_left,left,reg_right,right,0,fnid,"q",listn(reg_left)),'\n',
         *create_export_ll_post_call(types,{},0,right),
+        //*create_export_wrappers_ll_aux(name,inregs2,reg_left,types,reg_right,right),
         '\tret i32 0\n',
         'fail:\n',
         '\tret i32 %status\n',
@@ -1373,8 +1400,17 @@ create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{_,_,_,name,reg_left,
         {*sofarh,'\nint32_t rw_',*name,'(RWInstance* a',*sigin,*sigout,');\n'},
         fnid+1,rest);
 
+listn(n) -> listn_aux(0,n,{});
+
+listn_aux(n,n,sofar) -> sofar;
+listn_aux(n,m,sofar) -> listn_aux(n+1,m,{*sofar,n});
+
+//create_export_wrappers_ll_aux(name,inregs2,reg_left,types,reg_right,right) ->
+//   {'\t%z=call x86_regcallcc %R8 @__rw.',*name,'(',*create_export_ll_params({},inregs2),*output_undef({},reg_left,8),'ptr %A)\n',
+//   *create_export_ll_post_call(types,{},0,right)};
+
 create_export_ll_sigc_in(sofar,regs,_,{}) -> sofar,regs;
-create_export_ll_sigc_in(sofar,regs,n,{{_,tp,_},*rest}) match {'in',*int2s36(n)} => reg ->
+create_export_ll_sigc_in(sofar,regs,n,{{_,tp,_},*rest}) match {'p',*int2s36(n)} => reg ->
     create_export_ll_sigc_in({*sofar,',',*ll_tp(tp),' %',*reg},{*regs,{reg,tp}},n+1,rest);
 
 create_export_ll_sigc_out(sofar,n,n) -> sofar;
@@ -1385,16 +1421,14 @@ create_export_ll_pre_call(types,code,reglist,{{reg,tp},*rest}) @match nth(tp,typ
 create_export_ll_pre_call(types,code,reglist,{{reg,tp},*rest}) match nth(tp,types) => {_,_,_,{_,sz}} ->
     create_export_ll_pre_call(types,{*code,'\t%x',*reg,'=',z_or_s(tp),'ext i',*int2s(sz),' %',*reg,' to i64\n'},{*reglist,{'x',*reg}},rest);
 
-create_export_ll_params(sofar,{}) -> sofar;
-create_export_ll_params(sofar,{reg,*rest}) -> create_export_ll_params({*sofar,'i64 %',*reg,','},rest);
+//create_export_ll_params(sofar,{}) -> sofar;
+//create_export_ll_params(sofar,{reg,*rest}) -> create_export_ll_params({*sofar,'i64 %',*reg,','},rest);
 
 create_export_ll_post_call(types,code,_,{}) -> code;
 create_export_ll_post_call(types,code,n,{{reg,tp,_},*rest}) @match nth(tp,types) => {_,_,_,{_,64}}
     match int2s36(n) => ni ->
-    create_export_ll_post_call(types,{*code,'\t%eo',*ni,'=extractvalue %R8 %z,',*int2s(n),'\n\tstore i64 %eo',*ni,',ptr %out',*ni,'\n'},n+1,rest);
+    create_export_ll_post_call(types,{*code,'\tstore i64 %q',*ni,',ptr %out',*ni,'\n'},n+1,rest);
 create_export_ll_post_call(types,code,n,{{reg,tp,_},*rest}) match nth(tp,types) => {_,_,_,{_,sz}}
     match int2s36(n) => ni ->
     create_export_ll_post_call(types,{*code,
-        '\t%eo',*ni,'=extractvalue %R8 %z,',*int2s(n),'\n',
-        '\t%et',*ni,'=trunc i64 %eo',*ni,' to i',*int2s(sz),'\n',
-        '\tstore i',*int2s(sz),' %et',*ni,',ptr %out',*ni,'\n'},n+1,rest);
+        '\tstore i',*int2s(sz),' %q',*ni,',ptr %out',*ni,'\n'},n+1,rest);
