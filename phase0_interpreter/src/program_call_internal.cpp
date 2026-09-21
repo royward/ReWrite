@@ -230,10 +230,19 @@ void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& s
             if(!file.is_open()) {
                 throw std::runtime_error("save_text_file: could not open file: " + filename);
             }
-            for(uint32_t i=content_list.offset;i<content_listv.size();i++) {
-                const DataElement& e=content_listv[i];
-                check_type<DataChar>("save_text_file",e);
-                file << std::get<DataChar>(e.value).value;
+            try {
+                for(uint32_t i=content_list.offset;i<content_listv.size();i++) {
+                    const DataElement& e=content_listv[i];
+                    check_type<DataChar>("save_text_file",e);
+                    file << std::get<DataChar>(e.value).value;
+                }
+            } catch (const std::runtime_error& e) {
+                // for(std::size_t i=content_list.offset;i<content_listv.size();i++) {
+                //     if(i!=0)putchar(',');
+                //     std::cout << args.data[i].to_string();
+                //     sofar.data.push_back(args.data[i]);
+                // }
+                throw;
             }
         } break;
         case SaveBinaryFile: {

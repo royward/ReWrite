@@ -1117,7 +1117,7 @@ convert_to_llvm(target,table,symtext,symsz,sofar,{{fnid,code},*rest}) ->
 convert_to_ll_fn(target,table,fnid,code)
     match nth(fnid,table) => {_,_,_,name,reg_count1,bitmask1,type_left,_,reg_count2,bitmask2,type_right,_}
     match ll_emit_param_list(listnv(reg_count1,""),{},type_left) => text_args,args_code
-    -> {'\ndefine private x86_regcallcc ',*ll_ret_type(reg_count2),' @__rw.',*name,'(',*text_args,'ptr %A) {\n',
+    -> {'\ndefine private x86_regcallcc ',*ll_ret_type(reg_count2),' @__rw.',*name,'(',*text_args,'ptr %A) {\n',*ll_add_entry(fnid,args_code),
     *ll_emit_instructions(1,table,{},code),
     // 'exit:\n',
     // *ll_build_epilog1(0,type_right,{}),
@@ -1125,13 +1125,16 @@ convert_to_ll_fn(target,table,fnid,code)
     // *ll_ret(reg_count2),
     '}\n'};
 
+ll_add_entry(_,"") -> "";
+ll_add_entry(fnid,s) -> {'entry:',*s,'\n\tbr label %L',*int2s36(fnid),'\n'};
+
 ll_emit_param_list(text_arg_list,code,{}) -> {**text_arg_list},code;
 ll_emit_param_list(text_arg_list,code,{{storage,_,_},*rest}) -> ll_emit_param_list(ll_emit_param_list_aux(text_arg_list,code,storage),rest);
 
 ll_emit_param_list_aux(text_arg_list,code,{}) -> text_arg_list,code;
-ll_emit_param_list_aux(text_arg_list,code,{{BindReg,reg,64},*rest}) -> ll_emit_param_list_aux(nth_insert(reg,{'i64 %t',*int2s36(reg),','},text_arg_list),code,rest);
-ll_emit_param_list_aux(text_arg_list,code,{{BindReg,reg,sz},*rest}) match int2s36(reg) => rn
-    -> ll_emit_param_list_aux(nth_insert(reg,{'i64 %pt',*rn,','},text_arg_list),{*code,{'\t%ss',*rn,'=trunc i64 %s',*rn,' to i',int2s(sz),'\n'}},rest);
+ll_emit_param_list_aux(text_arg_list,code,{{BindReg,reg,sz},*rest})
+    match ll_emit_trunc('t',reg,sz) => val,code2
+    -> ll_emit_param_list_aux(nth_insert(reg,{'i64 ',*val,','},text_arg_list),{*code,*code2},rest);
 
 ll_ret_type(0) -> "void";
 ll_ret_type(1) -> "i64";
@@ -1168,23 +1171,24 @@ ll_emit_instruction(z,_,{_,_,op,tp,BindReg,dst,flag_src,src,flag_src2,src2}) whe
 //     {'\t%z',*int2s36(off),'=call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,regleft+off),*output_undef({},regleft,8),'ptr %A)'};
 // ll_emit_instruction(z,table,{_,_,OpGotoExit,_,_,label,_,off}) match nth(label,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_} ->
 //     {'\t%z',*int2s36(off),'=musttail call x86_regcallcc %R8 @__rw.',*name,'(',*output_lbls({},off,regleft+off),*output_undef({},regleft,8),'ptr %A)\n\tret %R8 %z',*int2s36(off)};
-// //ll_emit_instruction(z,_,{_,_,OpError,_,0,code,_,line,_,sym}) ->
-// //    {'\tcall void @__rw__error(ptr %A,i32 ',*int2s(code),',i32 ',*int2s(line),',i32 ',*int2s(sym),',ptr @.fn.syms)\n\tunreachable'};
+ll_emit_instruction(z,_,{_,_,OpError,_,0,code,_,line,_,sym}) ->
+    z,{'\tcall void @__rw__error(ptr %A,i32 ',*int2s(code),',i32 ',*int2s(line),',i32 ',*int2s(sym),',ptr @.fn.syms)\n\tunreachable'};
 // //ll_emit_instruction(z,_,{_,_,OpLLAlloc,_,_,dst}) -> {'\t%x','0'+dst,'=alloca i64'};
 // //ll_emit_instruction(z,_,{_,_,OpLLStore,tp,_,dst}) @match ll_tp(tp) => "i64" -> {'\tstore i64 %s','0'+dst,',ptr %x','0'+dst};
 // //ll_emit_instruction(z,_,{_,_,OpLLStore,tp,_,dst}) -> {'\t%ss','0'+dst,'=trunc i64 %s','0'+dst,' to ',*ll_tp(tp),'\n\tstore ',*ll_tp(tp),' %ss','0'+dst,',ptr %x','0'+dst};
 ll_emit_instruction(z,_,{OpBuildIOList,0,*_}) -> z,"";
-ll_emit_instruction(z,_,{OpBuildIOList,OpRetExit,_,_,_,0}) -> z,"ret void";
+ll_emit_instruction(z,_,{OpBuildIOList,OpRetExit,_,_,0}) -> z,"\tret void";
 ll_emit_instruction(z,table,{OpBuildIOList,OpRetExit,fnid16,_,1,v})
     match nth(fnid16>>16,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
     match ll_get_sizelist(listnv(regright,999),type_right) => {sz}
-    match ll_emit_ret1(v,sz) => code,arg
+    match ll_emit_zext('t',v,sz) => code,arg
     -> z,{*code,'\tret i64 ',*arg};
 ll_emit_instruction(z,table,{OpBuildIOList,OpRetExit,fnid16,_,_,*rest})
     match nth(fnid16>>16,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
+    match ll_ret_type(regright) => retname
     match ll_get_sizelist(listnv(regright,999),type_right) => sizes
-    match ll_emit_ret({},rest,sizes) => code,arg
-    -> z,{*code,'\tret i64 ',*arg};
+    match ll_emit_ret(retname,0,{},int2s36(z),rest,sizes) => code
+    -> z+1,{*code,'\tret ',*retname,' %m',*int2s36(regright-1),'_',*int2s36(z)};
 ll_emit_instruction(z,table,{OpBuildIOList,OpCallEnterExit,_,spinc16,callid,rleft,rright,*rest})
     match nth(callid,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
     -> z+1,ll_handle_call('t','t',name,regleft,params_left,regright,type_right,spinc16>>16,callid,int2s36(z),rest);
@@ -1194,7 +1198,7 @@ ll_handle_call(c,d,name,regleft,params_left,regright,type_right,spinc,callid,cal
     match ll_ret_type(regright) => retname
     match ll_get_sizelist(listnv(regleft,999),params_left) => sizeleft
     match ll_get_sizelist(listnv(regright,999),type_right) => sizeright
-    match ll_emit_call_retpart(c,callctr,spinc,0,sizeright) => rprefix,rpostfix
+    match ll_emit_call_retpart(retname,c,callctr,spinc,0,sizeright) => rprefix,rpostfix
     match ll_emit_call_parampart(d,callctr,{},{},rest,sizeleft) => pprefix,ppostfix
     -> {*pprefix,'\t',*rprefix,'call x86_regcallcc ',*retname,' @__rw.',*name,'(',*ppostfix,'ptr %A)',*rpostfix};
 
@@ -1206,25 +1210,33 @@ ll_get_sizelist_aux(outlist,{}) -> outlist;
 ll_get_sizelist_aux(outlist,{{BindReg,dst,sz},*rest}) -> ll_get_sizelist_aux(nth_insert(dst,sz,outlist),rest);
 ll_get_sizelist_aux(outlist,{x,*rest}) -> ll_get_sizelist_aux(outlist,rest);
 
-ll_emit_call_retpart(_,_,_,_,{}) -> {},{};
-ll_emit_call_retpart(c,ctr,spinc,_,{sz}) match ll_emit_trunc(c,ctr,spinc,sz) => pre,post -> {*pre,'='},post;
-ll_emit_call_retpart(c,ctr,spinc,_,sizes) -> {'%z',*ctr,'='},ll_emit_call_retpart_aux({},c,ctr,spinc,sizes);
+ll_emit_call_retpart(_,_,_,_,_,{}) -> {},{};
+ll_emit_call_retpart(_,c,ctr,spinc,_,{sz}) match ll_emit_trunc(c,spinc,sz) => pre,post -> {*pre,'='},post;
+ll_emit_call_retpart(rettype,c,ctr,spinc,_,sizes) -> {'%z',*ctr,'='},ll_emit_call_retpart_aux(rettype,{},c,ctr,0,spinc,sizes);
 
-ll_emit_call_retpart_aux(sofar,c,ctr,spinc,{}) -> sofar;
-ll_emit_call_retpart_aux(sofar,c,ctr,spinc,_) -> sofar;
+ll_emit_call_retpart_aux(rettype,sofar,c,ctr,n,spinc,{}) -> sofar;
+ll_emit_call_retpart_aux(rettype,sofar,c,ctr,n,spinc,{sz,*rest})
+    match ll_emit_trunc(c,spinc+n,sz) => val,code
+    -> ll_emit_call_retpart_aux(rettype,{*sofar,'\n\t',*val,'=extractvalue ',*rettype,' %z',*ctr,',',*int2s(n),*code},c,ctr,n+1,spinc,rest);
 
 ll_emit_call_parampart(c,callctr,pprefix,ppostfix,{},{}) -> pprefix,ppostfix;
-ll_emit_call_parampart(c,callctr,pprefix,ppostfix,{v,*vr},{64,*szr}) -> ll_emit_call_parampart(c,callctr,pprefix,{*ppostfix,'i64 %',c,*int2s36(v),','},vr,szr);
+ll_emit_call_parampart(c,callctr,pprefix,ppostfix,{v,*vr},{sz,*szr})
+    match ll_emit_zext(c,v,sz) => code,val
+    -> ll_emit_call_parampart(c,callctr,{*pprefix,*code},{*ppostfix,'i64 ',*val,','},vr,szr);
 
-ll_emit_trunc(c,ctr,v,64) -> {'%',c,*int2s36(v)},{};
-ll_emit_trunc(c,ctr,v,sz) match int2s36(v) => id -> {'%t',*id,'_',*ctr},{'\n\t%',c,*id,'=trunc i64 %t',*id,'_',*ctr,' to i',*int2s(sz)};
+ll_emit_trunc(c,v,64) -> {'%',c,*int2s36(v)},{};
+ll_emit_trunc(c,v,sz) match int2s36(v) => id -> {'%y',c,*id},{'\n\t%',c,*id,'=trunc i64 %y',c,*id,' to i',*int2s(sz)};
 
-ll_emit_ret1(v,64) -> {},{'%t',*int2s36(v)};
-ll_emit_ret1(v,sz) match int2s36(v) => id -> {'\t%qt',*id,'=zext i',*int2s(sz),' %t',*id,' to i64\n'},{'%qt',*id};
+ll_emit_zext(c,v,64) -> {},{'%',c,*int2s36(v)};
+ll_emit_zext(c,v,sz) match int2s36(v) => id -> {'\t%q',c,*id,'=zext i',*int2s(sz),' %',c,*id,' to i64\n'},{'%q',c,*id};
 
-ll_emit_ret(_,_,_) -> {},{};
+ll_emit_ret(typename,n,sofar,_,{},{}) -> sofar;
+ll_emit_ret(typename,n,sofar,z,{v,*rv},{sz,*rsz})
+    match ll_emit_zext('t',v,sz) => code,arg
+    -> ll_emit_ret(typename,n+1,{*sofar,*code,'\t%m',*int2s36(n),'_',*z,'=insertvalue ',*typename,' ',*ll_lastp(n,z),',i64 ',*arg,',',*int2s(n),'\n'},z,rv,rsz);
 
-// {1000000,239,239,262145,0,1,1,1,36})
+ll_lastp(0,_) -> "undef";
+ll_lastp(n,z) -> {'%m',*int2s36(n-1),'_',*z};
 
 // ll_build_epilog1(n,{},sofar) -> sofar;
 // ll_build_epilog1(i,{{_,tp,_},*rest},sofar) -> ll_build_epilog1(i+1,rest,{*sofar,'\t%p','0'+i,'=load ',*ll_tp(tp),',ptr %x','0'+i,'\n'});
@@ -1235,8 +1247,6 @@ ll_emit_ret(_,_,_) -> {},{};
 //     '\t%pp','0'+i,'=zext ',*ll_tp(tp),' %p','0'+i,' to i64\n',
 //     '\t%m','0'+i,'=insertvalue %R8 ',*ll_lastp(i),',i64 %pp','0'+i,',','0'+i,'\n'});
 //
-// ll_lastp(0) -> "undef";
-// ll_lastp(i) -> {'%m','0'+i-1};
 //
 // ll_ret(0) -> {'\tret %R8 undef\n'};
 // ll_ret(n) -> {'\tret %R8 %m','0'+n-1,'\n'};
