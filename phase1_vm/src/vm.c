@@ -10,8 +10,6 @@
 #define OP_LABEL 0x01
 #define OP_ERROR 0x02
 #define OP_RET_EXIT 0x05
-#define OP_LLALLOC 0x0E
-#define OP_STORE 0x0F
 #define OP_MOVE 0x10
 #define OP_PLUS 0x18
 #define OP_MINUS 0x19
@@ -20,10 +18,8 @@
 #define OP_MODULUS 0x1C
 #define OP_LT 0x1D
 #define OP_LTE 0x1E
-#define OP_INSERT_LL 0x20
 #define OP_LEA 0x28
 #define OP_LEA_SCALE 0x29
-#define OP_EXTRACT_LL 0x30
 #define OP_UNARY_MINUS 0x38
 #define OP_EQUAL 0x40
 #define OP_NOT_EQUAL 0x48
@@ -289,12 +285,6 @@ void program_disassemble(Program* program, FILE* out) {
             case OP_LABEL: {
                 fprintf(out,"label %d",operation->fdst.a);
             } break;
-            case OP_LLALLOC: {
-                fprintf(out,"ll_alloc %d",operation->fdst.a);
-            } break;
-            case OP_STORE: {
-                fprintf(out,"ll_store.%s %d",display_type(operation->type),operation->fdst.a);
-            } break;
             case OP_ERROR: {
                 fprintf(out,"error type:");
                 display_operand(out,operation->flags_dst,operation->dst);
@@ -408,22 +398,6 @@ void program_disassemble(Program* program, FILE* out) {
                 fprintf(out," = ");
                 display_operand(out,operation->flags_src.a,operation->src1);
             } break;
-            case OP_INSERT_LL: case OP_INSERT_LL+1: case OP_INSERT_LL+2: case OP_INSERT_LL+3: case OP_INSERT_LL+4: {
-                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
-                fprintf(out,"insert.%d ",sz);
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out," = ");
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out," (o=%d)",(uint32_t)operation->src2);
-            } break;
-            case OP_EXTRACT_LL: case OP_EXTRACT_LL+1: case OP_EXTRACT_LL+2: case OP_EXTRACT_LL+3: case OP_EXTRACT_LL+4: {
-                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
-                fprintf(out,"extract.%d ",sz);
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out," = ");
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out," (o=%d)",(uint32_t)operation->src2);
-            } break;
             case OP_CMP_NE_BRANCH: case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 fprintf(out,"test.%d ",sz);
@@ -496,8 +470,6 @@ void program_disassemble(Program* program, FILE* out) {
         fprintf(out,"\n");
     }
 }
-
-//            ((uint64_t*)exe->registers[0])[operation->fdst.a]=value;
 
 void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32_t sz, uint32_t sp) {
     switch(operation->flags_dst&0xF) {
@@ -595,11 +567,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
         switch(op) {
             case OP_LABEL: {
             } break;
-            case OP_LLALLOC:
-            case OP_STORE: {
-                // NOP
-            } break;
-            case OP_ERROR: {
+             case OP_ERROR: {
                 exe->errtype=operand_load(exe, 64, operation->flags_dst, operation->fdst.a, sp);
                 exe->errline=operation->src1;
                 exe->errsym=program->symbols+operation->src2;
@@ -742,13 +710,11 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_DEREF_FREE: {
                 deref_free(exe,operand_load(exe, 64, operation->flags_src.a, operation->src1, sp));
             } break;
-            case OP_MOVE: case OP_INSERT_LL: case OP_EXTRACT_LL: {
+            case OP_MOVE: {
                 uint64_t val = operand_load(exe, 1, operation->flags_src.a, operation->src1, sp);
                 operand_store(exe, operation, val, 1, sp);
             }
-            case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4:
-            case OP_INSERT_LL+1: case OP_INSERT_LL+2: case OP_INSERT_LL+3: case OP_INSERT_LL+4:
-            case OP_EXTRACT_LL+1: case OP_EXTRACT_LL+2: case OP_EXTRACT_LL+3: case OP_EXTRACT_LL+4: {
+            case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
                 uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
                 uint64_t val = operand_load(exe, sz, operation->flags_src.a, operation->src1, sp);
                 operand_store(exe, operation, val, sz, sp);
