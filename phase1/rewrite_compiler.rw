@@ -592,12 +592,8 @@ compile1(target,types,outfile,label_id,_,table,symtext,symsz,sofar,{})
     save_c_header(target,outfile,wrapperh);
 compile1(target,types,outfile,label_id,n,table,symtext,symsz,sofar,{rules,*rest})
     match nth(n,table) => {_,_,_,name,reg_count1,bitmask1,type_left,regs_left,reg_count2,bitmask2,type_right,_}
-    //update callout_enter(0,listnv(reg_count1,-2),{},type_left) => reg_count,outlist,type_left
-    //match slice_iolist(reg_count,6,{},{},{*outlist,-1}) => {first_slice,*slices}
     update compile_function(types,target,reg_count1,true,label_id,n,table,0,
-        {{n,0,OpLabel,0,0,n}
-        //,{n,0,OpEnter,0,0,reg_count1}
-        },
+        {{n,0,OpLabel,0,0,n}},
         rules,0,bitmask_or({},bitmask1,bitmask2),reg_count1,type_left,reg_count2,type_right) => label_id,code
     -> compile1(target,types,outfile,label_id,n+1,table,symtext,symsz,{*sofar,{n,code}},rest);
 
@@ -613,13 +609,14 @@ text_to_byte(sofar,{c,*rest}) -> text_to_byte({*sofar,c-'\0'},rest);
 code_length(n,{}) -> n;
 code_length(n,{{_,a},*rest}) -> code_length(n+length(a),rest);
 
+// TODO remove bitmask
 compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofar,{},_,_,_,_,_,_)
     match nth(fn_id,table) => {_,fnlineno,symoffset,_,reg_count1,bitmask1,type_left,_,reg_count2,bitmask2,type_right,_} ->
     label_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpError,0,BindImm,ErrNoMatch,0,fnlineno,0,symoffset}})};
 compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,regs_left,type_left,regs_right,type_right)
     match rule => {linerule,bindings,params,clauses,exprs}
     update calc_counts(table,bindings,params,clauses,exprs) => params,clauses,exprs
-    update compile_rule(target,types,linerule,{target,0,true,0,label_id,fn_id,rule_id,linerule,create_compiler_bindings({},bindings),reg_count,bitmask,{},table},{},params,clauses,exprs,regs_left,type_left,regs_right,type_right) => reg_count,active,oldlblnext,label_id,code
+    update compile_rule(target,types,linerule,{target,0,true,0,label_id,fn_id,rule_id,linerule,create_compiler_bindings({},bindings),reg_count,table},{},params,clauses,exprs,regs_left,type_left,regs_right,type_right) => reg_count,active,oldlblnext,label_id,code
     update {*sofar,*code,*code_or_not(active,{{fn_id,rule_id,OpLabel,0,0,oldlblnext}})} => code
     update compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id+1,code,rest,dummy,bitmask,regs_left,type_left,regs_right,type_right) => label_id,code
     -> label_id,code;
@@ -627,29 +624,27 @@ compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofa
 create_compiler_bindings(sofar,{}) -> sofar;
 create_compiler_bindings(sofar,{{n,ref},*rest}) -> create_compiler_bindings({*sofar,{0,0,{},n}},rest);
 
-ctx_fnr({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table}) -> fn_id,rule_id;
-ctx_linerule({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table}) -> linerule;
-ctx_lbl({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table}) -> label_id;
-ctx_bindings({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table}) -> bindings;
-ctx_newbindings({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table},newbindings) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,newbindings,reg_count,bitmask,bind_rhs,table};
-ctx_get_reg_count({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table}) -> reg_count;
-ctx_put_reg_count({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,_,bitmask,bind_rhs,table},new_reg_count) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,new_reg_count,bitmask,bind_rhs,table};
-//ctx_get_bitmask({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table}) -> bitmask;
-ctx_newreg({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table},sz) ->
-    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count+1,bitmask,bind_rhs,table},reg_count;
-//ctx_get_bind_rhs({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table}) -> bind_rhs;
-ctx_get_fn_sig({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table},n) -> nth(n,table);
-ctx_set_tail({target,_,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table},tailcall) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table};
-ctx_get_tail({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table}) -> tailcall;
-ctx_get_lblnext({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table}) -> lblnext;
-ctx_set_lblnext({target,tailcall,active,_,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table},lblnext) ->
-    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table};
-ctx_get_lbl_stuff({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table}) -> target,active,lblnext,label_id;
-ctx_get_lbl_active({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table}) -> active;
-ctx_set_label_id({target,tailcall,active,lblnext,_,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table},label_id) ->
-    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table};
-ctx_update_label_id({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table}) ->
-    {target,tailcall,active,lblnext,label_id+1,fn_id,rule_id,linerule,bindings,reg_count,bitmask,bind_rhs,table};
+ctx_fnr({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> fn_id,rule_id;
+ctx_linerule({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> linerule;
+ctx_lbl({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> label_id;
+ctx_bindings({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> bindings;
+ctx_newbindings({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table},newbindings) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,newbindings,reg_count,table};
+ctx_get_reg_count({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> reg_count;
+ctx_put_reg_count({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,_,table},new_reg_count) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,new_reg_count,table};
+ctx_newreg({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table},sz) ->
+    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count+1,table},reg_count;
+ctx_get_fn_sig({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table},n) -> nth(n,table);
+ctx_set_tail({target,_,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table},tailcall) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table};
+ctx_get_tail({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> tailcall;
+ctx_get_lblnext({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> lblnext;
+ctx_set_lblnext({target,tailcall,active,_,label_id,fn_id,rule_id,linerule,bindings,reg_count,table},lblnext) ->
+    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table};
+ctx_get_lbl_stuff({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> target,active,lblnext,label_id;
+ctx_get_lbl_active({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> active;
+ctx_set_label_id({target,tailcall,active,lblnext,_,fn_id,rule_id,linerule,bindings,reg_count,table},label_id) ->
+    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table};
+ctx_update_label_id({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) ->
+    {target,tailcall,active,lblnext,label_id+1,fn_id,rule_id,linerule,bindings,reg_count,table};
 
 // TODO expand this to deal properly with types. Just scalars and lists of scalars for now
 gen_types_deref_free(false,_,_,_,_) -> {};
