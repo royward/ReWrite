@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct { uint32_t a, b; } fparts64;
 
@@ -74,7 +75,8 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size);
 void deref_free(RWInstance* exe, uint64_t p);
 
 static inline uint32_t* rwu_get_header(RWInstance* a, uint32_t x) {return (uint32_t*)(a->heap8+x);}
-static inline void* rwu_get_data(uint32_t* header, uint32_t start) {return (void*)(header+4+start);}
+static inline void* rwu_get_data(uint32_t* header) {return (void*)(header+4);}
+static inline void* rwu_get_header_data(RWInstance* a, uint32_t x, uint32_t start) {return (void*)(rwu_get_header(a,x)+4+start);}
 static inline uint32_t rwu_get_len(uint32_t* header, uint32_t start) {return (header[2]-start);}
 static inline void rwu_set_len(RWInstance* a, uint32_t alloc, uint32_t val) {rwu_get_header(a,alloc)[2]=val;}
 

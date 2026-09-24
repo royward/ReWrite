@@ -11,7 +11,7 @@ f() -> 0,{'ab',g()},"test";
 :- export h(value string, value string, i64) -> value string, char;
 h(s,{_,a,'x'},0) -> s,a;
 
-:- export cdr(value string) -> value string;
+:- export cdr(value [i64]) -> value [i64];
 cdr({a,*rest}) -> rest;
 
 :- export car(value string) -> char;
@@ -21,13 +21,13 @@ car({a,*rest}) -> a;
 len("") -> 0;
 len({a,*rest}) -> len(rest)+1;
 
-:- export member(char, value string) -> bool;
+:- export member(i64, value [i64]) -> bool;
 member(_,{}) -> false;
 member(x,{x,*_}) -> true;
 member(x,{_,*rest}) -> member(x,rest);
 
 :- temp() -> bool;
-temp() -> member('a',"abc");
+temp() -> member(2,{1,2,3});
 
 :- export listn2(i64) -> value string;
 listn2(n) -> listn_aux(0,n,{});

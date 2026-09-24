@@ -258,52 +258,57 @@ get_add_symbol_table(n,sofar,{{key,val},*rest},key,false) -> {*sofar,{key,val},*
 get_add_symbol_table(n,sofar,{{key,val},*rest},key,val) -> {*sofar,{key,val},*rest},n;
 get_add_symbol_table(n,sofar,{x,*rest},key,val) -> get_add_symbol_table(n+1,{*sofar,x},rest,key,val);
 
-parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{}) -> rules,fnnames,symtext,symsz,types;
-parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{{linerule,_,Identifier,name},{_,_,LParen,_},*rest})
+parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{}) -> rules,fnnames,symtext,symsz,types;
+parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{linerule,_,Identifier,name},{_,_,LParen,_},*rest})
     update get_add_symbol_table(0,{},fnnames,name,false) => fnnames,fn_id
     update parse_params(consts,{},{},rest) => bindings,params,{{_,_,RParen,_},*rest}
     update parse_function_match_clauses(consts,{},fnnames,bindings,Arrow,rest) => clauses,fnnames,bindings,rest
     update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,exprs,{{_,_,Semicolon,_},*rest}
-    -> parse_aux(target,add_rule({},rules,fn_id,{linerule+1,bindings,{0,{},params},clauses,exprs}),fnnames,symtext,symsz,consts,types,types_lookup,rest);
-parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{{fnlineno,_,TypeFn,_},{_,_,Identifier,name},{_,_,LParen,_},*rest})
-    update parse_types(true,false,{},{},RParen,types,types_lookup,rest) => types_lhs,value_lhs,rest,types,types_lookup
+    -> parse_aux(target,add_rule({},rules,fn_id,{linerule+1,bindings,{0,{},params},clauses,exprs}),fnnames,symtext,symsz,consts,types,type_lookup,rest);
+parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{fnlineno,_,TypeFn,_},{_,_,Identifier,name},{_,_,LParen,_},*rest})
+    update parse_types(true,false,{},{},RParen,types,type_lookup,rest) => types_lhs,value_lhs,rest,types,type_lookup
     update rest => {{_,_,Arrow,_},*rest}
-    update parse_types(true,false,{},{},Semicolon,types,types_lookup,rest) => types_rhs,value_rhs,rest,types,types_lookup
+    update parse_types(true,false,{},{},Semicolon,types,type_lookup,rest) => types_rhs,value_rhs,rest,types,type_lookup
     update get_add_symbol_table(0,{},fnnames,name,{false,fnlineno+1,symsz,types_lhs,types_rhs,value_lhs,value_rhs}) => fnnames,_ ->
-    parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,types_lookup,rest);
-parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{{fnlineno,_,TypeFn,_},{_,_,Export,_},{_,_,Identifier,name},{_,_,LParen,_},*rest})
-    update parse_types(true,false,{},{},RParen,types,types_lookup,rest) => types_lhs,value_lhs,rest,types,types_lookup
+    parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,type_lookup,rest);
+parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{fnlineno,_,TypeFn,_},{_,_,Export,_},{_,_,Identifier,name},{_,_,LParen,_},*rest})
+    update parse_types(true,false,{},{},RParen,types,type_lookup,rest) => types_lhs,value_lhs,rest,types,type_lookup
     update rest => {{_,_,Arrow,_},*rest}
-    update parse_types(true,false,{},{},Semicolon,types,types_lookup,rest) => types_rhs,value_rhs,rest,types,types_lookup
+    update parse_types(true,false,{},{},Semicolon,types,type_lookup,rest) => types_rhs,value_rhs,rest,types,type_lookup
     update get_add_symbol_table(0,{},fnnames,name,{true,fnlineno+1,symsz,types_lhs,types_rhs,value_lhs,value_rhs}) => fnnames,_ ->
-    parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,types_lookup,rest);
-parse_aux(target,rules,fnnames,symtext,symsz,consts,types,types_lookup,{{_,_,ConstToken,_},{_,_,Identifier,name},{_,_,Equal,_},{_,_,Integer,val},{_,_,Semicolon,_},*rest}) ->
-    parse_aux(target,rules,fnnames,symtext,symsz,add_symbol_table({},consts,name,string_to_int_pos(val,0)),types,types_lookup,rest);
+    parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,type_lookup,rest);
+parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,_,ConstToken,_},{_,_,Identifier,name},{_,_,Equal,_},{_,_,Integer,val},{_,_,Semicolon,_},*rest}) ->
+    parse_aux(target,rules,fnnames,symtext,symsz,add_symbol_table({},consts,name,string_to_int_pos(val,0)),types,type_lookup,rest);
 
 add_symtext(TargetVM,symtext,symsz,name) -> {*symtext,*name,'\0'},symsz+length(name)+1;
 add_symtext(TargetVMLL,symtext,symsz,name) -> {*symtext,*name,'\0'},symsz+length(name)+1;
 add_symtext(_,symtext,symsz,name) -> {*symtext,*name,'\\00'},symsz+length(name)+1;
 
-parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,{{_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,types_lookup;
-parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,{{_,_,Identifier,_},{_,_,Colon,_},*rest}) -> parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,rest);
-parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,{{_,_,Identifier,"value"},*rest}) -> parse_types(top,true,sofar,sfval,endtok,types,types_lookup,rest);
-parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,{{_,_,Identifier,tp},*rest}) match lookup_symbol_table(types_lookup,tp) => true,convert ->
-    parse_types1(top,{*sofar,convert},{*sfval,isval},endtok,types,types_lookup,rest);
-parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,{{_,_,LBracket,_},*rest})
-    update parse_types(false,false,{},{},RBracket,types,types_lookup,rest) => {this_type},_,rest,types,types_lookup
-    update create_type_list(this_type,types,types_lookup) => newtp,types,types_lookup ->
-    parse_types1(top,{*sofar,newtp},{*sfval,isval},endtok,types,types_lookup,rest);
-//parse_types(top,isval,sofar,sfval,endtok,types,types_lookup,{{_,_,LBrace,_},*rest}) match parse_types(top,isval,{},sfval,RBrace,types,types_lookup,rest) => inside,rest,types,types_lookup ->
-//    parse_types1(top,{*sofar,{true,inside}},{*sfval,isval},endtok,types,types_lookup,rest);
+parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,type_lookup;
+parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,Identifier,_},{_,_,Colon,_},*rest}) -> parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,rest);
+parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,Identifier,"value"},*rest}) -> parse_types(top,true,sofar,sfval,endtok,types,type_lookup,rest);
+parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,Identifier,tp},*rest}) match lookup_symbol_table(type_lookup,tp) => true,convert ->
+    parse_types1(top,{*sofar,convert},{*sfval,isval},endtok,types,type_lookup,rest);
+parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,LBracket,_},*rest})
+    update parse_types(false,false,{},{},RBracket,types,type_lookup,rest) => {this_type},_,rest,types,type_lookup
+    update create_type_list(this_type,types,type_lookup) => newtp,types,type_lookup ->
+    parse_types1(top,{*sofar,newtp},{*sfval,isval},endtok,types,type_lookup,rest);
+//parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,LBrace,_},*rest}) match parse_types(top,isval,{},sfval,RBrace,types,type_lookup,rest) => inside,rest,types,type_lookup ->
+//    parse_types1(top,{*sofar,{true,inside}},{*sfval,isval},endtok,types,type_lookup,rest);
 
-create_type_list(elt_typeid,types,types_lookup)
+create_type_list(elt_typeid,types,type_lookup)
     match nth(elt_typeid,types) => {elt_name,_,ent_type,_}
     match {'L_',*elt_name} => name
-    match length(types) => len ->
-    len,{*types,{name,false,{DerivedTypeArray,elt_typeid},{0,32,0,32}}},{*types_lookup,{name,len}};
+    match {DerivedTypeArray,elt_typeid},{0,32,0,32} => def1,def2
+    -> check_add_type(0,name,def1,def2,type_lookup,{},types);
 
-parse_types1(top,sofar,sfval,endtok,types,types_lookup,{{_,_,Comma,_},*rest}) -> parse_types(top,false,sofar,sfval,endtok,types,types_lookup,rest);
-parse_types1(top,sofar,sfval,endtok,types,types_lookup,{{_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,types_lookup; // deal with no trailing comma
+check_add_type(n,name,def1,def2,type_lookup,sofar,{}) -> length(sofar),{*sofar,{name,false,def1,def2}},{*type_lookup,{name,length(sofar)}};
+check_add_type(n,name,def1,def2,type_lookup,sofar,{{name,b,def1,def2},*rest}) -> n,{*sofar,{name,b,def1,def2},*rest},type_lookup;
+check_add_type(n,name,def1,def2,type_lookup,sofar,{{name,b,_},*rest}) -> #error(5); // names match, but not types
+check_add_type(n,name,def1,def2,type_lookup,sofar,{x,*rest}) -> check_add_type(n+1,name,def1,def2,type_lookup,{*sofar,x},rest);
+
+parse_types1(top,sofar,sfval,endtok,types,type_lookup,{{_,_,Comma,_},*rest}) -> parse_types(top,false,sofar,sfval,endtok,types,type_lookup,rest);
+parse_types1(top,sofar,sfval,endtok,types,type_lookup,{{_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,type_lookup; // deal with no trailing comma
 
 add_rule(sofar,{},n,x) -> add_rule(sofar,{{}},n,x);
 add_rule(sofar,{r,*rest},0,x) -> {*sofar,{*r,x},*rest};
@@ -582,21 +587,21 @@ calc_counts_clause_map_rev(types,counts,{{upd_flag,decline,{_,_,params},exprs},*
     update calc_counts_expr_map_rev(types,true,counts,exprs) => counts,exprs
     -> next_maydecline,counts,{{upd_flag,decline,{pf1,pf2,params},exprs},*rest};
 
-compile1(TargetVM,types,outfile,label_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVM,types,outfile,label_id,table,symtext,sofar);
-compile1(TargetVMLL,types,outfile,label_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVMLL,types,outfile,label_id,table,symtext,sofar);
-compile1(target,types,outfile,label_id,_,table,symtext,symsz,sofar,{})
-    match create_export_wrappers_ll(target,types,{},{},label_id,table) => wrapper_code,wrapperh ->
+compile1(TargetVM,types,outfile,lbl_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVM,types,outfile,lbl_id,table,symtext,sofar);
+compile1(TargetVMLL,types,outfile,lbl_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVMLL,types,outfile,lbl_id,table,symtext,sofar);
+compile1(target,types,outfile,lbl_id,_,table,symtext,symsz,sofar,{})
+    match create_export_wrappers_ll(target,types,{},{},lbl_id,table) => wrapper_code,wrapperh ->
     save_text_file({*outfile,'.ll'},{*convert_to_llvm(target,table,symtext,symsz,{},sofar),*wrapper_code,*ll_boilerplate_end()}),
     save_c_header(target,outfile,wrapperh);
-compile1(target,types,outfile,label_id,n,table,symtext,symsz,sofar,{rules,*rest})
+compile1(target,types,outfile,lbl_id,n,table,symtext,symsz,sofar,{rules,*rest})
     match nth(n,table) => {_,_,_,name,reg_count1,bitmask1,type_left,regs_left,reg_count2,bitmask2,type_right,_}
-    update compile_function(types,target,reg_count1,true,label_id,n,table,0,
+    update compile_function(types,target,reg_count1,true,lbl_id,n,table,0,
         {{n,0,OpLabel,0,0,n}},
-        rules,0,bitmask_or({},bitmask1,bitmask2),reg_count1,type_left,reg_count2,type_right) => label_id,code
-    -> compile1(target,types,outfile,label_id,n+1,table,symtext,symsz,{*sofar,{n,code}},rest);
+        rules,0,bitmask_or({},bitmask1,bitmask2),reg_count1,type_left,reg_count2,type_right) => lbl_id,code
+    -> compile1(target,types,outfile,lbl_id,n+1,table,symtext,symsz,{*sofar,{n,code}},rest);
 
-compile1_vm(target,types,outfile,label_id,table,symtext,sofar)
-    match create_export_wrappers_vm(target,types,{},{},0,label_id,table) => wrapper_code,wrapperh
+compile1_vm(target,types,outfile,lbl_id,table,symtext,sofar)
+    match create_export_wrappers_vm(target,types,{},{},0,lbl_id,table) => wrapper_code,wrapperh
     match {*sofar,*wrapper_code} => vmcode
     -> save_c_header(target,outfile,wrapperh),
     save_binary_file({*outfile,'.rwo'},{*convert_to_binary({*emitb(28,0),*emitb(4,code_length(0,vmcode)+1)},vmcode),*text_to_byte({},symtext)});
@@ -608,41 +613,41 @@ code_length(n,{}) -> n;
 code_length(n,{{_,a},*rest}) -> code_length(n+length(a),rest);
 
 // TODO remove bitmask
-compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofar,{},_,_,_,_,_,_)
+compile_function(types,target,reg_count,active,lbl_id,fn_id,table,rule_id,sofar,{},_,_,_,_,_,_)
     match nth(fn_id,table) => {_,fnlineno,symoffset,_,reg_count1,bitmask1,type_left,_,reg_count2,bitmask2,type_right,_} ->
-    label_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpError,0,BindImm,ErrNoMatch,0,fnlineno,0,symoffset}})};
-compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,regs_left,type_left,regs_right,type_right)
+    lbl_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpError,0,BindImm,ErrNoMatch,0,fnlineno,0,symoffset}})};
+compile_function(types,target,reg_count,active,lbl_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,regs_left,type_left,regs_right,type_right)
     match rule => {linerule,bindings,params,clauses,exprs}
     update calc_counts(table,bindings,params,clauses,exprs) => params,clauses,exprs
-    update compile_rule(target,types,linerule,{target,0,true,0,label_id,fn_id,rule_id,linerule,create_compiler_bindings({},bindings),reg_count,table},{},params,clauses,exprs,regs_left,type_left,regs_right,type_right) => reg_count,active,oldlblnext,label_id,code
-    update {*sofar,*code,*code_or_not(active,{{fn_id,rule_id,OpLabel,0,0,oldlblnext}})} => code
-    update compile_function(types,target,reg_count,active,label_id,fn_id,table,rule_id+1,code,rest,dummy,bitmask,regs_left,type_left,regs_right,type_right) => label_id,code
-    -> label_id,code;
+    update compile_rule(target,types,linerule,{target,0,active,0,lbl_id,fn_id,rule_id,linerule,create_compiler_bindings({},bindings),reg_count,table},{},params,clauses,exprs,regs_left,type_left,regs_right,type_right) => reg_count,active,oldlbl_decline,lbl_id,code
+    update {*sofar,*code,*code_or_not(active,{{fn_id,rule_id,OpLabel,0,0,oldlbl_decline}})} => code
+    update compile_function(types,target,reg_count,active,lbl_id,fn_id,table,rule_id+1,code,rest,dummy,bitmask,regs_left,type_left,regs_right,type_right) => lbl_id,code
+    -> lbl_id,code;
 
 create_compiler_bindings(sofar,{}) -> sofar;
 create_compiler_bindings(sofar,{{n,ref},*rest}) -> create_compiler_bindings({*sofar,{0,0,{},n}},rest);
 
-ctx_fnr({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> fn_id,rule_id;
-ctx_linerule({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> linerule;
-ctx_lbl({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> label_id;
-ctx_bindings({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> bindings;
-ctx_newbindings({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table},newbindings) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,newbindings,reg_count,table};
-ctx_get_reg_count({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> reg_count;
-ctx_put_reg_count({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,_,table},new_reg_count) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,new_reg_count,table};
-ctx_newreg({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table},sz) ->
-    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count+1,table},reg_count;
-ctx_get_fn_sig({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table},n) -> nth(n,table);
-ctx_set_tail({target,_,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table},tailcall) -> {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table};
-ctx_get_tail({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> tailcall;
-ctx_get_lblnext({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> lblnext;
-ctx_set_lblnext({target,tailcall,active,_,label_id,fn_id,rule_id,linerule,bindings,reg_count,table},lblnext) ->
-    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table};
-ctx_get_lbl_stuff({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> target,active,lblnext,label_id;
-ctx_get_lbl_active({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> active;
-ctx_set_label_id({target,tailcall,active,lblnext,_,fn_id,rule_id,linerule,bindings,reg_count,table},label_id) ->
-    {target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table};
-ctx_update_label_id({target,tailcall,active,lblnext,label_id,fn_id,rule_id,linerule,bindings,reg_count,table}) ->
-    {target,tailcall,active,lblnext,label_id+1,fn_id,rule_id,linerule,bindings,reg_count,table};
+ctx_fnr({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> fn_id,rule_id;
+ctx_linerule({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> linerule;
+ctx_lbl({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> lbl_id;
+ctx_bindings({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> bindings;
+ctx_newbindings({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table},newbindings) -> {target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,newbindings,reg_count,table};
+ctx_get_reg_count({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> reg_count;
+ctx_put_reg_count({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,_,table},new_reg_count) -> {target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,new_reg_count,table};
+ctx_newreg({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table},sz) ->
+    {target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count+1,table},reg_count;
+ctx_get_fn_sig({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table},n) -> nth(n,table);
+ctx_set_tail({target,_,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table},tailcall) -> {target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table};
+ctx_get_tail({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> tailcall;
+ctx_get_lbl_decline({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> lbl_decline;
+ctx_set_lbl_decline({target,tailcall,active,_,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table},lbl_decline) ->
+    {target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table};
+ctx_get_lbl_stuff({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> target,active,lbl_decline,lbl_id;
+ctx_get_lbl_active({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table}) -> active;
+ctx_set_lbl_id({target,tailcall,active,lbl_decline,_,fn_id,rule_id,linerule,bindings,reg_count,table},lbl_id) ->
+    {target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table};
+ctx_update_lbl_id({target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table}) ->
+    {target,tailcall,active,lbl_decline,lbl_id+1,fn_id,rule_id,linerule,bindings,reg_count,table};
 
 // TODO expand this to deal properly with types. Just scalars and lists of scalars for now
 gen_types_deref_free(false,_,_,_,_) -> {};
@@ -668,7 +673,7 @@ compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type
     update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
     update generate_expr_code(types,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
     match slice_iolist(ctx_get_reg_count(ctx),5,{},{},outlist) => {first_slice,*slices}
-    -> ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ctx_get_lblnext(ctx),ctx_lbl(ctx),
+    -> ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lbl_decline(ctx)!=0,ctx_get_lbl_decline(ctx),ctx_lbl(ctx),
         code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_ret_exit(ctx_fnr(ctx),length(slices),regs_right,first_slice),*slices});
 compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type_left,regs_right,type_right)
     match ctx_get_tail(ctx)-1 => call_id
@@ -676,8 +681,8 @@ compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type
     update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
     update generate_expr_code(types,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
     match slice_iolist(ctx_get_reg_count(ctx),4,{},{},outlist) => {first_slice,*slices}
-    -> ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lblnext(ctx)!=0,ctx_get_lblnext(ctx),ctx_lbl(ctx),
-    code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_goto(ctx_fnr(ctx),length(slices),call_id,regs_right,first_slice),*slices});
+    -> ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lbl_decline(ctx)!=0,ctx_get_lbl_decline(ctx),ctx_lbl(ctx),
+        code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_goto(ctx_fnr(ctx),length(slices),call_id,regs_right,first_slice),*slices});
 
 slice_build_ret_exit(fn_id,rule_id,len,regs_right,first_slice) -> {OpBuildIOList,OpRetExit,OpRetExit+(fn_id<<16),(rule_id&255)+(len<<8),regs_right,*first_slice};
 slice_build_goto(fn_id,rule_id,len,call_id,regs_right,first_slice) -> {OpBuildIOList,OpGotoExit,OpGotoExit+(fn_id<<16),(rule_id&255)+(len<<8),call_id,regs_right,*first_slice};
@@ -741,8 +746,8 @@ generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2
     -> ctx,sofar0,sofar1;
 generate_param_code(types,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp,_},type_left
-    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,BindImm,val) => lblnext,ctx,code
-    update ctx_set_lblnext(ctx,lblnext) => ctx ->
+    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,BindImm,val) => lbl_decline,ctx,code
+    update ctx_set_lbl_decline(ctx,lbl_decline) => ctx ->
     generate_param_code(types,false,bindlevel,newstride,ctx,{*sofar0,*code},sofar1,type_left,rest);
 generate_param_code(types,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp,_},type_left
@@ -762,8 +767,8 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,pend
-    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,TypeU32,32,src_flag2,src2,BindReg,pend) => lblnext,ctx,code
-    update ctx_set_lblnext(ctx,lblnext) => ctx
+    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,TypeU32,32,src_flag2,src2,BindReg,pend) => lbl_decline,ctx,code
+    update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
     update gen_types_deref_free(true,types,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
     -> generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
         {ctx_fnr(ctx),OpLea,0,BindReg,parray,src_flag1,src1},
@@ -779,8 +784,8 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update ctx_newreg(ctx,32) => ctx,len
     update ctx_newreg(ctx,64) => ctx,pbegin
     update generate_list_min_size(0,0,elements) => min_size,splatcount
-    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),if(splatcount!=0,OpCompareLessThanBranch,OpCompareNotEqualBranch),TypeU32,32,BindReg,len,BindImm,min_size) => lblnext,ctx,code
-    update ctx_set_lblnext(ctx,lblnext) => ctx
+    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),if(splatcount!=0,OpCompareLessThanBranch,OpCompareNotEqualBranch),TypeU32,32,BindReg,len,BindImm,min_size) => lbl_decline,ctx,code
+    update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
     update gen_types_deref_free(splatcount==0,types,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
     update generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,(substride>>3),0,min_size+splatcount},ctx,{},{},{{{{BindMem,pbegin+(16<<32),substride}},sub_type,Consume}},elements) => ctx,code1,code2 ->
     generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
@@ -820,20 +825,20 @@ sum_sub_alloc(n,{}) -> n;
 sum_sub_alloc(n,{_,sz,*rest}) -> sum_sub_alloc(n+sz,rest);
 
 generate_conditional_rhs(ctx,code,tp,{{src_flag,src,sz},{src_flag2,src2,sz}})
-    update ctx_update_label_id(ctx) => ctx
-    match ctx_get_lbl_stuff(ctx) => target,active,lblnext,label_id
-    update generate_conditional(ctx,target,active,label_id,label_id,OpCompareEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => _,ctx,newcode
+    update ctx_update_lbl_id(ctx) => ctx
+    match ctx_get_lbl_stuff(ctx) => target,active,lbl_decline,lbl_id
+    update generate_conditional(ctx,target,active,lbl_id,lbl_id,OpCompareEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => _,ctx,newcode
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
-    ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset},{ctx_fnr(ctx),OpLabel,0,0,label_id}};
+    ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset},{ctx_fnr(ctx),OpLabel,0,0,lbl_id}};
 
 // TODO have comparison deal with non-scalars, and reduce refcount where appropriate
 generate_bind_variable(types,count,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
     update generate_bind_variable_aux(ctx,{},{},storage) => ctx,bind,code
     -> ctx,{bindlevel,tp,bind,name},code,{};
 generate_bind_variable(types,count,false,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
-    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => lblnext,ctx,code
-    update ctx_set_lblnext(ctx,lblnext) => ctx
+    update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => lbl_decline,ctx,code
+    update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
     -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
 generate_bind_variable(types,count,true,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
     update generate_conditional_rhs(ctx,{},tp,{{src_flag,src,sz},{src_flag2,src2,sz}}) => ctx,code
@@ -854,14 +859,14 @@ code_or_not(_,code) -> code;
 get_size_scale(0) -> 0;
 get_size_scale(sz) -> 64-count_leading_zeros(sz>>3);
 
-generate_conditional(ctx,target,0,lblnext,label_id,op,tp,sz,src_flag,src,src_flag2,src2) -> lblnext,ctx,{};
-generate_conditional(ctx,TargetVM,_,0,label_id,op,tp,sz,src_flag,src,src_flag2,src2) ->
-    label_id+1,ctx_set_label_id(ctx,label_id+1),{{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,label_id+1,src_flag,src,src_flag2,src2}};
-generate_conditional(ctx,TargetVM,_,lblnext,label_id,op,tp,sz,src_flag,src,src_flag2,src2) -> lblnext,ctx,{{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,lblnext,src_flag,src,src_flag2,src2}};
-generate_conditional(ctx,_,_,0,label_id,op,tp,sz,src_flag,src,src_flag2,src2)
-    -> label_id+1,ctx_set_label_id(ctx,label_id+2),{{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,label_id+1,src_flag,src,src_flag2,src2,label_id+2},{ctx_fnr(ctx),OpLabel,0,0,label_id+2}};
-generate_conditional(ctx,_,_,lblnext,label_id,op,tp,sz,src_flag,src,src_flag2,src2)
-    -> lblnext,ctx_set_label_id(ctx,label_id+1),{{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,lblnext,src_flag,src,src_flag2,src2,label_id+1},{ctx_fnr(ctx),OpLabel,0,0,label_id+1}};
+generate_conditional(ctx,target,0,lbl_decline,lbl_id,op,tp,sz,src_flag,src,src_flag2,src2) -> lbl_decline,ctx,{};
+generate_conditional(ctx,TargetVM,_,0,lbl_id,op,tp,sz,src_flag,src,src_flag2,src2) ->
+    lbl_id+1,ctx_set_lbl_id(ctx,lbl_id+1),{{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,lbl_id+1,src_flag,src,src_flag2,src2}};
+generate_conditional(ctx,TargetVM,_,lbl_decline,lbl_id,op,tp,sz,src_flag,src,src_flag2,src2) -> lbl_decline,ctx,{{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,lbl_decline,src_flag,src,src_flag2,src2}};
+generate_conditional(ctx,_,_,0,lbl_id,op,tp,sz,src_flag,src,src_flag2,src2)
+    -> lbl_id+1,ctx_set_lbl_id(ctx,lbl_id+2),{{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,lbl_id+1,src_flag,src,src_flag2,src2,lbl_id+2},{ctx_fnr(ctx),OpLabel,0,0,lbl_id+2}};
+generate_conditional(ctx,_,_,lbl_decline,lbl_id,op,tp,sz,src_flag,src,src_flag2,src2)
+    -> lbl_decline,ctx_set_lbl_id(ctx,lbl_id+1),{{ctx_fnr(ctx),gen_cond_op(op,tp,sz),0,lbl_decline,src_flag,src,src_flag2,src2,lbl_id+1},{ctx_fnr(ctx),OpLabel,0,0,lbl_id+1}};
 
 gen_cond_op(OpCompareNotEqualBranch,tp,sz) -> OpCompareNotEqualBranch+get_size_scale(sz),0;
 gen_cond_op(OpCompareEqualBranch,tp,sz) -> OpCompareEqualBranch+get_size_scale(sz),0;
@@ -1253,11 +1258,11 @@ includes(TargetVMLL) -> "vm.h";
 includes(_) -> "rewrite_base.h";
 
 create_export_wrappers_vm(target,types,sofarc,sofarh,_,_,{}) -> sofarc,sofarh;
-create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{false,*_},*rest}) -> create_export_wrappers_vm(target,types,sofarc,sofarh,fnid+1,label_id,rest);
-create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,label_id,{{_,_,_,name,reg_left,_,left,values_left,reg_right,_,right,values_right},*rest})
-    match label_id+1 => new_lbl
-    match create_export_vm_sigc({},0,0,"const ","in",left) => n1,sig1
-    match create_export_vm_sigc({},0,0,"","*out",right) => n2,sig2
+create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,lbl_id,{{false,*_},*rest}) -> create_export_wrappers_vm(target,types,sofarc,sofarh,fnid+1,lbl_id,rest);
+create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,lbl_id,{{_,_,_,name,reg_left,_,left,values_left,reg_right,_,right,values_right},*rest})
+    match lbl_id+1 => new_lbl
+    match create_export_value_sigc(types,{},0,0,"const ","in",left) => n1,sig1
+    match create_export_value_sigc(types,{},0,0,"","*out",right) => n2,sig2
     match create_export_vm_in(types,{},{},0,left,values_left) => incode,inarray
     match create_export_vm_inout0({},reg_count(0,left),reg_count(0,right)) => outarray
     match callout_enter(0,listnv(reg_left,-2),{},left) => cleft,_
@@ -1280,13 +1285,22 @@ reg_count(n,{}) -> n;
 reg_count(n,{{{},_,_},*rest}) -> reg_count(n,rest);
 reg_count(n,{{{_,*r1},tp,consume},*rest}) -> reg_count(n+1,{{r1,tp,consume},*rest});
 
-create_export_vm_sigc(sofar,labeln,n,_,_,{}) -> n,sofar;
-create_export_vm_sigc(sofar,labeln,n,fill0,fill1,{{vals,tp,_},*rest}) -> create_export_vm_sigc({*sofar,',',*fill0,*c_type(tp),' ',*fill1,*int2s(labeln)},labeln+1,n+length(vals),fill0,fill1,rest);
+create_export_value_sigc(types,sofar,labeln,n,_,_,{}) -> n,sofar;
+create_export_value_sigc(types,sofar,labeln,n,fill0,fill1,{{vals,tp,_},*rest})
+    match {*fill1,*int2s(labeln)} => name
+    -> create_export_value_sigc(types,{*sofar,',',*fill0,*c_type(nth(tp,types),tp),' ',*name,*ctype_in_extra(nth(tp,types),tp,name)},labeln+1,n+length(vals),fill0,fill1,rest);
 
-c_type(TypeI64) -> "int64_t";
-c_type(TypeChar) -> "codepoint";
-c_type(TypeBool) -> "bool";
-c_type(TypeString) -> "char*";
+c_type({_,_,{1},_},tp) -> c_type_base(tp);
+c_type({_,_,_,_},TypeString) -> "char*";
+c_type({_,_,{2,tp},_},_) -> {*c_type_base(tp),'*'};
+
+c_type_base(TypeI64) -> "int64_t";
+c_type_base(TypeChar) -> "codepoint";
+c_type_base(TypeBool) -> "bool";
+
+ctype_in_extra({_,_,{1},_},tp,name) -> "";
+ctype_in_extra({_,_,_,_},TypeString,name) -> "";
+ctype_in_extra({_,_,{2,_},_},tp,name) -> {',size_t ',*name,'_len'};
 
 z_or_s(tp) when is_unsigned(tp) -> 'z';
 z_or_s(_) -> 's';
@@ -1299,7 +1313,14 @@ create_export_vm_in(types,code,sofar,n,{{_,TypeString,_},*rest},{val,*vrest}) ma
         '\tint err',*i,'=string_to_utf32(a,in',*i,',&dst',*i,',&len',*i,');\n',
         '\tif(err',*i,'!=0) return err',*i,';\n',
         '\trwu_set_len(a,dst',*i,',len',*i,');\n'},
-        {*sofar,'(uint64_t)dst',*int2s(n),',0,'},n+1,rest,vrest);
+        {*sofar,'(uint64_t)dst',*i,',0,'},n+1,rest,vrest);
+create_export_vm_in(types,code,sofar,n,{{_,tp,_},*rest},{val,*vrest}) @match nth(tp,types) => {_,_,{2,subtp},_} match val => true
+    match int2s(n) => i ->
+    create_export_vm_in(types,{*code,
+        '\tuint32_t array',*i,'=alloc(a,(uint64_t)in',*i,'_len,sizeof(',*c_type_base(subtp),'));\n',
+        '\trwu_set_len(a,array',*i,',in',*i,'_len);\n',
+        '\tmemcpy(rwu_get_header_data(a,array',*i,',0),','in',*i,',in',*i,'_len*sizeof(',*c_type_base(subtp),'));\n'},
+        {*sofar,'(uint64_t)array',*i,',0,'},n+1,rest,vrest);
 create_export_vm_in(types,code,sofar,n,{{_,tp,_},*rest},{_,*vrest}) -> create_export_vm_in(types,code,{*sofar,'(uint64_t)in',*int2s(n),','},n+1,rest,vrest);
 
 create_export_vm_inout0(sofar,l,r) when l<r -> create_export_vm_inout0({*sofar,'0,'},l+1,r);
@@ -1310,15 +1331,32 @@ create_export_vm_out(types,sofar,allocs,labeln,n,{{_,TypeString,_},*rest},{val,*
     create_export_vm_out(types,{*sofar,
         '\t{\n\t\tuint32_t* head=rwu_get_header(a,inout[',*int2s(n),']);\n',
         '\t\tuint32_t start=inout[',*int2s(n+1),'];\n',
-        '\t\tint err=utf32_to_string((uint32_t*)rwu_get_data(head,start),rwu_get_len(head,start),out',*int2s(labeln),');\n',
+        '\t\tint err=utf32_to_string(((uint32_t*)rwu_get_data(head))+start,rwu_get_len(head,start),out',*int2s(labeln),');\n',
         '\t\tif(err!=0) {\n',
         *create_export_free_and_null({},"\t\t\tFREE_AND_NULL(",");\n",allocs),
         '\t\t\treturn err;\n',
         '\t\t}\n',
         '\t\tderef_free(a,inout[',*int2s(n),']);\n',
         '\t}\n'},{*allocs,{'out',*int2s(labeln)}},labeln+1,n+2,rest,vrest);
+create_export_vm_out(types,sofar,allocs,labeln,n,{{_,tp,_},*rest},{val,*vrest}) @match nth(tp,types) => {_,_,{2,subtp},_} match val => true
+    match int2s(n) => i
+    -> create_export_vm_out(types,{*sofar,
+        '\t{\n\t\tuint32_t* head=rwu_get_header(a,inout[',*i,']);\n',
+        '\t\tsize_t start=inout[',*int2s(n+1),'];\n',
+        '\t\t',*c_type_base(subtp),'* array',*i,'=((',*c_type_base(subtp),'*)rwu_get_data(head))+start;\n',
+        '\t\tsize_t len=rwu_get_len(head,start);\n',
+        '\t\t',*c_type_base(subtp),'* result',*i,'=malloc(len*sizeof(',*c_type_base(subtp),'));\n',
+        '\t\tif(result',*i,'==NULL) {\n',
+        *create_export_free_and_null({},"\t\t\tFREE_AND_NULL(",");\n",allocs),
+        '\t\t\treturn 6;\n',
+        '\t\t}\n',
+        '\t\tmemcpy(result',*i,',array',*i,',len*sizeof(',*c_type_base(subtp),'));\n',
+        '\t\tderef_free(a,inout[',*i,']);\n',
+        '\t\t*out',*int2s(labeln),'=result',*i,';\n',
+        '\t\t*out',*int2s(labeln),'_len=len;\n',
+        '\t}\n'},{*allocs,{'out',*int2s(labeln)}},labeln+1,n+2,rest,vrest);
 create_export_vm_out(types,sofar,allocs,labeln,n,{{_,tp,_},*rest},{_,*vrest}) ->
-    create_export_vm_out(types,{*sofar,'\t*out',*int2s(labeln),'=(',*c_type(tp),')inout[',*int2s(n),'];\n'},allocs,labeln+1,n+1,rest,vrest);
+    create_export_vm_out(types,{*sofar,'\t*out',*int2s(labeln),'=(',*c_type(nth(tp,types),tp),')inout[',*int2s(n),'];\n'},allocs,labeln+1,n+1,rest,vrest);
 
 create_export_free_and_null(sofar,f1,f2,{}) -> sofar;
 create_export_free_and_null(sofar,f1,f2,{a,*rest}) -> create_export_free_and_null({*sofar,*f1,*a,*f2},f1,f2,rest);
@@ -1327,8 +1365,8 @@ create_export_wrappers_ll(target,types,sofarc,sofarh,_,{}) -> sofarc,sofarh;
 create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{false,*_},*rest}) -> create_export_wrappers_ll(target,types,sofarc,sofarh,fnid+1,rest);
 create_export_wrappers_ll(target,types,sofarc,sofarh,fnid,{{_,_,_,name,reg_left,_,left,_,reg_right,_,right,_},*rest})
     match create_export_ll_sigc_in({},{},0,left) => inparams,inregs
-    match create_export_vm_sigc({},0,0,"const ","in",left) => _,sigin
-    match create_export_vm_sigc({},0,0,"","*out",right) => _,sigout ->
+    match create_export_value_sigc(types,{},0,0,"const ","in",left) => _,sigin
+    match create_export_value_sigc(types,{},0,0,"","*out",right) => _,sigout ->
     create_export_wrappers_ll(target,types,
     {*sofarc,'\ndefine i32 @rw_',*name,'(ptr %A',*inparams,*create_export_ll_sigc_out({},0,reg_right),') {\n',
         'entry:\n',

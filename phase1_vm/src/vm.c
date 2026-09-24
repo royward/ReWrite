@@ -275,199 +275,205 @@ void display_xreg_assignments(FILE* out, bool outx, const char* r, uint32_t sz, 
     }
 }
 
+uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
+    Operation* operation=&program->code[i];
+    uint32_t ret=0;
+    fprintf(out,"%6d %4d %3d: %02x: ",i,operation->fn_id,operation->rule_id,operation->op);
+    uint8_t op=operation->op;
+    switch(op) {
+        case OP_LABEL: {
+            fprintf(out,"label %d",operation->fdst.a);
+        } break;
+        case OP_ERROR: {
+            fprintf(out,"error type:");
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out," line:%ld sym:%s",operation->src1,program->symbols+operation->src2);
+        } break;
+        case OP_RET_EXIT: {
+            uint32_t pc_inc=operation->flags_dst;
+            fprintf(out,"ret_exit");
+            display_xreg_assignments(out,true,"r",operation->fdst.a,(int32_t*)(&operation->fdst.b));
+            ret=pc_inc;
+        } break;
+        case OP_CALL_ENTER_EXIT: {
+            uint32_t pc_inc=operation->flags_dst;
+            fprintf(out,"call_enter_exit (sp+=%d) ",(int32_t)operation->offset16);
+            program_display_label(program,out,operation);
+            fprintf(out,"  in:");
+            display_xreg_assignments(out,true,"r",operation->fdst.b,(int32_t*)(&operation->fsrc1.b));
+            fprintf(out,"  out: %d+off_%d",operation->fsrc1.a,operation->offset16);
+            ret=pc_inc;
+        } break;
+        case OP_CALL_IO_RET: {
+            uint32_t pc_inc=operation->flags_dst;
+            fprintf(out,"call_io_ret ");
+            program_display_label(program,out,operation);
+            fprintf(out,"  in:");
+            display_xreg_assignments(out,true,"*r0+",operation->fdst.b,(int32_t*)(&operation->fsrc1.b));
+            fprintf(out,"  out:");
+            display_xreg_assignments(out,false,"*r0+",operation->fsrc1.a,(int32_t*)(&operation->fsrc1.b)+operation->fdst.b);
+            ret=pc_inc;
+        } break;
+        case OP_GOTO_EXIT: {
+            uint32_t pc_inc=operation->flags_dst;
+            fprintf(out,"goto ");
+            program_display_label(program,out,operation);
+            display_xreg_assignments(out,true,"r",operation->fdst.b,(int32_t*)(&operation->fsrc1.a));
+            ret=pc_inc;
+        } break;
+        case OP_LEA: {
+            fprintf(out,"let.p ");
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out," = lea ");
+            display_operand(out,operation->flags_src.a,operation->src1);
+        } break;
+        case OP_LEA_SCALE: {
+            fprintf(out,"let.p ");
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out," = lea_scale ");
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out,"+");
+            display_operand(out,operation->flags_src.b,operation->src2);
+            fprintf(out,"*%d",operation->fdst.b);
+        } break;
+        case OP_ALLOC: {
+            fprintf(out,"let ");
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out," = alloc ");
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out,"*");
+            display_operand(out,operation->flags_src.b,operation->src2);
+        } break;
+        case OP_DEREF_FREE: {
+            fprintf(out,"deref_free ");
+            display_operand(out,operation->flags_src.a,operation->src1);
+        } break;
+        case OP_REALLOC: {
+            Operation* operation2=&program->code[i+1];
+            fprintf(out,"let (");
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out,",");
+            display_operand(out,operation2->flags_dst,operation2->dst);
+            fprintf(out,") = realloc (");
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out,",");
+            display_operand(out,operation2->flags_src.a,operation2->src1);
+            fprintf(out,") stride=");
+            display_operand(out,operation->flags_src.b,operation->src2);
+            fprintf(out," pre=%d post=%d+",operation->fdst.b,operation2->fdst.b);
+            display_operand(out,operation2->flags_src.b,operation2->src2);
+        } break;
+        case OP_APPEND: {
+            fprintf(out,"append.%d ",operation->fdst.b);
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out,") <- ");
+            display_operand(out,operation->flags_src.a,operation->src1);
+        } break;
+        case OP_APPEND_SPLAT: {
+            fprintf(out,"append_splat.%d (",operation->fdst.b);
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out,") <- (");
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out,",");
+            display_operand(out,operation->flags_src.b,operation->src2);
+            fprintf(out,")");
+        } break;
+        case OP_APPEND_SPLAT_CONSUME: {
+            fprintf(out,"append_splat_consume.%d (",operation->fdst.b);
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out,") <- (");
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out,",");
+            display_operand(out,operation->flags_src.b,operation->src2);
+            fprintf(out,")");
+        } break;
+        case OP_CONTINUATION: {
+            fprintf(out,"(continuation)");
+        } break;
+        case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
+            uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
+            fprintf(out,"let.%d ",sz);
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out," = ");
+            display_operand(out,operation->flags_src.a,operation->src1);
+        } break;
+        case OP_CMP_NE_BRANCH: case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
+            uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
+            fprintf(out,"test.%d ",sz);
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out," != ");
+            display_operand(out,operation->flags_src.b,operation->src2);
+            fprintf(out," goto ");
+            program_display_label_both(program,out,operation);
+        } break;
+        case OP_EQUAL: case OP_EQUAL+1: case OP_EQUAL+2: case OP_EQUAL+3: case OP_EQUAL+4: {
+            uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
+            fprintf(out,"let.%d ",sz);
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out," = ");
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out," == ");
+            display_operand(out,operation->flags_src.b,operation->src2);
+        } break;
+        case OP_NOT_EQUAL: case OP_NOT_EQUAL+1: case OP_NOT_EQUAL+2: case OP_NOT_EQUAL+3: case OP_NOT_EQUAL+4: {
+            uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
+            fprintf(out,"let.%d ",sz);
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out," = ");
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out," != ");
+            display_operand(out,operation->flags_src.b,operation->src2);
+        } break;
+        case OP_CMP_EQ_BRANCH: case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
+            uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
+            fprintf(out,"test.%d ",sz);
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out," == ");
+            display_operand(out,operation->flags_src.b,operation->src2);
+            fprintf(out," goto ");
+            program_display_label_both(program,out,operation);
+        } break;
+        case OP_CMP_LT_BRANCH: {
+            fprintf(out,"test.%s ",display_type(operation->type));
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out," < ");
+            display_operand(out,operation->flags_src.b,operation->src2);
+            fprintf(out," goto ");
+            program_display_label_both(program,out,operation);
+        } break;
+        case OP_CMP_LE_BRANCH: {
+            fprintf(out,"test.%s ",display_type(operation->type));
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out," <= ");
+            display_operand(out,operation->flags_src.b,operation->src2);
+            fprintf(out," goto ");
+            program_display_label_both(program,out,operation);
+        } break;
+        case OP_UNARY_MINUS: {
+            fprintf(out,"let.%s ",display_type(operation->type));
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out," = ");
+            fprintf(out," %s ",display_unop(op));
+            display_operand(out,operation->flags_src.a,operation->src1);
+        } break;
+        case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
+            fprintf(out,"let.%s ",display_type(operation->type));
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out," = ");
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out," %s ",display_binop(op));
+            display_operand(out,operation->flags_src.b,operation->src2);
+        } break;
+        default: fprintf(out,"unknown");
+    }
+    fprintf(out,"\n");
+    return ret;
+}
+
 void program_disassemble(Program* program, FILE* out) {
     fprintf(out,"  line func:rule op\n");
     for(uint32_t i=1;i<program->instr_max;i++) {
-        Operation* operation=&program->code[i];
-        fprintf(out,"%6d %4d %3d: %02x: ",i,operation->fn_id,operation->rule_id,operation->op);
-        uint8_t op=operation->op;
-        switch(op) {
-            case OP_LABEL: {
-                fprintf(out,"label %d",operation->fdst.a);
-            } break;
-            case OP_ERROR: {
-                fprintf(out,"error type:");
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out," line:%ld sym:%s",operation->src1,program->symbols+operation->src2);
-            } break;
-            case OP_RET_EXIT: {
-                uint32_t pc_inc=operation->flags_dst;
-                fprintf(out,"ret_exit");
-                display_xreg_assignments(out,true,"r",operation->fdst.a,(int32_t*)(&operation->fdst.b));
-                i+=pc_inc;
-            } break;
-            case OP_CALL_ENTER_EXIT: {
-                uint32_t pc_inc=operation->flags_dst;
-                fprintf(out,"call_enter_exit (sp+=%d) ",(int32_t)operation->offset16);
-                program_display_label(program,out,operation);
-                fprintf(out,"  in:");
-                display_xreg_assignments(out,true,"r",operation->fdst.b,(int32_t*)(&operation->fsrc1.b));
-                fprintf(out,"  out: %d+off_%d",operation->fsrc1.a,operation->offset16);
-                i+=pc_inc;
-            } break;
-            case OP_CALL_IO_RET: {
-                uint32_t pc_inc=operation->flags_dst;
-                fprintf(out,"call_io_ret ");
-                program_display_label(program,out,operation);
-                fprintf(out,"  in:");
-                display_xreg_assignments(out,true,"*r0+",operation->fdst.b,(int32_t*)(&operation->fsrc1.b));
-                fprintf(out,"  out:");
-                display_xreg_assignments(out,false,"*r0+",operation->fsrc1.a,(int32_t*)(&operation->fsrc1.b)+operation->fdst.b);
-                i+=pc_inc;
-            } break;
-            case OP_GOTO_EXIT: {
-                uint32_t pc_inc=operation->flags_dst;
-                fprintf(out,"goto ");
-                program_display_label(program,out,operation);
-                display_xreg_assignments(out,true,"r",operation->fdst.b,(int32_t*)(&operation->fsrc1.a));
-                i+=pc_inc;
-            } break;
-            case OP_LEA: {
-                fprintf(out,"let.p ");
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out," = lea ");
-                display_operand(out,operation->flags_src.a,operation->src1);
-            } break;
-           case OP_LEA_SCALE: {
-                fprintf(out,"let.p ");
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out," = lea_scale ");
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out,"+");
-                display_operand(out,operation->flags_src.b,operation->src2);
-                fprintf(out,"*%d",operation->fdst.b);
-            } break;
-            case OP_ALLOC: {
-                fprintf(out,"let ");
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out," = alloc ");
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out,"*");
-                display_operand(out,operation->flags_src.b,operation->src2);
-            } break;
-            case OP_DEREF_FREE: {
-                fprintf(out,"deref_free ");
-                display_operand(out,operation->flags_src.a,operation->src1);
-            } break;
-            case OP_REALLOC: {
-                Operation* operation2=&program->code[i+1];
-                fprintf(out,"let (");
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out,",");
-                display_operand(out,operation2->flags_dst,operation2->dst);
-                fprintf(out,") = realloc (");
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out,",");
-                display_operand(out,operation2->flags_src.a,operation2->src1);
-                fprintf(out,") stride=");
-                display_operand(out,operation->flags_src.b,operation->src2);
-                fprintf(out," pre=%d post=%d+",operation->fdst.b,operation2->fdst.b);
-                display_operand(out,operation2->flags_src.b,operation2->src2);
-            } break;
-            case OP_APPEND: {
-                fprintf(out,"append.%d ",operation->fdst.b);
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out,") <- ");
-                display_operand(out,operation->flags_src.a,operation->src1);
-            } break;
-            case OP_APPEND_SPLAT: {
-                fprintf(out,"append_splat.%d (",operation->fdst.b);
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out,") <- (");
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out,",");
-                display_operand(out,operation->flags_src.b,operation->src2);
-                fprintf(out,")");
-            } break;
-            case OP_APPEND_SPLAT_CONSUME: {
-                fprintf(out,"append_splat_consume.%d (",operation->fdst.b);
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out,") <- (");
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out,",");
-                display_operand(out,operation->flags_src.b,operation->src2);
-                fprintf(out,")");
-            } break;
-            case OP_CONTINUATION: {
-                fprintf(out,"(continuation)");
-            } break;
-            case OP_MOVE: case OP_MOVE+1: case OP_MOVE+2: case OP_MOVE+3: case OP_MOVE+4: {
-                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
-                fprintf(out,"let.%d ",sz);
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out," = ");
-                display_operand(out,operation->flags_src.a,operation->src1);
-            } break;
-            case OP_CMP_NE_BRANCH: case OP_CMP_NE_BRANCH+1: case OP_CMP_NE_BRANCH+2: case OP_CMP_NE_BRANCH+3: case OP_CMP_NE_BRANCH+4: {
-                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
-                fprintf(out,"test.%d ",sz);
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out," != ");
-                display_operand(out,operation->flags_src.b,operation->src2);
-                fprintf(out," goto ");
-                program_display_label_both(program,out,operation);
-            } break;
-            case OP_EQUAL: case OP_EQUAL+1: case OP_EQUAL+2: case OP_EQUAL+3: case OP_EQUAL+4: {
-                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
-                fprintf(out,"let.%d ",sz);
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out," = ");
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out," == ");
-                display_operand(out,operation->flags_src.b,operation->src2);
-            } break;
-            case OP_NOT_EQUAL: case OP_NOT_EQUAL+1: case OP_NOT_EQUAL+2: case OP_NOT_EQUAL+3: case OP_NOT_EQUAL+4: {
-                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
-                fprintf(out,"let.%d ",sz);
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out," = ");
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out," != ");
-                display_operand(out,operation->flags_src.b,operation->src2);
-            } break;
-            case OP_CMP_EQ_BRANCH: case OP_CMP_EQ_BRANCH+1: case OP_CMP_EQ_BRANCH+2: case OP_CMP_EQ_BRANCH+3: case OP_CMP_EQ_BRANCH+4: {
-                uint32_t sz=(op&7)==0?1:(8<<((op-1)&7));
-                fprintf(out,"test.%d ",sz);
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out," == ");
-                display_operand(out,operation->flags_src.b,operation->src2);
-                fprintf(out," goto ");
-                program_display_label_both(program,out,operation);
-            } break;
-            case OP_CMP_LT_BRANCH: {
-                fprintf(out,"test.%s ",display_type(operation->type));
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out," < ");
-                display_operand(out,operation->flags_src.b,operation->src2);
-                fprintf(out," goto ");
-                program_display_label_both(program,out,operation);
-            } break;
-            case OP_CMP_LE_BRANCH: {
-                fprintf(out,"test.%s ",display_type(operation->type));
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out," <= ");
-                display_operand(out,operation->flags_src.b,operation->src2);
-                fprintf(out," goto ");
-                program_display_label_both(program,out,operation);
-            } break;
-            case OP_UNARY_MINUS: {
-                fprintf(out,"let.%s ",display_type(operation->type));
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out," = ");
-                fprintf(out," %s ",display_unop(op));
-                display_operand(out,operation->flags_src.a,operation->src1);
-            } break;
-            case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
-                fprintf(out,"let.%s ",display_type(operation->type));
-                display_operand(out,operation->flags_dst,operation->dst);
-                fprintf(out," = ");
-                display_operand(out,operation->flags_src.a,operation->src1);
-                fprintf(out," %s ",display_binop(op));
-                display_operand(out,operation->flags_src.b,operation->src2);
-            } break;
-            default: fprintf(out,"unknown");
-        }
-        fprintf(out,"\n");
+        i+=program_disassemble1(program,out,i);
     }
 }
 
