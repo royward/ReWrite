@@ -95,6 +95,14 @@ roman_to_int({a,b,*rest}) when roman_to_int_convert_case(a)<roman_to_int_convert
     roman_to_int_convert_case(b)-roman_to_int_convert_case(a)+roman_to_int(rest);
 roman_to_int({a,*rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
 
+:- export nprime(i64) -> value [i64];
+nprime(n) -> nprime_aux(n,2,{});
+
+:- nprime_aux(i64,i64,[i64]) -> [i64];
+nprime_aux(0,_,sofar) -> sofar;
+nprime_aux(n,p,sofar) when isprime(p,sofar) -> nprime_aux(n-1,p+1,{*sofar,p});
+nprime_aux(n,p,sofar) -> nprime_aux(n,p+1,sofar);
+
 :- isprime(i64,[i64]) -> bool;
 isprime(n,{i,*_}) when i*i>n -> true;
 isprime(n,{i,*_}) when n%i==0 -> false;
@@ -103,3 +111,25 @@ isprime(_,{}) -> true;
 
 :- export testprime(i64) -> bool;
 testprime(n) -> isprime(n,{2,3,5,7,11});
+
+// :- nqueens(i64) -> [[i64]];
+// nqueens(n) -> nqueens_aux({},listn1(n),{});
+//
+// :- listn1(i64) -> [i64];
+// listn1(0) -> {};
+// listn1(n) -> {*listn1(n-1),n};
+//
+// // nqueens_aux(column_choices_sofar, column_choices_todo, rows_done)
+// :- nqueens_aux([i64],[i64],[i64]) -> [[i64]];
+// nqueens_aux({},{},solution) -> {solution};
+// nqueens_aux(_,{},solution) -> {};
+// nqueens_aux(col_so_far,{c,*col_todo},rows_done) -> {*nqueens_try(col_so_far,col_todo,c,rows_done),*nqueens_aux({*col_so_far,c},col_todo,rows_done)};
+//
+// :- nqueens_try([i64],[i64],i64,[i64]) -> [[i64]];
+// nqueens_try(col_so_far,col_todo,c,rows_done) when attack(c,1,rows_done) -> {}; // no solutions here
+// nqueens_try(col_so_far,col_todo,c,rows_done) -> nqueens_aux({},{*col_so_far,*col_todo},{c,*rows_done}); // got another row
+//
+// :- attack(i64, i64, [i64]) -> bool;
+// attack(c,offset,{}) -> false;
+// attack(c,offset,{x,*rest}) when c+offset==x || c-offset==x -> true;
+// attack(c,offset,{_,*rest}) -> attack(c,offset+1,rest);

@@ -5,7 +5,7 @@
 
 #define REGISTERS_SIZE 100000
 #define LABEL_COUNT 100000
-#define HEAP_SIZE 1000000
+#define HEAP_SIZE 10000000
 
 #define OP_LABEL 0x01
 #define OP_ERROR 0x02
@@ -541,6 +541,7 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
     //printf("alloc +%d=%d %d\n",full_size,exe->allocated,alloc);
     uint32_t* header=rwu_get_header(exe,alloc);
     header[0]=full_size;
+    //printf("%d\n",full_size);
     header[1]=1;
     header[3]=0xDEADBEEF;
     exe->end_of_heap+=full_size;
@@ -558,6 +559,10 @@ void deref_free(RWInstance* exe, uint64_t v) {
             exe->heap8[v+i]=0xDEADBEEFDEADBEEF;
         }
     }
+}
+
+static inline uint32_t max_uint32(uint32_t a, uint32_t b) {
+    return (a > b) ? a : b;
 }
 
 int program_execute(RWInstance* exe, uint32_t in_lbl) {
@@ -654,11 +659,13 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint32_t* parray=rwu_get_header(exe,array);
                 uint32_t end=parray[2];
                 if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
-                    // no need to realloc
                     operand_store(exe, operation, array, 32, sp);
                     operand_store(exe, operation2, start-pre, 32, sp);
                 } else {
-                    uint32_t ret=alloc(exe,pre+post+end-start,stride);
+                    uint32_t sz=max_uint32(pre+post+end-start+2,8);
+                    uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
+                    //printf("realloc %d\n",full_size);
+                    uint32_t ret=alloc(exe,full_size,stride);
                     uint32_t* parray2=rwu_get_header(exe,ret);
                     memcpy((uint8_t*)(&parray2[4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
                     parray2[2]=pre+end;

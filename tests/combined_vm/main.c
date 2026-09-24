@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
     printf("cdr:");
     exe->allocated=0;
     ret_code=rw_cdr(exe,(int64_t[]){6,5,5,3,6},5,&array,&sz);
-    if(!ret_code && sz==4 && array[0]==5 && array[3]==6) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,sz); };
+    if(!ret_code && sz==4 && array[0]==5 && array[3]==6) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
     free(array);
 
     printf("car:");
@@ -105,6 +105,19 @@ int main(int argc, char** argv) {
     exe->allocated=0;
     ret_code=rw_testprime(exe,11,&resultb);
     if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
+
+    printf("nprime:");
+    exe->allocated=0;
+    ret_code=rw_nprime(exe,1000,&array,&sz);
+    if(!ret_code && sz==1000 && array[999]==7919) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
+
+    //printf("nprime:");
+    //exe->allocated=0;
+    //ret_code=rw_nprime(exe,200000,&array,&sz);
+    //if(!ret_code && sz==200000 && array[199999]==2750159) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
+    //free(array);
+
+    printf("Heap size=%d\n",exe->end_of_heap*8);
 
     program_unload(&p);
     rw_instance_unload(exe);
