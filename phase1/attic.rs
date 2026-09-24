@@ -47,4 +47,9 @@ is_unsigned(TypeI64) -> true;
 compile_rhs_final_binding(_,sofar,{}) -> sofar;
 compile_rhs_final_binding(ctx,sofar,{{tp,src,dst},*rest}) -> compile_rhs_final_binding(ctx,{*sofar,{ctx_fnr(ctx),OpMove+get_scalar_type_size(tp),0,BindReg,dst,BindReg,src}},rest);
 
+// create_export_ll_pre_call(types,code,reglist,{}) -> code,reglist;
+// create_export_ll_pre_call(types,code,reglist,{{reg,tp},*rest}) @match nth(tp,types) => {_,_,_,{_,64}} -> create_export_ll_pre_call(types,code,{*reglist,reg},rest);
+// create_export_ll_pre_call(types,code,reglist,{{reg,tp},*rest}) match nth(tp,types) => {_,_,_,{_,sz}} ->
+//     create_export_ll_pre_call(types,{*code,'\t%x',*reg,'=',z_or_s(tp),'ext i',*int2s(sz),' %',*reg,' to i64\n'},{*reglist,{'x',*reg}},rest);
+
 

@@ -10,6 +10,7 @@ int main(int argc, char** argv) {
     program_disassemble(&p,stdout);
     RWInstance* exe=(RWInstance*)malloc(sizeof(RWInstance));
     rw_instance_init(exe,&p);
+    exe->allocated=0;
 #include "tests.h"
     program_unload(&p);
     rw_instance_unload(exe);

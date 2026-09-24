@@ -1,12 +1,20 @@
-    int64_t result0;
-    int64_t result1;
-    bool resultb;
-    codepoint resultc;
+    int64_t result0=-1;
+    int64_t result1=-1;
+    bool resultb=false;
+    codepoint resultc=-1;
     int ret_code;
 
     printf("fact:");
     ret_code=rw_fact(exe,10,&result0);
     if(!ret_code && result0==3628800) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("equal:");
+    ret_code=rw_equal(exe,6,7,&resultb);
+    if(!ret_code && !resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,(int)resultb); };
+
+    printf("equal:");
+    ret_code=rw_equal(exe,7,7,&resultb);
+    if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,(int)resultb); };
 
     printf("min_max:");
     ret_code=rw_min_max(exe,6,7,&result0,&result1);
@@ -50,14 +58,6 @@
             printf("fail:%d %s\n",ret_code,function);
         }
     };
-
-    printf("equal:");
-    ret_code=rw_equal(exe,6,7,&resultb);
-    if(!ret_code && !resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,(int)resultb); };
-
-    printf("equal:");
-    ret_code=rw_equal(exe,7,7,&resultb);
-    if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,(int)resultb); };
 
     printf("fact_err:");
     ret_code=rw_fact_err(exe,10,&result0);

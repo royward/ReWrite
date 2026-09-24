@@ -3,10 +3,11 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <stdlib.h>
+#include <string.h>
 
-#define ARGREG_NO 8
+typedef struct { uint32_t a, b; } fparts64;
 
-typedef struct { uint32_t a, b; } fparts;
+typedef struct { uint8_t a, b; } fparts16;
 
 typedef struct {
 // 0
@@ -16,22 +17,24 @@ typedef struct {
 // 4
     uint8_t rule_id;
     uint8_t flags_dst;
-    uint8_t flags_src1;
-    uint8_t flags_src2;
+    union {
+        uint16_t offset16;
+        fparts16 flags_src;
+    };
 // 8
     union {
         uint64_t dst;
-        fparts fdst;
+        fparts64 fdst;
     };
 // 16
     union {
         uint64_t src1;
-        fparts fsrc1;
+        fparts64 fsrc1;
     };
 // 24
     union {
         uint64_t src2;
-        fparts fsrc2;
+        fparts64 fsrc2;
     };
 // 32
 } Operation;
@@ -50,13 +53,11 @@ struct ExecutionState {
     uint32_t sp;
     uint32_t end_of_heap;
     uint64_t* registers;
-    uint8_t* overflow;
     Program* program;
     uint32_t errtype;
     uint32_t errline;
     int32_t allocated;
     const char* errsym;
-    uint64_t argret[ARGREG_NO];
     uint64_t* heap8;
 };
 
@@ -74,7 +75,8 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size);
 void deref_free(RWInstance* exe, uint64_t p);
 
 static inline uint32_t* rwu_get_header(RWInstance* a, uint32_t x) {return (uint32_t*)(a->heap8+x);}
-static inline void* rwu_get_data(uint32_t* header, uint32_t start) {return (void*)(header+4+start);}
+static inline void* rwu_get_data(uint32_t* header) {return (void*)(header+4);}
+static inline void* rwu_get_header_data(RWInstance* a, uint32_t x, uint32_t start) {return (void*)(rwu_get_header(a,x)+4+start);}
 static inline uint32_t rwu_get_len(uint32_t* header, uint32_t start) {return (header[2]-start);}
 static inline void rwu_set_len(RWInstance* a, uint32_t alloc, uint32_t val) {rwu_get_header(a,alloc)[2]=val;}
 

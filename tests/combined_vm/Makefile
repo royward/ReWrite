@@ -11,7 +11,7 @@ test_vm: combined.exe
 
 combined.exe: ../../phase1_vm/src/vm.c main.c $(CORE_DEPS)
 	$(REWRITE_CPP) $(COMPILER_RW) 'compile("combined_vm.rw","combined_vm","vm")'
-	clang -ggdb3 -Wall -Wextra -pedantic -I../../phase1_vm/include/ ../../phase1_vm/src/vm.c main.c -o $@
+	clang -ggdb3 -O3 -Wall -Wextra -pedantic -I../../phase1_vm/include/ ../../phase1_vm/src/vm.c main.c -o $@
 
 test_native: combined_native.exe
 	./combined_native.exe
