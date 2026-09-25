@@ -20,12 +20,15 @@
 #define OP_LTE 0x1E
 #define OP_LEA 0x28
 #define OP_LEA_SCALE 0x29
+#define OP_AND_AND 0x36
+#define OP_OR_OR 0x37
 #define OP_UNARY_MINUS 0x38
 #define OP_EQUAL 0x40
 #define OP_NOT_EQUAL 0x48
 #define OP_ALLOC 0xC0
 #define OP_DEREF_FREE 0xC1
 #define OP_REALLOC 0xC2
+#define OP_PREPEND 0xC3
 #define OP_APPEND 0xC4
 #define OP_APPEND_SPLAT 0xC6
 #define OP_APPEND_SPLAT_CONSUME 0xC7
@@ -161,7 +164,7 @@ void display_operand(FILE* out, uint8_t flag, int64_t val) {
     uint8_t bind=flag&0xF;
     switch(bind) {
         case BIND_IMM: {
-            fprintf(out,"%" PRId64,val&0xFFFFFFFF);
+            fprintf(out,"%" PRId64,val);
         } break;
         case BIND_REG: {
             fprintf(out,"r%" PRIu64,val&0xFFFFFFFF);
@@ -250,6 +253,8 @@ const char* display_binop(uint8_t op) {
         case OP_MODULUS: return "%"; break;
         case OP_LT: return "<"; break;
         case OP_LTE: return "<="; break;
+        case OP_OR_OR: return "||"; break;
+        case OP_AND_AND: return "&&"; break;
         default: return "(unknown)";
     }
 }
@@ -363,10 +368,18 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
             fprintf(out," pre=%d post=%d+",operation->fdst.b,operation2->fdst.b);
             display_operand(out,operation2->flags_src.b,operation2->src2);
         } break;
+        case OP_PREPEND: {
+            fprintf(out,"prepend.%d (",operation->fdst.b);
+            display_operand(out,operation->flags_dst,operation->fdst.a);
+            fprintf(out,",");
+            display_operand(out,operation->flags_src.b,operation->fsrc2.a);
+            fprintf(out,"+%d) <- ",operation->fsrc2.b);
+            display_operand(out,operation->flags_src.a,operation->src1);
+        } break;
         case OP_APPEND: {
             fprintf(out,"append.%d ",operation->fdst.b);
-            display_operand(out,operation->flags_dst,operation->dst);
-            fprintf(out,") <- ");
+            display_operand(out,operation->flags_dst,operation->fdst.a);
+            fprintf(out," <- ");
             display_operand(out,operation->flags_src.a,operation->src1);
         } break;
         case OP_APPEND_SPLAT: {
@@ -455,6 +468,14 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
             fprintf(out," = ");
             fprintf(out," %s ",display_unop(op));
             display_operand(out,operation->flags_src.a,operation->src1);
+        } break;
+        case OP_OR_OR: case OP_AND_AND: {
+            fprintf(out,"let.1 ");
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out," = ");
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out," %s ",display_binop(op));
+            display_operand(out,operation->flags_src.b,operation->src2);
         } break;
         case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
             fprintf(out,"let.%s ",display_type(operation->type));
@@ -573,13 +594,14 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
     uint32_t sp=2; // make sure we are start, even if it was run before
     uint32_t pc=program->labels[in_lbl];
     while(true) {
+        //printf("%d\n",pc);
         Operation* operation=&program->code[pc];
         uint8_t op=operation->op;
         switch(op) {
             case OP_LABEL: {
             } break;
              case OP_ERROR: {
-                exe->errtype=operand_load(exe, 64, operation->flags_dst, operation->fdst.a, sp);
+                exe->errtype=operand_load(exe, 32, operation->flags_dst, operation->fdst.a, sp);
                 exe->errline=operation->src1;
                 exe->errsym=program->symbols+operation->src2;
                 return exe->errtype;
@@ -674,9 +696,24 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     operand_store(exe, operation2, 0, 32, sp);
                 }
             } break;
+            case OP_PREPEND: {
+                uint32_t array=operand_load(exe,32,operation->flags_dst,operation->fdst.a,sp);
+                uint32_t start=operand_load(exe,32,operation->flags_src.b,operation->fsrc2.a,sp);
+                uint32_t value=operand_load(exe,32,operation->flags_src.a,operation->src1,sp);
+                uint32_t offset=operation->fsrc2.b;
+                uint32_t* parray=rwu_get_header(exe,array);
+                uint8_t* addr=((uint8_t*)parray)+16+(start+offset)*(operation->fdst.b>>3);
+                switch(operation->fdst.b) { // alignment is guaranteed by the compiler
+                    case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
+                    case 16:*((uint16_t*)addr)=(uint16_t)value; break;
+                    case 32:*((uint32_t*)addr)=(uint32_t)value; break;
+                    case 64:*((uint64_t*)addr)=(uint64_t)value; break;
+                    default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
+                } break;
+            } break;
             case OP_APPEND: {
                 uint32_t array=operand_load(exe,32,operation->flags_dst,operation->dst,sp);
-                uint32_t value=operand_load(exe,32,operation->flags_src.a, operation->src1, sp);
+                uint32_t value=operand_load(exe,32,operation->flags_src.a,operation->src1, sp);
                 uint32_t* parray=rwu_get_header(exe,array);
                 uint32_t end=parray[2];
                 parray[2]=end+1;
@@ -808,6 +845,16 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     case OP_UNARY_MINUS: dst = -src1; break;
                 }
                 operand_store(exe, operation, dst, sz, sp);
+            } break;
+            case OP_OR_OR: {
+                uint64_t src1 = operand_load(exe, 1, operation->flags_src.a, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, 1, operation->flags_src.b, operation->src2, sp);
+                operand_store(exe, operation, src1 || src2, 1, sp);
+            } break;
+            case OP_AND_AND: {
+                uint64_t src1 = operand_load(exe, 1, operation->flags_src.a, operation->src1, sp);
+                uint64_t src2 = operand_load(exe, 1, operation->flags_src.b, operation->src2, sp);
+                operand_store(exe, operation, src1 && src2, 1, sp);
             } break;
             case OP_PLUS: case OP_MINUS: case OP_TIMES: case OP_DIVIDE: case OP_MODULUS: case OP_LT: case OP_LTE: {
                 uint32_t sz = type_to_size(operation->type);

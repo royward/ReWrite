@@ -502,12 +502,15 @@ const OpLessThan=29;
 const OpLessThanEqual=30;
 const OpLea=40;
 const OpLeaScale=41;
+const OpAndAnd=54;
+const OpOrOr=55;
 const OpUnaryMinus=56;
 const OpEqual=64;
 const OpNotEqual=72;
 const OpAlloc=192;
 const OpDerefFree=193;
 const OpRealloc=194;
+const OpPrepend=195;
 const OpAppend=196;
 const OpAppendArray=198;
 const OpAppendArrayConsume=199;
@@ -620,7 +623,7 @@ compile_function(types,target,reg_count,active,lbl_id,fn_id,table,rule_id,sofar,
     match rule => {linerule,bindings,params,clauses,exprs}
     update calc_counts(table,bindings,params,clauses,exprs) => params,clauses,exprs
     update compile_rule(target,types,linerule,{target,0,active,0,lbl_id,fn_id,rule_id,linerule,create_compiler_bindings({},bindings),reg_count,table},{},params,clauses,exprs,regs_left,type_left,regs_right,type_right) => reg_count,active,oldlbl_decline,lbl_id,code
-    update {*sofar,*code,*code_or_not(active,{{fn_id,rule_id,OpLabel,0,0,oldlbl_decline}})} => code
+    update {*sofar,*code,*code_or_not(active,{{fn_id,rule_id+1,OpLabel,0,0,oldlbl_decline}})} => code
     update compile_function(types,target,reg_count,active,lbl_id,fn_id,table,rule_id+1,code,rest,dummy,bitmask,regs_left,type_left,regs_right,type_right) => lbl_id,code
     -> lbl_id,code;
 
@@ -831,7 +834,7 @@ generate_conditional_rhs(ctx,code,tp,{{src_flag,src,sz},{src_flag2,src2,sz}})
     update generate_conditional(ctx,target,active,lbl_id,lbl_id,OpCompareEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => _,ctx,newcode
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
-    ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset},{ctx_fnr(ctx),OpLabel,0,0,lbl_id}};
+    ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,BindImm,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset},{ctx_fnr(ctx),OpLabel,0,0,lbl_id}};
 
 // TODO have comparison deal with non-scalars, and reduce refcount where appropriate
 generate_bind_variable(types,count,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
@@ -929,7 +932,7 @@ generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprCall,fn_id,args})
 generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}})
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
-    ctx,false,{{ctx_fnr(ctx),OpError,0,0,err,0,ctx_linerule(ctx),0,symoffset}},{{{{BindImm,err,DefaultSize}},TypeI64,Consume}};
+    ctx,false,{{ctx_fnr(ctx),OpError,0,BindImm,err,0,ctx_linerule(ctx),0,symoffset}},{{{{BindImm,err,DefaultSize}},TypeI64,Consume}};
 generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprList,elements}) @match decompose_stypes(stypes) => stype,_
     @match nth(stype,types) => {_,_,{DerivedTypeArray,t},storage}
     // Array - go get the elements then come back to allocate
@@ -951,13 +954,20 @@ generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,args_code,{},{}) /
     {{{{BindReg,newarray,32},{BindImm,0,32}},stype,Consume}};
 generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,{},{{true,precode,{{{array_flag,array,32},{start_flag,start,32}},stype,_}}},post_splat) // first splat at start - check for append
     update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,post_splat) => ctx,sum_const,sum_code,sum_src_flag,sum_src
-    update array_var_elt_assign(ctx,BindReg,newarray,BindReg,newstart,{},post_splat) => code
+    update array_var_elt_assign_post(ctx,BindReg,newarray,BindReg,newstart,{},post_splat) => code
     -> ctx,false,
         {*precode,*sum_code,{ctx_fnr(ctx),OpRealloc,0,BindReg,newarray,array_flag,array,BindImm,sz>>3,0},
         {ctx_fnr(ctx),OpCont,0,BindReg,newstart,start_flag,start,sum_src_flag,sum_src,sum_const},*code},
     {{{{BindReg,newarray,32},{BindReg,newstart,32}},stype,Consume}};
-generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,pre_splat,splat,post_splat) // first splat in middle - check for prepend and append
-    -> println_any(pre_splat),#error(13);
+generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,pre_splat,{{true,precode,{{{array_flag,array,32},{start_flag,start,32}},stype,_}}},post_splat) // first splat in middle - check for prepend and append
+    update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,pre_splat) => ctx,sum_const_pre,{},BindImm,0
+    update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,post_splat) => ctx,sum_const_post,sum_code,sum_src_flag,sum_src
+    update array_var_elt_assign_pre(ctx,BindReg,newarray,BindReg,newstart,0,{},pre_splat) => code_pre
+    update array_var_elt_assign_post(ctx,BindReg,newarray,BindReg,newstart,{},post_splat) => code_post
+    -> ctx,false,
+        {*precode,*sum_code,{ctx_fnr(ctx),OpRealloc,0,BindReg,newarray,array_flag,array,BindImm,sz>>3,sum_const_pre},
+        {ctx_fnr(ctx),OpCont,0,BindReg,newstart,start_flag,start,sum_src_flag,sum_src,sum_const_post},*code_pre,*code_post},
+    {{{{BindReg,newarray,32},{BindReg,newstart,32}},stype,Consume}};
 
 generate_expr_code_aux_map(post_arrow,types,ctx,sofar,{0,_},{}) -> ctx,sofar;
 generate_expr_code_aux_map(post_arrow,types,ctx,sofar,{1},{}) -> ctx,sofar;
@@ -997,11 +1007,15 @@ array_fixed_elt_assign(ctx,mem,c,code,{{false,partcode,{{{src_flag1,src1,sz},{sr
     -> array_fixed_elt_assign(ctx,mem,c+1,
     {*code,*partcode,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindMem,mem,src_flag1,src1,0,0,16+(c*sz>>2)},{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindMem,mem,src_flag2,src2,0,0,16+(c*sz>>2)+1}},rest);
 
-array_var_elt_assign(ctx,arrayf,array,startf,start,code,{}) -> code;
-array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{false,_,{{{src_flag,src,sz}},tp,_}},*rest})
-    -> array_var_elt_assign(ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),OpAppend,0,arrayf,array,src_flag,src,0,0,sz}},rest);
-array_var_elt_assign(ctx,arrayf,array,startf,start,code,{{true,_,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,consume}},*rest})
-    -> array_var_elt_assign(ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),if(consume==Consume,OpAppendArrayConsume,OpAppendArray),0,arrayf,array,src_flag1,src1,src_flag2,src2,sz}},rest);
+array_var_elt_assign_pre(ctx,arrayf,array,startf,start,n,code,{}) -> code;
+array_var_elt_assign_pre(ctx,arrayf,array,startf,start,n,code,{{false,_,{{{src_flag,src,sz}},tp,_}},*rest})
+    -> array_var_elt_assign_pre(ctx,arrayf,array,startf,start,n+1,{*code,{ctx_fnr(ctx),OpPrepend,0,arrayf,array,src_flag,src,startf,start+(n<<32),sz}},rest);
+
+array_var_elt_assign_post(ctx,arrayf,array,startf,start,code,{}) -> code;
+array_var_elt_assign_post(ctx,arrayf,array,startf,start,code,{{false,_,{{{src_flag,src,sz}},tp,_}},*rest})
+    -> array_var_elt_assign_post(ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),OpAppend,0,arrayf,array,src_flag,src,0,0,sz}},rest);
+array_var_elt_assign_post(ctx,arrayf,array,startf,start,code,{{true,_,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,consume}},*rest})
+    -> array_var_elt_assign_post(ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),if(consume==Consume,OpAppendArrayConsume,OpAppendArray),0,arrayf,array,src_flag1,src1,src_flag2,src2,sz}},rest);
 
 decompose_stypes({0,n}) -> n,{0,n};
 decompose_stypes({1,a,*rest}) -> a,{1,*rest};
@@ -1046,6 +1060,10 @@ binop(t1,t1,Less) -> true,false,TypeBool,OpLessThan;
 binop(t1,t1,LessEqual) -> true,false,TypeBool,OpLessThanEqual;
 binop(t1,t1,Greater) -> true,true,TypeBool,OpLessThan;
 binop(t1,t1,GreaterEqual) -> true,true,TypeBool,OpLessThanEqual;
+binop(TypeBool,TypeBool,OrOr) -> true,false,TypeBool,OpOrOr;
+binop(TypeBool,TypeBool,AndAnd) -> true,false,TypeBool,OpAndAnd;
+binop(0,0,OrOr) -> true,false,TypeBool,OpOrOr;
+binop(0,0,AndAnd) -> true,false,TypeBool,OpAndAnd;
 binop(_,_,_) -> false,false,0,0;
 
 unop(t1,Minus) -> true,t1,OpUnaryMinus;
@@ -1148,7 +1166,7 @@ ll_emit_instruction(z,_,{_,_,op,_,_,lbl,flag_src,src,flag_src2,src2,lbl2}) when 
     z,{'\t%c',*id,'=icmp eq ',*intsize(op-OpCompareEqualBranch),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2),'\n\tbr i1 %c',*id,',label %L',*int2s36(lbl),',label %L',*id};
 ll_emit_instruction(z,_,{_,_,op,tp,BindReg,dst,flag_src,src,flag_src2,src2}) when op>=OpPlus when op<=OpLessThanEqual ->
     z,{'\t',*ll_emit_arg(BindReg,dst),'=',*ll_binop(op,tp),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2)};
-ll_emit_instruction(z,_,{_,_,OpError,_,0,code,_,line,_,sym}) ->
+ll_emit_instruction(z,_,{_,_,OpError,0,BindImm,code,_,line,_,sym}) ->
     z,{'\tcall void @__rw__error(ptr %A,i32 ',*int2s(code),',i32 ',*int2s(line),',i32 ',*int2s(sym),',ptr @.fn.syms)\n\tunreachable'};
 ll_emit_instruction(z,_,{OpBuildIOList,0,*_}) -> z,"";
 ll_emit_instruction(z,_,{OpBuildIOList,OpRetExit,_,_,0}) -> z,"\tret void";

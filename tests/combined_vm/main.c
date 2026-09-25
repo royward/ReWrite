@@ -117,6 +117,12 @@ int main(int argc, char** argv) {
     //if(!ret_code && sz==200000 && array[199999]==2750159) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
     //free(array);
 
+    printf("int_to_roman:");
+    exe->allocated=0;
+    ret_code=rw_int_to_roman(exe,1994,&resultc1);
+    if(!ret_code && strcmp(resultc1,"MCMXCIV")==0) { printf("success\n"); } else { printf("fail:%d \"%s\"\n",ret_code,resultc1); };
+    free(resultc1);
+
     printf("Heap size=%d\n",exe->end_of_heap*8);
 
     program_unload(&p);
