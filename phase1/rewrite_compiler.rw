@@ -491,7 +491,7 @@ lookup_type_size_pri(t,types) match nth(t,types) => {_,_,_,size_pri} -> size_pri
 
 const OpLabel=1;
 const OpError=2;
-const OpRetExit=5;
+const OpRet=5;
 const OpMove=16;
 const OpPlus=24;
 const OpMinus=25;
@@ -516,8 +516,8 @@ const OpAppendArray=198;
 const OpAppendArrayConsume=199;
 const OpCont=207;
 const OpCallIO=237;
-const OpGotoExit=238;
-const OpCallEnterExit=239;
+const OpGoto=238;
+const OpCall=239;
 const OpCompareNotEqualBranch=240;
 const OpCompareLessThanBranch=246;
 const OpCompareLessThanEqualBranch=247;
@@ -687,10 +687,10 @@ compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type
     -> ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lbl_decline(ctx)!=0,ctx_get_lbl_decline(ctx),ctx_lbl(ctx),
         code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_goto(ctx_fnr(ctx),length(slices),call_id,regs_right,first_slice),*slices});
 
-slice_build_ret_exit(fn_id,rule_id,len,regs_right,first_slice) -> {OpBuildIOList,OpRetExit,OpRetExit+(fn_id<<16),(rule_id&255)+(len<<8),regs_right,*first_slice};
-slice_build_goto(fn_id,rule_id,len,call_id,regs_right,first_slice) -> {OpBuildIOList,OpGotoExit,OpGotoExit+(fn_id<<16),(rule_id&255)+(len<<8),call_id,regs_right,*first_slice};
+slice_build_ret_exit(fn_id,rule_id,len,regs_right,first_slice) -> {OpBuildIOList,OpRet,OpRet+(fn_id<<16),(rule_id&255)+(len<<8),regs_right,*first_slice};
+slice_build_goto(fn_id,rule_id,len,call_id,regs_right,first_slice) -> {OpBuildIOList,OpGoto,OpGoto+(fn_id<<16),(rule_id&255)+(len<<8),call_id,regs_right,*first_slice};
 slice_build_call(fn_id,rule_id,len,call_id,spinc,regleft,regright,first_slice)
-    -> {OpBuildIOList,OpCallEnterExit,OpCallEnterExit+(fn_id<<16),(rule_id&255)+(len<<8)+(spinc<<16),call_id,regleft,regright,*first_slice};
+    -> {OpBuildIOList,OpCall,OpCall+(fn_id<<16),(rule_id&255)+(len<<8)+(spinc<<16),call_id,regleft,regright,*first_slice};
 slice_build_call_io(fn_id,rule_id,len,call_id,reg_left,reg_right,first_slice) -> {OpBuildIOList,OpCallIO,OpCallIO+(fn_id<<16),(rule_id&255)+(len<<8),call_id,reg_left,reg_right,*first_slice};
 
 //slice_iolist(maxreg,_,sofar,{},{}) -> sofar;
@@ -1169,22 +1169,22 @@ ll_emit_instruction(z,_,{_,_,op,tp,BindReg,dst,flag_src,src,flag_src2,src2}) whe
 ll_emit_instruction(z,_,{_,_,OpError,0,BindImm,code,_,line,_,sym,0}) ->
     z,{'\tcall void @__rw__error(ptr %A,i32 ',*int2s(code),',i32 ',*int2s(line),',i32 ',*int2s(sym),',ptr @.fn.syms)\n\tunreachable'};
 ll_emit_instruction(z,_,{OpBuildIOList,0,*_}) -> z,"";
-ll_emit_instruction(z,_,{OpBuildIOList,OpRetExit,_,_,0}) -> z,"\tret void";
-ll_emit_instruction(z,table,{OpBuildIOList,OpRetExit,fnid16,_,1,v})
+ll_emit_instruction(z,_,{OpBuildIOList,OpRet,_,_,0}) -> z,"\tret void";
+ll_emit_instruction(z,table,{OpBuildIOList,OpRet,fnid16,_,1,v})
     match nth(fnid16>>16,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
     match ll_get_sizelist(listnv(regright,999),type_right) => {sz}
     match ll_emit_zext('t',v,sz) => code,arg
     -> z,{*code,'\tret i64 ',*arg};
-ll_emit_instruction(z,table,{OpBuildIOList,OpRetExit,fnid16,_,_,*rest})
+ll_emit_instruction(z,table,{OpBuildIOList,OpRet,fnid16,_,_,*rest})
     match nth(fnid16>>16,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
     match ll_ret_type(regright) => retname
     match ll_get_sizelist(listnv(regright,999),type_right) => sizes
     match ll_emit_ret(retname,0,{},int2s36(z),rest,sizes) => code
     -> z+1,{*code,'\tret ',*retname,' %m',*int2s36(regright-1),'_',*int2s36(z)};
-ll_emit_instruction(z,table,{OpBuildIOList,OpCallEnterExit,_,spinc16,callid,rleft,rright,*rest})
+ll_emit_instruction(z,table,{OpBuildIOList,OpCall,_,spinc16,callid,rleft,rright,*rest})
     match nth(callid,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
     -> z+1,ll_handle_call(false,'t','t',name,regleft,params_left,regright,type_right,spinc16>>16,callid,int2s36(z),rest);
-ll_emit_instruction(z,table,{OpBuildIOList,OpGotoExit,_,spinc16,callid,rleft,*rest})
+ll_emit_instruction(z,table,{OpBuildIOList,OpGoto,_,spinc16,callid,rleft,*rest})
     match nth(callid,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
     -> z+1,ll_handle_call(true,'x','t',name,regleft,params_left,regright,type_right,0,callid,int2s36(z),rest);
 ll_emit_instruction(z,_,{_,_,op,*_}) -> z,{'\tunknown:',*int2s(op)};
