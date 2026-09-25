@@ -618,7 +618,7 @@ code_length(n,{{_,a},*rest}) -> code_length(n+length(a),rest);
 // TODO remove bitmask
 compile_function(types,target,reg_count,active,lbl_id,fn_id,table,rule_id,sofar,{},_,_,_,_,_,_)
     match nth(fn_id,table) => {_,fnlineno,symoffset,_,reg_count1,bitmask1,type_left,_,reg_count2,bitmask2,type_right,_} ->
-    lbl_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpError,0,BindImm,ErrNoMatch,0,fnlineno,0,symoffset}})};
+    lbl_id,{*sofar,*code_or_not(active,{{fn_id,rule_id,OpError,0,BindImm,ErrNoMatch,0,fnlineno,0,symoffset,0}})};
 compile_function(types,target,reg_count,active,lbl_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,regs_left,type_left,regs_right,type_right)
     match rule => {linerule,bindings,params,clauses,exprs}
     update calc_counts(table,bindings,params,clauses,exprs) => params,clauses,exprs
@@ -834,7 +834,7 @@ generate_conditional_rhs(ctx,code,tp,{{src_flag,src,sz},{src_flag2,src2,sz}})
     update generate_conditional(ctx,target,active,lbl_id,lbl_id,OpCompareEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => _,ctx,newcode
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
-    ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,BindImm,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset},{ctx_fnr(ctx),OpLabel,0,0,lbl_id}};
+    ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,BindImm,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset,0},{ctx_fnr(ctx),OpLabel,0,0,lbl_id}};
 
 // TODO have comparison deal with non-scalars, and reduce refcount where appropriate
 generate_bind_variable(types,count,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
@@ -932,7 +932,7 @@ generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprCall,fn_id,args})
 generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}})
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
-    ctx,false,{{ctx_fnr(ctx),OpError,0,BindImm,err,0,ctx_linerule(ctx),0,symoffset}},{{{{BindImm,err,DefaultSize}},TypeI64,Consume}};
+    ctx,false,{{ctx_fnr(ctx),OpError,0,BindImm,err,0,ctx_linerule(ctx),0,symoffset,0}},{{{{BindImm,err,DefaultSize}},TypeI64,Consume}};
 generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprList,elements}) @match decompose_stypes(stypes) => stype,_
     @match nth(stype,types) => {_,_,{DerivedTypeArray,t},storage}
     // Array - go get the elements then come back to allocate
@@ -1166,7 +1166,7 @@ ll_emit_instruction(z,_,{_,_,op,_,_,lbl,flag_src,src,flag_src2,src2,lbl2}) when 
     z,{'\t%c',*id,'=icmp eq ',*intsize(op-OpCompareEqualBranch),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2),'\n\tbr i1 %c',*id,',label %L',*int2s36(lbl),',label %L',*id};
 ll_emit_instruction(z,_,{_,_,op,tp,BindReg,dst,flag_src,src,flag_src2,src2}) when op>=OpPlus when op<=OpLessThanEqual ->
     z,{'\t',*ll_emit_arg(BindReg,dst),'=',*ll_binop(op,tp),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2)};
-ll_emit_instruction(z,_,{_,_,OpError,0,BindImm,code,_,line,_,sym}) ->
+ll_emit_instruction(z,_,{_,_,OpError,0,BindImm,code,_,line,_,sym,0}) ->
     z,{'\tcall void @__rw__error(ptr %A,i32 ',*int2s(code),',i32 ',*int2s(line),',i32 ',*int2s(sym),',ptr @.fn.syms)\n\tunreachable'};
 ll_emit_instruction(z,_,{OpBuildIOList,0,*_}) -> z,"";
 ll_emit_instruction(z,_,{OpBuildIOList,OpRetExit,_,_,0}) -> z,"\tret void";

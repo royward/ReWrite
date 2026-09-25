@@ -601,7 +601,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_LABEL: {
             } break;
              case OP_ERROR: {
-                exe->errtype=operand_load(exe, 32, operation->flags_dst, operation->fdst.a, sp);
+                exe->errtype=operand_load(exe, 64, operation->flags_dst, operation->fdst.a, sp);
                 exe->errline=operation->src1;
                 exe->errsym=program->symbols+operation->src2;
                 return exe->errtype;
