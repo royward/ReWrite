@@ -515,6 +515,7 @@ const OpAppend=196;
 const OpAppendSplat=198;
 const OpAppendSplatConsume=199;
 const OpDerefFreeList=200;
+const OpEmptyList=201;
 const OpCont=207;
 const OpCallIO=237;
 const OpGoto=238;
@@ -945,6 +946,10 @@ generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprError,{{Const,{TypeI64,e
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
     ctx,false,{{ctx_fnr(ctx),OpError,0,BindImm,err,0,ctx_linerule(ctx),0,symoffset,0}},{{{{BindImm,err,DefaultSize}},TypeI64,Consume}};
+generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprList,{}})  @match decompose_stypes(stypes) => stype,_ // empty list.
+    update ctx_newreg(ctx,32) => ctx,newarray
+    update ctx_newreg(ctx,32) => ctx,newstart
+    -> ctx,false,{{ctx_fnr(ctx),OpEmptyList,0,BindReg,newarray,BindReg,newstart}},{{{{BindReg,newarray,32},{BindReg,newstart,32}},stype,Consume}};
 generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprList,elements}) @match decompose_stypes(stypes) => stype,_
     @match nth(stype,types) => {_,_,{DerivedTypeArray,t},storage}
     // Array - go get the elements then come back to allocate

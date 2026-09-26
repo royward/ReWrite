@@ -33,6 +33,7 @@
 #define OP_APPEND_SPLAT 0xC6
 #define OP_APPEND_SPLAT_CONSUME 0xC7
 #define OP_DEREF_FREE_LIST 0xC8
+#define OP_EMPTY_LIST 0xC9
 #define OP_CONTINUATION 0xCF
 #define OP_CALL_IO_RET 0xED
 #define OP_GOTO_EXIT 0xEE
@@ -127,7 +128,13 @@ int rw_instance_init(RWInstance* exe, Program* p) {
     exe->program = p;
     exe->registers = (uint64_t*)malloc(REGISTERS_SIZE*sizeof(uint64_t));
     exe->heap8 = (uint64_t*)malloc(HEAP_SIZE*sizeof(uint8_t));
-    exe->end_of_heap = 0;
+    // create an empty value
+    uint32_t* header=rwu_get_header(exe,0);
+    header[0]=2;
+    header[1]=1;
+    header[2]=0;
+    header[3]=0xDEADBEEF;
+    exe->end_of_heap = 2;
     if(!exe->registers || !exe->heap8) {
         free(exe->registers);
         free(exe->heap8);
@@ -345,6 +352,12 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
             display_operand(out,operation->flags_src.a,operation->src1);
             fprintf(out,"*");
             display_operand(out,operation->flags_src.b,operation->src2);
+        } break;
+        case OP_EMPTY_LIST: {
+            fprintf(out,"empty_list ");
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out,",");
+            display_operand(out,operation->flags_src.a,operation->src1);
         } break;
         case OP_DEREF_FREE: {
             fprintf(out,"deref_free ");
@@ -566,7 +579,6 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
     //printf("alloc +%d=%d %d\n",full_size,exe->allocated,alloc);
     uint32_t* header=rwu_get_header(exe,alloc);
     header[0]=full_size;
-    //printf("%d\n",full_size);
     header[1]=1;
     header[3]=0xDEADBEEF;
     exe->end_of_heap+=full_size;
@@ -677,6 +689,11 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_ALLOC: {
                 uint32_t ret=alloc(exe,operand_load(exe,64,operation->flags_src.a,operation->src1,sp),operand_load(exe,64,operation->flags_src.a,operation->src2,sp));
                 operand_store(exe, operation, ret, 64, sp);
+            } break;
+            case OP_EMPTY_LIST: {
+                operand_store(exe, operation, 0, 32, sp);
+                exe->registers[operation->fsrc1.a+sp]=0;
+                rwu_get_header(exe,0)[1]++;
             } break;
             case OP_REALLOC: {
                 Operation* operation2=&program->code[pc+1];
