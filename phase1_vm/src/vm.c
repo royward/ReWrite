@@ -3,9 +3,9 @@
 #include <inttypes.h>
 #include <string.h>
 
-#define REGISTERS_SIZE 100000
+#define REGISTERS_SIZE 10000000
 #define LABEL_COUNT 100000
-#define HEAP_SIZE 10000000
+#define HEAP_SIZE 1000000000
 
 #define OP_LABEL 0x01
 #define OP_ERROR 0x02
@@ -32,6 +32,7 @@
 #define OP_APPEND 0xC4
 #define OP_APPEND_SPLAT 0xC6
 #define OP_APPEND_SPLAT_CONSUME 0xC7
+#define OP_DEREF_FREE_LIST 0xC8
 #define OP_CONTINUATION 0xCF
 #define OP_CALL_IO_RET 0xED
 #define OP_GOTO_EXIT 0xEE
@@ -271,11 +272,7 @@ void display_xreg_assignments(FILE* out, bool outx, const char* r, uint32_t sz, 
         uint32_t v=p[i];
         fprintf(out," ");
         if(outx)fprintf(out,"x%d=",i);
-        if((v&15)==15) {
-            fprintf(out,"UNDEF");
-        } else {
-            fprintf(out,"%s%d",r,v);
-        }
+        fprintf(out,"%s%d",r,v);
         if(!outx)fprintf(out,"=x%d",i);
     }
 }
@@ -352,6 +349,13 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
         case OP_DEREF_FREE: {
             fprintf(out,"deref_free ");
             display_operand(out,operation->flags_src.a,operation->src1);
+        } break;
+        case OP_DEREF_FREE_LIST: {
+            fprintf(out,"deref_free_list (");
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out,",");
+            display_operand(out,operation->flags_src.b,operation->src2);
+            fprintf(out,")");
         } break;
         case OP_REALLOC: {
             Operation* operation2=&program->code[i+1];
@@ -569,8 +573,12 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
     return alloc;
 }
 
-void deref_free(RWInstance* exe, uint64_t v) {
+void deref_free(RWInstance* exe, uint32_t v) {
     uint32_t* header=rwu_get_header(exe,v);
+    if(header[1]==0) {
+        printf("double free\n");
+        exit(1);
+    }
     header[1]--;
     if(header[1]==0) {
         uint32_t sz=header[0];
@@ -594,7 +602,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
     uint32_t sp=2; // make sure we are start, even if it was run before
     uint32_t pc=program->labels[in_lbl];
     while(true) {
-        //printf("%d\n",pc);
+        //printf("%d ",pc);
         Operation* operation=&program->code[pc];
         uint8_t op=operation->op;
         switch(op) {
@@ -758,7 +766,19 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 deref_free(exe,array);
             } break;
             case OP_DEREF_FREE: {
-                deref_free(exe,operand_load(exe, 64, operation->flags_src.a, operation->src1, sp));
+                uint32_t array=operand_load(exe,32,operation->flags_src.a, operation->src1, sp);
+                deref_free(exe,array);
+            } break;
+            case OP_DEREF_FREE_LIST: {
+                uint32_t array=operand_load(exe,32,operation->flags_src.a, operation->src1, sp);
+                uint32_t start=operand_load(exe,32,operation->flags_src.b, operation->src2, sp);
+                uint32_t* parray=rwu_get_header(exe,array);
+                uint32_t* data=rwu_get_data(parray);
+                uint32_t end=parray[2];
+                for(uint32_t i=start;i<end;i++) {
+                    deref_free(exe,data[i+i]);
+                }
+                deref_free(exe,array);
             } break;
             case OP_MOVE: {
                 uint64_t val = operand_load(exe, 1, operation->flags_src.a, operation->src1, sp);

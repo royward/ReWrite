@@ -123,6 +123,17 @@ int main(int argc, char** argv) {
     if(!ret_code && strcmp(resultc1,"MCMXCIV")==0) { printf("success\n"); } else { printf("fail:%d \"%s\"\n",ret_code,resultc1); };
     free(resultc1);
 
+    printf("len_nqueens:");
+    exe->allocated=0;
+    ret_code=rw_len_nqueens(exe,8,&result0);
+    if(!ret_code && result0==92) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("car_nqueens:");
+    exe->allocated=0;
+    ret_code=rw_car_nqueens(exe,8,&array,&sz);
+    if(!ret_code && sz==8 && array[0]==4 && array[7]==1) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
+    free(array);
+
     printf("Heap size=%d\n",exe->end_of_heap*8);
 
     program_unload(&p);

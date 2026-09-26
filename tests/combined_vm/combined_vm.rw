@@ -112,6 +112,19 @@ isprime(_,{}) -> true;
 :- export testprime(i64) -> bool;
 testprime(n) -> isprime(n,{2,3,5,7,11});
 
+:- export car_nqueens(i64) -> value [i64];
+car_nqueens(x) -> car_nqueens_aux(nqueens(x));
+
+:- car_nqueens_aux([[i64]]) -> [i64];
+car_nqueens_aux({x,*a}) -> x;
+
+:- export len_nqueens(i64) -> i64;
+len_nqueens(x) -> length_nqueens_aux(nqueens(x));
+
+:- length_nqueens_aux([[i64]]) -> i64;
+length_nqueens_aux({}) -> 0;
+length_nqueens_aux({_,*rest}) -> 1+length_nqueens_aux(rest);
+
 :- nqueens(i64) -> [[i64]];
 nqueens(n) -> nqueens_aux({},listn1(n),{});
 
@@ -133,5 +146,3 @@ nqueens_try(col_so_far,col_todo,c,rows_done) -> nqueens_aux({},{*col_so_far,*col
 attack(c,offset,{}) -> false;
 attack(c,offset,{x,*rest}) when c+offset==x || c-offset==x -> true;
 attack(c,offset,{_,*rest}) -> attack(c,offset+1,rest);
-
-//op_infer(29,0,{{8,11,{{8,30,{{2,{0,1,0}},{2,{1,1,0}}}},{2,{2,1,0}}}},{8,11,{{8,24,{{2,{0,0,2}},{2,{1,0,2}}}},{2,{2,0,2}}}}})
