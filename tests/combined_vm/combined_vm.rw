@@ -123,7 +123,7 @@ len_nqueens(x) -> length_nqueens_aux(nqueens(x));
 
 :- length_nqueens_aux([[i64]]) -> i64;
 length_nqueens_aux({}) -> 0;
-length_nqueens_aux({_,*rest}) -> 1+length_nqueens_aux(rest);
+length_nqueens_aux({a,*rest}) -> 1+length_nqueens_aux(rest)+length(a);
 
 :- nqueens(i64) -> [[i64]];
 nqueens(n) -> nqueens_aux({},listn1(n),{});
