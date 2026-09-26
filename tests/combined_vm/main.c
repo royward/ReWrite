@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
     printf("h:");
     exe->allocated=0;
     ret_code=rw_h(exe,"test","hex",0,&resultc1,&resultc);
-    if(!ret_code && result0==0 && strcmp(resultc1,"test")==0 && (char)resultc=='e') { printf("success\n"); } else { printf("fail:%d %ld %c %s\n",ret_code,result0,resultc,resultc1); };
+    if(!ret_code && strcmp(resultc1,"test")==0 && (char)resultc=='e') { printf("success\n"); } else { printf("fail:%d %ld %c %s\n",ret_code,result0,resultc,resultc1); };
     free(resultc1);
 
     printf("cdr:");
@@ -110,6 +110,7 @@ int main(int argc, char** argv) {
     exe->allocated=0;
     ret_code=rw_nprime(exe,1000,&array,&sz);
     if(!ret_code && sz==1000 && array[999]==7919) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
+    free(array);
 
     //printf("nprime:");
     //exe->allocated=0;
