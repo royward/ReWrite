@@ -516,6 +516,7 @@ const OpAppendSplat=198;
 const OpAppendSplatConsume=199;
 const OpDerefFreeList=200;
 const OpEmptyList=201;
+const OpExtractList=202;
 const OpCont=207;
 const OpCallIO=237;
 const OpGoto=238;
@@ -761,6 +762,19 @@ generate_param_code(types,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,
     update generate_conditional_rhs(ctx,sofar0,tp,{{src_flag,src,sz},{BindImm,val,sz}}) => ctx,code ->
     generate_param_code(types,true,bindlevel,newstride,ctx,code,sofar1,type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
+    @match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,_},type_left
+    @match newstride => {_,psrc_flagp,srcp,*_}
+    @match nth(tp,types) => {_,_,{2,sub_type},_}
+    update ctx_bindings(ctx) => bindings
+    update nth(id,bindings) => bind
+    update ctx_newreg(ctx,64) => ctx,array
+    update ctx_newreg(ctx,32) => ctx,begin
+    //update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,bind) => ctx,newbind,code0,code1
+    update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,{{BindReg,array,sz},{BindReg,begin,sz}},tp,bind) => ctx,newbind,code0,code1
+    update ctx_newbindings(ctx,nth_insert(id,newbind,bindings)) => ctx ->
+    //generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,*code0},{*sofar1,*code1},type_left,rest);
+    generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,{ctx_fnr(ctx),OpExtractList,0,0,array,src_flag1,src1,src_flag2,src2,srcp},*code0},{*sofar1,*code1},type_left,rest);
+generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{storage,tp,_},type_left
     update ctx_bindings(ctx) => bindings
     update nth(id,bindings) => bind
@@ -768,10 +782,10 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update ctx_newbindings(ctx,nth_insert(id,newbind,bindings)) => ctx ->
     generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,*code0},{*sofar1,*code1},type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest})
-    @match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz},_},tp,_},type_left
+    @match gen_param_code_next_type(stride,typex) => {},{{{src_flag,src,sz},_},tp,_},type_left
     @match nth(tp,types) => {_,_,{2,_},_}
     update ctx_newreg(ctx,32) => ctx,newreg
-    -> generate_param_code(types,post_arrow,bindlevel,newstride,ctx,sofar0,
+    -> generate_param_code(types,post_arrow,bindlevel,{},ctx,sofar0,
         {*sofar1,{ctx_fnr(ctx),OpMove+get_size_scale(sz),0,BindReg,newreg,src_flag,src},{ctx_fnr(ctx),OpDerefFree,0,0,0,BindReg,newreg}},type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,_,type_left
@@ -789,7 +803,7 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
         {*sofar1,*codefree},type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,elements},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
-    match nth(tp,types) => {_,_,{2,sub_type},{0,32,0,32}}
+    match nth(tp,types) => {_,_,{2,sub_type},_}
     match nth(sub_type,types) => {_,_,_,sub_alloc}
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,pend
@@ -1324,7 +1338,7 @@ create_export_wrappers_vm(target,types,sofarc,sofarh,fnid,lbl_id,{{_,_,_,name,re
             '\tuint64_t inout[',*int2s(max(n1,n2)),']={',*inarray,*outarray,'};\n',
             '\tint32_t e=RW__vmcall(a,',*int2s(new_lbl),',inout);\n\tif(e!=0)return e;\n',
             *create_export_vm_out(types,{},{},0,0,right,values_right),
-            '\tprintf("%d:",a->allocated);\n',
+            '\tprintf("%d-%d:",a->allocated,rwu_get_header(a,0)[1]);\n',
             '\treturn 0;\n}\n'},
         fnid+1,new_lbl,rest);
 

@@ -34,6 +34,7 @@
 #define OP_APPEND_SPLAT_CONSUME 0xC7
 #define OP_DEREF_FREE_LIST 0xC8
 #define OP_EMPTY_LIST 0xC9
+#define OP_EXTRACT_LIST 0xCA
 #define OP_CONTINUATION 0xCF
 #define OP_CALL_IO_RET 0xED
 #define OP_GOTO_EXIT 0xEE
@@ -359,6 +360,13 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
             fprintf(out,",");
             display_operand(out,operation->flags_src.a,operation->src1);
         } break;
+        case OP_EXTRACT_LIST: {
+            fprintf(out,"extractlist uniq(r%d) (%d,%d) = (",operation->fdst.b,operation->fdst.a,operation->fdst.a+1);
+            display_operand(out,operation->flags_src.a,operation->src1);
+            fprintf(out,",");
+            display_operand(out,operation->flags_src.b,operation->src2);
+            fprintf(out,")");
+        } break;
         case OP_DEREF_FREE: {
             fprintf(out,"deref_free ");
             display_operand(out,operation->flags_src.a,operation->src1);
@@ -614,7 +622,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
     uint32_t sp=2; // make sure we are start, even if it was run before
     uint32_t pc=program->labels[in_lbl];
     while(true) {
-        //printf("%d ",pc);
+        //printf("%d\n",pc);
         Operation* operation=&program->code[pc];
         uint8_t op=operation->op;
         switch(op) {
@@ -694,6 +702,24 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 operand_store(exe, operation, 0, 32, sp);
                 exe->registers[operation->fsrc1.a+sp]=0;
                 rwu_get_header(exe,0)[1]++;
+            } break;
+            case OP_EXTRACT_LIST: {
+                if(operation->flags_src.a!=BIND_MEM) {
+                    exit(1);
+                }
+                uint32_t* addr=(uint32_t*)(exe->registers[operation->fsrc1.a+sp]+operation->fsrc1.b);
+                uint64_t v1=addr[0];
+                uint64_t v2=addr[1];
+                uint32_t* parray=rwu_get_header(exe,exe->registers[operation->fdst.b+sp]);
+                exe->registers[operation->fdst.a+sp]=v1;
+                exe->registers[operation->fdst.a+sp+1]=v2;
+                if(parray[1]==1) { // unique, replace with tombstone
+                    addr[0]=0;
+                    addr[1]=0;
+                    rwu_get_header(exe,0)[1]++;
+                } else {
+                    rwu_get_header(exe,v1)[1]++;
+                }
             } break;
             case OP_REALLOC: {
                 Operation* operation2=&program->code[pc+1];
@@ -788,11 +814,11 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             } break;
             case OP_DEREF_FREE_LIST: {
                 uint32_t array=operand_load(exe,32,operation->flags_src.a, operation->src1, sp);
-                uint32_t start=operand_load(exe,32,operation->flags_src.b, operation->src2, sp);
+                //uint32_t start=operand_load(exe,32,operation->flags_src.b, operation->src2, sp);
                 uint32_t* parray=rwu_get_header(exe,array);
                 uint32_t* data=rwu_get_data(parray);
                 uint32_t end=parray[2];
-                for(uint32_t i=start;i<end;i++) {
+                for(uint32_t i=0;i<end;i++) {
                     deref_free(exe,data[i+i]);
                 }
                 deref_free(exe,array);

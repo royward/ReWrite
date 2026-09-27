@@ -21,6 +21,10 @@ car({a,*rest}) -> a;
 len("") -> 0;
 len({a,*rest}) -> len(rest)+1;
 
+:- export len_int(value [i64]) -> i64;
+len_int({}) -> 0;
+len_int({a,*rest}) -> len_int(rest)+1;
+
 :- export member(i64, value [i64]) -> bool;
 member(_,{}) -> false;
 member(x,{x,*_}) -> true;
@@ -116,14 +120,14 @@ testprime(n) -> isprime(n,{2,3,5,7,11});
 car_nqueens(x) -> car_nqueens_aux(nqueens(x));
 
 :- car_nqueens_aux([[i64]]) -> [i64];
-car_nqueens_aux({x,*a}) -> x;
+car_nqueens_aux({x,*_}) -> x;
 
 :- export len_nqueens(i64) -> i64;
 len_nqueens(x) -> length_nqueens_aux(nqueens(x));
 
 :- length_nqueens_aux([[i64]]) -> i64;
 length_nqueens_aux({}) -> 0;
-length_nqueens_aux({a,*rest}) -> 1+length_nqueens_aux(rest)+length(a);
+length_nqueens_aux({_,*rest}) -> 1+length_nqueens_aux(rest);
 
 :- nqueens(i64) -> [[i64]];
 nqueens(n) -> nqueens_aux({},listn1(n),{});
