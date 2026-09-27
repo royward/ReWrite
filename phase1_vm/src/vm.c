@@ -181,9 +181,6 @@ void display_operand(FILE* out, uint8_t flag, int64_t val) {
         case BIND_REG: {
             fprintf(out,"r%" PRIu64,val&0xFFFFFFFF);
         } break;
-        // case BIND_MEM: {
-        //     fprintf(out,"(r%" PRId64 "+%" PRId64 ")",val&0xFFFFFFFF, val>>32);
-        // } break;
     }
 }
 
@@ -553,16 +550,6 @@ void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32
             value&=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
             exe->registers[operation->fdst.a+sp]=value;
         } break;
-        // case BIND_MEM: {
-        //     uint8_t* addr=(uint8_t*)(exe->registers[operation->fdst.a+sp]+operation->fdst.b);
-        //     switch(sz) { // alignment is guaranteed by the compiler
-        //         case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
-        //         case 16:*((uint16_t*)addr)=(uint16_t)value; break;
-        //         case 32:*((uint32_t*)addr)=(uint32_t)value; break;
-        //         case 64:*((uint64_t*)addr)=(uint64_t)value; break;
-        //         default: fprintf(stderr,"unknown size in operand_store\n"); exit(EXIT_FAILURE);
-        //     }
-        // } break;
         default: {
             fprintf(stderr,"unknown flag in operand_store\n");
             exit(EXIT_FAILURE);
@@ -591,18 +578,6 @@ uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t
         case BIND_REG: {
             return exe->registers[src+sp]&mask;
         } break;
-        // case BIND_MEM: {
-        //     uint8_t* addr=(uint8_t*)(exe->registers[src+sp]+(srcfull>>32));
-        //     uint64_t value;
-        //     switch(sz) { // alignment is guaranteed by the compiler
-        //         case 1:case 8: value=*((uint8_t*)addr); break;
-        //         case 16:value=*((uint16_t*)addr); break;
-        //         case 32:value=*((uint32_t*)addr); break;
-        //         case 64:value=*((uint64_t*)addr); break;
-        //         default: fprintf(stderr,"unknown size in operand_load\n"); exit(EXIT_FAILURE);
-        //     }
-        //     return value&mask;
-        // } break;
         default: {
             fprintf(stderr,"unknown flag in operand_load %d\n",flags_src);
             exit(EXIT_FAILURE);
