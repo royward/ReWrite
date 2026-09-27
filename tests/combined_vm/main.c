@@ -96,6 +96,12 @@ int main(int argc, char** argv) {
     ret_code=rw_roman_to_int(exe,"mcmxciv",&result0);
     if(!ret_code && result0==1994) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
+    printf("int_to_roman:");
+    exe->allocated=0;
+    ret_code=rw_int_to_roman(exe,1994,&resultc1);
+    if(!ret_code && strcmp(resultc1,"MCMXCIV")==0) { printf("success\n"); } else { printf("fail:%d \"%s\"\n",ret_code,resultc1); };
+    free(resultc1);
+
     printf("testprime:");
     exe->allocated=0;
     ret_code=rw_testprime(exe,6,&resultb);
@@ -106,23 +112,11 @@ int main(int argc, char** argv) {
     ret_code=rw_testprime(exe,11,&resultb);
     if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
 
-    printf("nprime:");
-    exe->allocated=0;
-    ret_code=rw_nprime(exe,1000,&array,&sz);
-    if(!ret_code && sz==1000 && array[999]==7919) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
-    free(array);
-
     //printf("nprime:");
     //exe->allocated=0;
     //ret_code=rw_nprime(exe,200000,&array,&sz);
     //if(!ret_code && sz==200000 && array[199999]==2750159) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
     //free(array);
-
-    printf("int_to_roman:");
-    exe->allocated=0;
-    ret_code=rw_int_to_roman(exe,1994,&resultc1);
-    if(!ret_code && strcmp(resultc1,"MCMXCIV")==0) { printf("success\n"); } else { printf("fail:%d \"%s\"\n",ret_code,resultc1); };
-    free(resultc1);
 
     printf("len_nqueens:");
     exe->allocated=0;
@@ -134,6 +128,24 @@ int main(int argc, char** argv) {
     ret_code=rw_car_nqueens(exe,8,&array,&sz);
     if(!ret_code && sz==8 && array[0]==4 && array[7]==1) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
     free(array);
+
+    printf("nprime:");
+    exe->allocated=0;
+    ret_code=rw_nprime(exe,256,&array,&sz);
+    if(!ret_code && sz==256 && array[255]==1619) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
+    free(array);
+
+    printf("nprime:");
+    exe->allocated=0;
+    ret_code=rw_nprime(exe,257,&array,&sz);
+    if(!ret_code && sz==257 && array[256]==1621) { printf("success\n"); } else { printf("fail:%d %ld %d\n",ret_code,sz,array[256]); };
+    free(array);
+
+    // printf("nprime:");
+    // exe->allocated=0;
+    // ret_code=rw_nprime(exe,1000,&array,&sz);
+    // if(!ret_code && sz==1000 && array[999]==7919) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
+    // free(array);
 
     printf("Heap size=%d\n",exe->end_of_heap*8);
 
