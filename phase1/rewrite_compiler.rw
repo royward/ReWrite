@@ -476,7 +476,6 @@ create_empty_types(sofar,{_,_,*rest}) -> create_empty_types({*sofar,{}},rest);
 const BindImm=0;
 const BindReg=1;
 const BindMem=2;
-const BindArgRet=3; // never occurs in output
 
 annotate_type_list_reg(types,pri,max_reg,sofar,{}) -> max_reg,{},sofar;
 annotate_type_list_reg(types,pri,max_reg,sofar,{{{{}},t,_},*rest}) match lookup_type_size_pri(t,types) => {p,sz} when p<=pri ->
@@ -493,6 +492,9 @@ const OpLabel=1;
 const OpError=2;
 const OpRet=5;
 const OpMove=16;
+const OpLoad=17;
+const OpStore=18;
+const OpIncMem=19;
 const OpPlus=24;
 const OpMinus=25;
 const OpTimes=26;
@@ -667,7 +669,7 @@ gen_types_addref(types,ctx,tp,{},_) -> ctx,{};
 gen_types_addref(types,ctx,tp,{_},_) -> ctx,{};
 gen_types_addref(types,ctx,tp,{{src_flag1,src1,sz1},_},v)
     update ctx_newreg(ctx,64) => ctx,parray
-    -> ctx,{{ctx_fnr(ctx),OpLea,0,BindReg,parray,src_flag1,src1},{ctx_fnr(ctx),OpPlus,TypeU32,BindMem,parray,BindMem,parray+(4<<32),BindImm,v,4}};
+    -> ctx,{{ctx_fnr(ctx),OpLea,0,BindReg,parray,src_flag1,src1},{ctx_fnr(ctx),OpIncMem,TypeU32,0,parray,0,0,BindImm,v,4}};
 
 gen_types_do_compare(noteq,types,ctx,result,tp,{{srcflag1,src1,sz}},{{srcflag2,src2,sz}})
     -> ctx,{{ctx_fnr(ctx),if(noteq,OpNotEqual,OpEqual),get_size_scale(sz),BindReg,result,srcflag1,src1,srcflag2,src2}};
@@ -753,10 +755,11 @@ generate_param_code(types,post_arrow,bindlevel,{},ctx,sofar0,sofar1,{},{}) -> ct
 generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,_,_,_},ctx,sofar0,sofar1,{},{})
     -> ctx,sofar0,sofar1;
 generate_param_code(types,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
-    match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp,_},type_left
+    match gen_param_code_next_type(stride,typex) => newstride,{storage,tp,_},type_left
+    update move_mem_to_reg(ctx,{},{},storage) => ctx,mv_code,{{src_flag,src,sz}}
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,BindImm,val) => lbl_decline,ctx,code
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx ->
-    generate_param_code(types,false,bindlevel,newstride,ctx,{*sofar0,*code},sofar1,type_left,rest);
+    generate_param_code(types,false,bindlevel,newstride,ctx,{*sofar0,*mv_code,*code},sofar1,type_left,rest);
 generate_param_code(types,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp,_},type_left
     update generate_conditional_rhs(ctx,sofar0,tp,{{src_flag,src,sz},{BindImm,val,sz}}) => ctx,code ->
@@ -769,18 +772,17 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update nth(id,bindings) => bind
     update ctx_newreg(ctx,64) => ctx,array
     update ctx_newreg(ctx,32) => ctx,begin
-    //update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,bind) => ctx,newbind,code0,code1
     update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,{{BindReg,array,sz},{BindReg,begin,sz}},tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(id,newbind,bindings)) => ctx ->
-    //generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,*code0},{*sofar1,*code1},type_left,rest);
     generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,{ctx_fnr(ctx),OpExtractList,0,0,array,src_flag1,src1,src_flag2,src2,srcp},*code0},{*sofar1,*code1},type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{storage,tp,_},type_left
     update ctx_bindings(ctx) => bindings
     update nth(id,bindings) => bind
-    update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,storage,tp,bind) => ctx,newbind,code0,code1
+    update move_mem_to_reg(ctx,{},{},storage) => ctx,mv_code,mv_storage
+    update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,mv_storage,tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(id,newbind,bindings)) => ctx ->
-    generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,*code0},{*sofar1,*code1},type_left,rest);
+    generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,*mv_code,*code0},{*sofar1,*code1},type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest})
     @match gen_param_code_next_type(stride,typex) => {},{{{src_flag,src,sz},_},tp,_},type_left
     @match nth(tp,types) => {_,_,{2,_},_}
@@ -799,7 +801,7 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update gen_types_deref_free(true,types,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
     -> generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
         {ctx_fnr(ctx),OpLea,0,BindReg,parray,src_flag1,src1},
-        {ctx_fnr(ctx),OpMove,3,BindReg,pend,BindMem,parray+(8<<32)},*code},
+        {ctx_fnr(ctx),OpLoad,3,BindReg,pend,0,parray+(8<<32)},*code},
         {*sofar1,*codefree},type_left,rest);
 generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,elements},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
@@ -817,7 +819,7 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,(sz_one>>3),0,min_size+splatcount},ctx,{},{},{{memindex,sub_type,Consume}},elements) => ctx,code1,code2 ->
     generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
         {ctx_fnr(ctx),OpLea,0,BindReg,parray,src_flag1,src1},
-        {ctx_fnr(ctx),OpMove,3,BindReg,pend,BindMem,parray+(8<<32)},
+        {ctx_fnr(ctx),OpLoad,3,BindReg,pend,0,parray+(8<<32)},
         {ctx_fnr(ctx),OpMinus,TypeU32,BindReg,len,BindReg,pend,src_flag2,src2},*code,
         {ctx_fnr(ctx),OpLeaScale,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,sz_tot>>3},
         *code1},{*sofar1,*codefree,*code2},type_left,rest);
@@ -831,6 +833,12 @@ generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2
     update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,{{src_flag1,src1,32},{BindReg,start,32}},tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(id,newbind,bindings)) => ctx
     -> ctx,{*sofar0,{ctx_fnr(ctx),OpPlus,TypeU32,BindReg,start,src_flag2,src2,BindImm,pos},*code0},{*sofar1,*code1};
+
+move_mem_to_reg(ctx,code,sofar,{}) -> ctx,code,sofar;
+move_mem_to_reg(ctx,code,sofar,{{BindMem,m,sz},*rest})
+    update ctx_newreg(ctx,sz) => ctx,newreg
+    -> move_mem_to_reg(ctx,{*code,{ctx_fnr(ctx),OpLoad,get_size_scale(sz),BindReg,newreg,0,m}},{*sofar,{BindReg,newreg,sz}},rest);
+move_mem_to_reg(ctx,code,sofar,{a,*rest}) -> move_mem_to_reg(ctx,code,{*sofar,a},rest);
 
 generate_get_stride(pbegin,{_,sz}) -> sz,sz,{{BindMem,pbegin+(16<<32),sz}};
 generate_get_stride(pbegin,{_,sz,_,sz}) -> sz,sz+sz,{{BindMem,pbegin+(16<<32),sz},{BindMem,pbegin+((16+(sz>>3))<<32),sz}};
@@ -868,6 +876,11 @@ generate_conditional_rhs(ctx,code,tp,{{src_flag,src,sz},{src_flag2,src2,sz}})
 generate_bind_variable(types,count,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
     update generate_bind_variable_aux(ctx,{},{},storage) => ctx,bind,code
     -> ctx,{bindlevel,tp,bind,name},code,{};
+// generate_bind_variable(types,count,false,bindlevel,ctx,{{BindImm,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
+//     update ctx_newreg(ctx,sz) => ctx,newreg
+//     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,BindReg,newreg,src_flag2,src2) => lbl_decline,ctx,code
+//     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
+//     -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},{{ctx_fnr(ctx),OpLoad,sz,BindReg,newreg,BindImm,src},*code},{};
 generate_bind_variable(types,count,false,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompareNotEqualBranch,tp,sz,src_flag,src,src_flag2,src2) => lbl_decline,ctx,code
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
@@ -981,7 +994,7 @@ generate_expr_code_aux(post_arrow,types,ctx,{0,t},{ExprSplat,arg})
 
 generate_expr_code_list(types,ctx,newarray,parray,newstart,sz,stype,args_code,{},{}) // no splats
     update array_fixed_elt_assign(sz,ctx,parray,0,{},args_code) => c,code
-    -> ctx,false,{{ctx_fnr(ctx),OpAlloc,0,BindReg,newarray,BindImm,sz>>3,BindImm,c},{ctx_fnr(ctx),OpLea,0,BindReg,parray,BindReg,newarray},*code,{ctx_fnr(ctx),OpMove,3,BindMem,parray,BindImm,c,0,0,8}},
+    -> ctx,false,{{ctx_fnr(ctx),OpAlloc,0,BindReg,newarray,BindImm,sz>>3,BindImm,c},{ctx_fnr(ctx),OpLea,0,BindReg,parray,BindReg,newarray},*code,{ctx_fnr(ctx),OpStore,3,0,parray,BindImm,c,0,0,8}},
     {{{{BindReg,newarray,32},{BindImm,0,32}},stype,Consume}};
 generate_expr_code_list(types,ctx,newarray,parray,newstart,sz,stype,{},{{true,precode,{{{array_flag,array,32},{start_flag,start,32}},stype,_}}},post_splat) // first splat at start - check for append
     update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,post_splat) => ctx,sum_const,sum_code,sum_src_flag,sum_src
@@ -1025,7 +1038,7 @@ get_post_splat_alloc_size(ctx,sum,part_code,sum_code,sum_src_flag,sum_src,{{true
     update splat_sum(ctx,{},sum_src_flag,sum_src,len) => ctx,new_sum_code,newlen
     -> get_post_splat_alloc_size(ctx,sum,{*part_code,*part},{*sum_code,
         {ctx_fnr(ctx),OpLea,0,BindReg,parray,BindReg,array},
-        {ctx_fnr(ctx),OpMove,3,BindReg,end,BindMem,parray+(8<<32)},
+        {ctx_fnr(ctx),OpLoad,3,BindReg,end,0,parray+(8<<32)},
         {ctx_fnr(ctx),OpMinus,TypeU32,BindReg,len,BindReg,end,startf,start},*new_sum_code},BindReg,newlen,rest);
 
 splat_sum(ctx,code,BindImm,0,len) -> ctx,code,len;
@@ -1033,10 +1046,10 @@ splat_sum(ctx,code,src_flag,src,len) update ctx_newreg(ctx,32) => ctx,t -> ctx,{
 
 array_fixed_elt_assign(eltsize,ctx,mem,c,code,{}) -> c,code;
 array_fixed_elt_assign(eltsize,ctx,mem,c,code,{{false,partcode,{{{src_flag,src,sz}},tp,_}},*rest})
-    -> array_fixed_elt_assign(eltsize,ctx,mem,c+1,{*code,*partcode,{ctx_fnr(ctx),OpMove,get_size_scale(eltsize),BindMem,mem,src_flag,src,0,0,16+(c*eltsize>>3)}},rest);
+    -> array_fixed_elt_assign(eltsize,ctx,mem,c+1,{*code,*partcode,{ctx_fnr(ctx),OpStore,get_size_scale(eltsize),0,mem,src_flag,src,0,0,16+(c*eltsize>>3)}},rest);
 array_fixed_elt_assign(eltsize,ctx,mem,c,code,{{false,partcode,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,_}},*rest})
     -> array_fixed_elt_assign(eltsize,ctx,mem,c+1,
-    {*code,*partcode,{ctx_fnr(ctx),OpMove,get_size_scale(sz),BindMem,mem,src_flag1,src1,0,0,16+(c*sz>>2)},{ctx_fnr(ctx),OpMove,get_size_scale(sz),BindMem,mem,src_flag2,src2,0,0,16+(c*sz>>2)+(sz>>3)}},rest);
+    {*code,*partcode,{ctx_fnr(ctx),OpStore,get_size_scale(sz),0,mem,src_flag1,src1,0,0,16+(c*sz>>2)},{ctx_fnr(ctx),OpStore,get_size_scale(sz),0,mem,src_flag2,src2,0,0,16+(c*sz>>2)+(sz>>3)}},rest);
 
 array_var_elt_assign_pre(eltsize,ctx,arrayf,array,startf,start,n,code,{}) -> code;
 array_var_elt_assign_pre(eltsize,ctx,arrayf,array,startf,start,n,code,{{false,_,{{{src_flag,src,sz}},tp,_}},*rest})

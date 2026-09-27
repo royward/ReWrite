@@ -11,6 +11,9 @@
 #define OP_ERROR 0x02
 #define OP_RET_EXIT 0x05
 #define OP_MOVE 0x10
+#define OP_LOAD 0x11
+#define OP_STORE 0x12
+#define OP_INC_MEM 0x13
 #define OP_PLUS 0x18
 #define OP_MINUS 0x19
 #define OP_TIMES 0x1A
@@ -435,6 +438,23 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
             fprintf(out," = ");
             display_operand(out,operation->flags_src.a,operation->src1);
         } break;
+        case OP_LOAD: {
+            uint32_t sz=operation->type==0?1:(8<<((operation->type-1)&7));
+            fprintf(out,"load.%d ",sz);
+            display_operand(out,operation->flags_dst,operation->dst);
+            fprintf(out," = ");
+            fprintf(out,"(r%d+%d)",operation->fsrc1.a, operation->fsrc1.b);
+        } break;
+        case OP_STORE: {
+            uint32_t sz=operation->type==0?1:(8<<((operation->type-1)&7));
+            fprintf(out,"store.%d ",sz);
+            fprintf(out,"(r%d+%d)",operation->fdst.a, operation->fdst.b);
+            fprintf(out," = ");
+            display_operand(out,operation->flags_src.a,operation->src1);
+        } break;
+        case OP_INC_MEM: {
+            fprintf(out,"inc" "(r%d+%d) += %d",operation->fdst.a, operation->fdst.b, operation->fsrc2.a);
+        } break;
         case OP_CMP_NE_BRANCH: {
             uint32_t sz=operation->type==0?1:(8<<((operation->type-1)&7));
             fprintf(out,"test.%d ",sz);
@@ -550,6 +570,17 @@ void operand_store(RWInstance* exe, Operation* operation, uint64_t value, uint32
     }
 }
 
+void operand_store_mem(RWInstance* exe, Operation* operation, uint64_t value, uint32_t sz, uint32_t sp) {
+    uint8_t* addr=(uint8_t*)(exe->registers[operation->fdst.a+sp]+operation->fdst.b);
+    switch(sz) { // alignment is guaranteed by the compiler
+        case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
+        case 16:*((uint16_t*)addr)=(uint16_t)value; break;
+        case 32:*((uint32_t*)addr)=(uint32_t)value; break;
+        case 64:*((uint64_t*)addr)=(uint64_t)value; break;
+        default: fprintf(stderr,"unknown size in operand_store\n"); exit(EXIT_FAILURE);
+    }
+}
+
 uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t srcfull, uint32_t sp) {
     uint32_t src=srcfull&0xFFFFFFFF;
     uint64_t mask=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
@@ -577,6 +608,21 @@ uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t
             exit(EXIT_FAILURE);
         }
     }
+}
+
+uint64_t operand_load_mem(RWInstance* exe, uint32_t sz, uint64_t srcfull, uint32_t sp) {
+    uint32_t src=srcfull&0xFFFFFFFF;
+    uint64_t mask=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
+    uint8_t* addr=(uint8_t*)(exe->registers[src+sp]+(srcfull>>32));
+    uint64_t value;
+    switch(sz) { // alignment is guaranteed by the compiler
+        case 1:case 8: value=*((uint8_t*)addr); break;
+        case 16:value=*((uint16_t*)addr); break;
+        case 32:value=*((uint32_t*)addr); break;
+        case 64:value=*((uint64_t*)addr); break;
+        default: fprintf(stderr,"unknown size in operand_load\n"); exit(EXIT_FAILURE);
+    }
+    return value&mask;
 }
 
 uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
@@ -827,6 +873,27 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint32_t sz=operation->type==0?1:(8<<((operation->type-1)&7));
                 uint64_t val = operand_load(exe, sz, operation->flags_src.a, operation->src1, sp);
                 operand_store(exe, operation, val, sz, sp);
+            } break;
+            case OP_LOAD: {
+                uint32_t sz=operation->type==0?1:(8<<((operation->type-1)&7));
+                uint64_t val = operand_load_mem(exe, sz, operation->src1, sp);
+                operand_store(exe, operation, val, sz, sp);
+            } break;
+            case OP_STORE: {
+                uint32_t sz=operation->type==0?1:(8<<((operation->type-1)&7));
+                uint64_t val = operand_load(exe, sz, operation->flags_src.a, operation->src1, sp);
+                operand_store_mem(exe, operation, val, sz, sp);
+            } break;
+            case OP_INC_MEM: {
+                uint8_t* addr=(uint8_t*)(exe->registers[operation->fdst.a+sp]+operation->fdst.b);
+                uint32_t sz=operation->type==0?1:(8<<((operation->type-1)&7));
+                switch(sz) { // alignment is guaranteed by the compiler
+                    case 1:case 8:*((uint8_t*)addr)+=(uint8_t)operation->fsrc2.a; break;
+                    case 16:*((uint16_t*)addr)+=(uint16_t)operation->fsrc2.a; break;
+                    case 32:*((uint32_t*)addr)+=(uint32_t)operation->fsrc2.a; break;
+                    case 64:*((uint64_t*)addr)+=(uint64_t)operation->fsrc2.a; break;
+                    default: fprintf(stderr,"unknown size in operand_store\n"); exit(EXIT_FAILURE);
+                }
             } break;
             case OP_CMP_NE_BRANCH: {
                 uint32_t sz=operation->type==0?1:(8<<((operation->type-1)&7));

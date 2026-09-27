@@ -138,7 +138,7 @@ int main(int argc, char** argv) {
     printf("nprime:");
     exe->allocated=0;
     ret_code=rw_nprime(exe,257,&array,&sz);
-    if(!ret_code && sz==257 && array[256]==1621) { printf("success\n"); } else { printf("fail:%d %ld %d\n",ret_code,sz,array[256]); };
+    if(!ret_code && sz==257 && array[256]==1621) { printf("success\n"); } else { printf("fail:%d %ld %ld\n",ret_code,sz,array[256]); };
     free(array);
 
     // printf("nprime:");
