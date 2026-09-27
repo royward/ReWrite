@@ -187,7 +187,7 @@ void display_operand(FILE* out, uint8_t flag, int64_t val) {
 void program_display_label(Program* program, FILE* out, Operation* operation) {
     uint32_t label=0;
     for(uint32_t i=0;i<program->label_count;i++) {
-        if(program->labels[i]==operation->fdst.a-1) {
+        if(program->labels[i]==operation->fdst.a) {
             label=i;
             break;
         }
@@ -202,7 +202,7 @@ void program_display_label_both(Program* program, FILE* out, Operation* operatio
     }
     uint32_t label=0;
     for(uint32_t i=0;i<program->label_count;i++) {
-        if(program->labels[i]==operation->fdst.a-1) {
+        if(program->labels[i]==operation->fdst.a) {
             label=i;
             break;
         }
@@ -622,8 +622,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
     uint32_t sp=2; // make sure we are start, even if it was run before
     uint32_t pc=program->labels[in_lbl];
     while(true) {
-        //printf("%d\n",pc);
-        Operation* operation=&program->code[pc];
+        //printf("'%d ",pc);
+        Operation* operation=&program->code[pc++];
         uint8_t op=operation->op;
         switch(op) {
             case OP_LABEL: {
@@ -653,7 +653,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                         exe->registers[index1+sp]=exe->registers[index1+sp+1000];
                     }
                     sp-=program->code[pc].offset16; // restore the stack to the old value
-                    pc+=program->code[pc].flags_dst;
+                    pc+=program->code[pc].flags_dst+1;
                 }
             } break;
             case OP_CALL_ENTER_EXIT: {
@@ -664,16 +664,16 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 }
                 sp=newsp;
                 uint32_t* r=(uint32_t*)(&exe->registers[sp-1]);
-                r[0]=pc;
-                pc = operation->fdst.a-1;
+                r[0]=pc-1;
+                pc = operation->fdst.a;
             } break;
             case OP_CALL_IO_RET: {
                 int32_t* p=(int32_t*)(&operation->fsrc1.b);
                 for(uint32_t index=0;index<operation->fdst.b;index++) {
                     exe->registers[index+sp]=((uint64_t*)exe->registers[0])[p[index]];
                 }
-                exe->registers[1]=pc;
-                pc = operation->fdst.a-1;
+                exe->registers[1]=pc-1;
+                pc = operation->fdst.a;
             } break;
             case OP_GOTO_EXIT: {
                 int32_t* p=(int32_t*)(&operation->fsrc1.a);
@@ -683,7 +683,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 for(uint32_t index=0;index<operation->fdst.b;index++) {
                     exe->registers[index+sp]=exe->registers[index+sp+1000];
                 }
-                pc = operation->fdst.a-1;
+                pc = operation->fdst.a;
             } break;
             case OP_LEA: {
                 uint64_t val = operand_load(exe, 64, operation->flags_src.a, operation->src1, sp);
@@ -722,7 +722,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 }
             } break;
             case OP_REALLOC: {
-                Operation* operation2=&program->code[pc+1];
+                Operation* operation2=&program->code[pc];
                 pc++;
                 uint32_t pre=operation->fdst.b;
                 uint32_t post=operation2->fdst.b + operand_load(exe, 32, operation2->flags_src.b, operation2->src2, sp);
@@ -833,7 +833,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint64_t src1 = operand_load(exe, sz, operation->flags_src.a, operation->src1, sp);
                 uint64_t src2 = operand_load(exe, sz, operation->flags_src.b, operation->src2, sp);
                 if(src1 != src2) {
-                    pc = operation->fdst.a-1; // -1 because pc++ at end of loop
+                    pc = operation->fdst.a; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_CMP_EQ_BRANCH: {
@@ -841,7 +841,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint64_t src1 = operand_load(exe, sz, operation->flags_src.a, operation->src1, sp);
                 uint64_t src2 = operand_load(exe, sz, operation->flags_src.b, operation->src2, sp);
                 if(src1 == src2) {
-                    pc = operation->fdst.a-1; // -1 because pc++ at end of loop
+                    pc = operation->fdst.a; // -1 because pc++ at end of loop
                 }
             } break;
              case OP_CMP_LE_BRANCH: {
@@ -849,7 +849,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 int64_t src1 = operand_load(exe, sz, operation->flags_src.a, operation->src1, sp);
                 int64_t src2 = operand_load(exe, sz, operation->flags_src.b, operation->src2, sp);
                 if(src1 <= src2) {
-                    pc = operation->fdst.a-1; // -1 because pc++ at end of loop
+                    pc = operation->fdst.a; // -1 because pc++ at end of loop
                 }
             } break;
              case OP_CMP_LT_BRANCH: {
@@ -857,7 +857,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 int64_t src1 = operand_load(exe, sz, operation->flags_src.a, operation->src1, sp);
                 int64_t src2 = operand_load(exe, sz, operation->flags_src.b, operation->src2, sp);
                 if(src1 < src2) {
-                    pc = operation->fdst.a-1; // -1 because pc++ at end of loop
+                    pc = operation->fdst.a; // -1 because pc++ at end of loop
                 }
             } break;
             case OP_NOT_EQUAL: {
@@ -954,7 +954,6 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 return exe->errtype;
             }
         }
-        pc++;
     }
 }
 
