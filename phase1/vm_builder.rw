@@ -175,14 +175,14 @@ opclass(OpSext) -> 6;
 
 
 // address encoding for each class - 16 means field not encoded
-//                    a  b  z  s sd arity
-opclass_encode(1) ->  4, 3,16, 5,16, 2;
-opclass_encode(2) ->  9, 8,10, 5,16, 2;
-opclass_encode(3) ->  0,16,16, 8,16, 1;
-opclass_encode(4) -> 16,16,16, 8,16, 1;
-opclass_encode(5) ->  8, 0,16,16,16, 2;
-opclass_encode(6) -> 16,16,16, 8, 0, 1;
-opclass_encode(7) ->  0,16,16,16,16, 1;
+//                    a  b  z  s sd
+opclass_encode(1) ->  4, 3,16, 5,16;
+opclass_encode(2) ->  9, 8,10, 5,16;
+opclass_encode(3) ->  0,16,16, 8,16;
+opclass_encode(4) -> 16,16,16, 8,16;
+opclass_encode(5) ->  8, 0,16,16,16;
+opclass_encode(6) -> 16,16,16, 8, 0;
+opclass_encode(7) ->  0,16,16,16,16;
 
 has_label(OpCompLtBr) -> true;
 has_label(OpCompLteBr) -> true;
@@ -214,7 +214,7 @@ generate_inc_files_aux(defines,fulllist,disassem,execute,{op,*rest})
     update generate_inc_files_op(defines,fulllist,disassem,execute,op,op,opclass(op),opclass_encode(opclass(op))) => defines,fulllist,disassem,execute
     -> generate_inc_files_aux(defines,fulllist,disassem,execute,rest);
 
-generate_inc_files_op(defines,fulllist,disassem,execute,opb,op,class,a,b,z,s,sd,arity)
+generate_inc_files_op(defines,fulllist,disassem,execute,opb,op,class,a,b,z,s,sd)
     -> generate_inc_z(defines,fulllist,disassem,execute,{'OP_',*upper_snake_case({},true,op_name(op))},opb,op,class,a,b,z,s,sd);
 
 generate_inc_z(defines,fulllist,disassem,execute,name,opb,op,class,a,b,16,s,sd) -> generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,16,s,sd,'X');
