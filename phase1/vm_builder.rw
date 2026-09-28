@@ -1,0 +1,290 @@
+// #ab:2 address modes: reg or imm
+// #z:2 signed: signed or unsigned
+// #s:4 sizes: 4 - 8,16,32,64 bits for integer only
+// #S:8 sizes: allow room for non-integer sizes
+// #t:5 saturating, checked, now needs sign
+//
+// Operation counts:
+// +,-,*,<<: S*a*b*t = 160 each (initially 32)
+// /,%,<,<=,,branch<,branch<=,>>: S*a*b*z = 64 each
+// trunc (register only): s = 4 /4
+// ext (register only): s*z = 8 /8
+// load,neg: S = 8 /16
+// store: S*a = 16 /16
+// &&,||: a*b = 4 each /8
+// &,|,^,eq,ne,brancheq,branchne: (size doesn't matter): a*b = 4 each /28
+// !,mv: a = 2 /2
+// ~: s*a = 8 /8
+//
+// All other forms 1 each
+
+// 1: 3 bit: tttSSSab0xx
+const OpPlus=0;
+const OpMinus=1;
+const OpTimes=2;
+const OpShiftLeft=3;
+
+// 2: 5 bit: zabSSS0x1xx
+const OpLt=4;
+const OpLte=5;
+const OpCompLtBr=6;
+const OpCompLteBr=7;
+const OpShiftRight=12;
+const OpDiv=13;
+const OpMod=14;
+const OpReserved5_1=15; // future use
+
+// 8 bit: (var)XXX1x1xx (all the rest, except singletons, XXX cannot all be 1)
+// 3: Other sized operations: +SSS00000000 or +ss00000000
+const OpStore=20; // +a
+const OpLoad=22; // class 4
+const OpTrunc=23; // class 4
+const OpUnaryMinus=30; // +a
+const OpBitNot=52; // +a
+
+// 7: unsized unary: +a
+const OpMove=28; // +a
+const OpNot=54; // +a
+
+// 5: E: unsized binary: + a0000000b
+const OpEqual=84;
+const OpNotEqual=86;
+const OpCompEqBr=92;
+const OpCompNeqBr=94;
+const OpAnd=116;
+const OpOr=118;
+const OpXor=124;
+
+// D: Misc
+const OpSext=60; // + destination ss, class 6
+
+const OpZext=126; // Moved to handcode because it is a nop
+
+const OpLabel=224;
+const OpCall=225;
+const OpRet=226;
+const OpGoto=227;
+const OpLea=229;
+const OpLeaScale=230;
+
+const OpError=254;
+const OpCallIO=255;
+
+const OpAlloc=736;
+const OpRealloc=737;
+const OpEmptyList=738;
+
+const OpDerefFree=740;
+const OpDerefFreeList=741;
+const OpIncMem=742;
+const OpCont=743;
+
+const OpPrepend=744;
+const OpAppend=745;
+const OpAppendSplat=746;
+const OpAppendSplatConsume=747;
+const OpExtractList=748;
+
+const OpBuildIOList=1000000;
+
+op_name(OpPlus) -> "Plus";
+op_name(OpMinus) -> "Minus";
+op_name(OpTimes) -> "Times";
+op_name(OpShiftLeft) -> "ShiftLeft";
+op_name(OpLt) -> "Lt";
+op_name(OpLte) -> "Lte";
+op_name(OpCompLtBr) -> "CompLtBr";
+op_name(OpCompLteBr) -> "CompLteBr";
+op_name(OpShiftRight) -> "ShiftRight";
+op_name(OpDiv) -> "Div";
+op_name(OpMod) -> "Mod";
+op_name(OpReserved5_1) -> "Reserved5_1";
+op_name(OpStore) -> "Store";
+op_name(OpLoad) -> "Load";
+op_name(OpTrunc) -> "Trunc";
+op_name(OpUnaryMinus) -> "UnaryMinus";
+op_name(OpBitNot) -> "BitNot";
+op_name(OpMove) -> "Move";
+op_name(OpNot) -> "Not";
+op_name(OpEqual) -> "Equal";
+op_name(OpNotEqual) -> "NotEqual";
+op_name(OpCompEqBr) -> "CompEqBr";
+op_name(OpCompNeqBr) -> "CompNeqBr";
+op_name(OpAnd) -> "And";
+op_name(OpOr) -> "Or";
+op_name(OpXor) -> "Xor";
+op_name(OpSext) -> "Sext";
+op_name(OpZext) -> "Zext";
+op_name(OpLabel) -> "Label";
+op_name(OpCall) -> "Call";
+op_name(OpRet) -> "Ret";
+op_name(OpGoto) -> "Goto";
+op_name(OpLea) -> "Lea";
+op_name(OpLeaScale) -> "LeaScale";
+op_name(OpError) -> "Error";
+op_name(OpCallIO) -> "CallIO";
+op_name(OpAlloc) -> "Alloc";
+op_name(OpRealloc) -> "Realloc";
+op_name(OpEmptyList) -> "EmptyList";
+op_name(OpDerefFree) -> "DerefFree";
+op_name(OpDerefFreeList) -> "DerefFreeList";
+op_name(OpIncMem) -> "IncMem";
+op_name(OpCont) -> "Cont";
+op_name(OpPrepend) -> "Prepend";
+op_name(OpAppend) -> "Append";
+op_name(OpAppendSplat) -> "AppendSplat";
+op_name(OpAppendSplatConsume) -> "AppendSplatConsume";
+op_name(OpExtractList) -> "ExtractList";
+
+some_gen_ops() -> {OpPlus,OpLt,OpLte};
+all_gen_ops() ->
+    {OpPlus,OpMinus,OpTimes,OpShiftLeft,
+    OpLt,OpLte,OpCompLtBr,OpCompLteBr,OpShiftRight,OpDiv,OpMod,
+    OpStore,OpLoad,OpTrunc,OpMove,OpUnaryMinus,OpBitNot,OpNot,
+    OpEqual,OpNotEqual,OpCompEqBr,OpCompNeqBr,OpAnd,OpOr,OpXor,OpSext};
+
+all_single_ops() -> {OpZext,OpLabel,OpCall,OpRet,OpGoto,OpLea,OpLeaScale,OpError,OpCallIO,
+    OpAlloc,OpRealloc,OpEmptyList,OpDerefFree,OpDerefFreeList,OpIncMem,OpCont,OpPrepend,OpAppend,OpAppendSplat,OpAppendSplatConsume,OpExtractList};
+
+opclass(OpPlus) -> 1;
+opclass(OpMinus) -> 1;
+opclass(OpTimes) -> 1;
+opclass(OpShiftLeft) -> 1;
+opclass(OpLt) -> 2;
+opclass(OpLte) -> 2;
+opclass(OpCompLtBr) -> 2;
+opclass(OpCompLteBr) -> 2;
+opclass(OpShiftRight) -> 2;
+opclass(OpDiv) -> 2;
+opclass(OpMod) -> 2;
+opclass(OpStore) -> 3;
+opclass(OpLoad) -> 4;
+opclass(OpTrunc) -> 4;
+opclass(OpMove) -> 7;
+opclass(OpUnaryMinus) -> 3;
+opclass(OpBitNot) -> 3;
+opclass(OpNot) -> 7;
+opclass(OpEqual) -> 5;
+opclass(OpNotEqual) -> 5;
+opclass(OpCompEqBr) -> 5;
+opclass(OpCompNeqBr) -> 5;
+opclass(OpAnd) -> 5;
+opclass(OpOr) -> 5;
+opclass(OpXor) -> 5;
+opclass(OpSext) -> 6;
+
+
+// address encoding for each class - 16 means field not encoded
+//                    a  b  z  s sd arity
+opclass_encode(1) ->  4, 3,16, 5,16, 2;
+opclass_encode(2) ->  9, 8,10, 5,16, 2;
+opclass_encode(3) ->  0,16,16, 8,16, 1;
+opclass_encode(4) -> 16,16,16, 8,16, 1;
+opclass_encode(5) ->  8, 0,16,16,16, 2;
+opclass_encode(6) -> 16,16,16, 8, 0, 1;
+opclass_encode(7) ->  0,16,16,16,16, 1;
+
+has_label(OpCompLtBr) -> true;
+has_label(OpCompLteBr) -> true;
+has_label(OpCompEqBr) -> true;
+has_label(OpCompNeqBr) -> true;
+has_label(_) -> false;
+
+// generate 4 text artifacts that each go in a separate file
+// * a file of #defines
+// * an ordered list of all opcodes
+// * the disassembler cases
+// * the execution cases
+
+generate_inc_files()
+    match generate_inc_files_aux({},listnv(2048,""),{},{},all_gen_ops()) => defines,fulllist,disassem,execute
+    update add_single_defines(defines,fulllist,all_single_ops()) => defines,fulllist
+    match process_fulllist(0,{},fulllist) => oplist
+    -> println(defines),println(oplist);
+
+process_fulllist(n,full,{}) -> full;
+process_fulllist(n,full,{"",*rest}) -> process_fulllist(n+1,full,rest);
+process_fulllist(n,full,{name,*rest}) -> process_fulllist(0,{*full,**listnv(n,"OP_BAD,"),*name,','},rest);
+
+add_single_defines(defines,fulllist,{}) -> defines,fulllist;
+add_single_defines(defines,fulllist,{op,*rest}) -> add_single_defines(generate_define_list(defines,fulllist,{'OP_',*upper_snake_case({},true,op_name(op))},op),rest);
+
+generate_inc_files_aux(defines,fulllist,disassem,execute,{}) -> defines,fulllist,disassem,execute;
+generate_inc_files_aux(defines,fulllist,disassem,execute,{op,*rest})
+    update generate_inc_files_op(defines,fulllist,disassem,execute,op,op,opclass(op),opclass_encode(opclass(op)),has_label(op)) => defines,fulllist,disassem,execute
+    -> generate_inc_files_aux(defines,fulllist,disassem,execute,rest);
+
+generate_inc_files_op(defines,fulllist,disassem,execute,opb,op,class,a,b,z,s,sd,arity,has_lbl)
+    -> generate_inc_z(defines,fulllist,disassem,execute,{'OP_',*upper_snake_case({},true,op_name(op))},opb,op,class,a,b,z,s,sd,arity,has_lbl);
+
+generate_inc_z(defines,fulllist,disassem,execute,name,opb,op,class,a,b,16,s,sd,arity,has_lbl) -> generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,16,s,sd,arity,has_lbl,'X');
+generate_inc_z(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,s,sd,arity,has_lbl)
+    update generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,0,s,sd,arity,has_lbl,'U') => defines,fulllist,disassem,execute
+    update generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op+(1<<z),class,a,b,1,s,sd,arity,has_lbl,'I') => defines,fulllist,disassem,execute
+    -> defines,fulllist,disassem,execute;
+
+generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,16,sd,arity,has_lbl,'X') -> generate_inc_sd(defines,fulllist,disassem,execute,name,opb,op,a,b,z,16,sd,arity,has_lbl);
+generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,16,sd,arity,has_lbl,zc) -> generate_inc_sd(defines,fulllist,disassem,execute,{*name,zc},opb,op,a,b,z,16,sd,arity,has_lbl);
+generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,2,a,b,0,s,sd,arity,has_lbl,zc)
+    -> generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'64'},opb,op+(3<<s),a,b,0,3,sd,arity,has_lbl);
+generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,s,sd,arity,has_lbl,zc)
+    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'8'},opb,op,a,b,z,0,sd,arity,has_lbl) => defines,fulllist,disassem,execute
+    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'16'},opb,op+(1<<s),a,b,z,1,sd,arity,has_lbl) => defines,fulllist,disassem,execute
+    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'32'},opb,op+(2<<s),a,b,z,2,sd,arity,has_lbl) => defines,fulllist,disassem,execute
+    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'64'},opb,op+(3<<s),a,b,z,3,sd,arity,has_lbl) => defines,fulllist,disassem,execute
+    -> defines,fulllist,disassem,execute;
+
+generate_inc_sd(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,16,arity,has_lbl) -> generate_inc_a(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,16,arity,has_lbl);
+generate_inc_sd(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd,arity,has_lbl)
+    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D8'},opb,op,a,b,z,s,0,arity,has_lbl) => defines,fulllist,disassem,execute
+    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D16'},opb,op+(1<<sd),a,b,z,s,1,arity,has_lbl) => defines,fulllist,disassem,execute
+    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D32'},opb,op+(2<<sd),a,b,z,s,2,arity,has_lbl) => defines,fulllist,disassem,execute
+    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D64'},opb,op+(3<<sd),a,b,z,s,3,arity,has_lbl) => defines,fulllist,disassem,execute
+    -> defines,fulllist,disassem,execute;
+
+generate_inc_a(defines,fulllist,disassem,execute,name,opb,op,16,b,z,s,sd,arity,has_lbl) -> generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,16,b,z,s,sd,arity,has_lbl);
+generate_inc_a(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd,arity,has_lbl)
+    update generate_inc_b(defines,fulllist,disassem,execute,{*name,'_AREG'},opb,op,0,b,z,s,sd,arity,has_lbl) => defines,fulllist,disassem,execute
+    update generate_inc_b(defines,fulllist,disassem,execute,{*name,'_AIMM'},opb,op+(1<<a),1,b,z,s,sd,arity,has_lbl) => defines,fulllist,disassem,execute
+    -> defines,fulllist,disassem,execute;
+
+generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,a,16,z,s,sd,arity,has_lbl) -> generate_inc_final(defines,fulllist,disassem,execute,name,opb,op,a,16,z,s,sd,arity,has_lbl);
+generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd,arity,has_lbl)
+    update generate_inc_final(defines,fulllist,disassem,execute,{*name,'_BREG'},opb,op,a,0,z,s,sd,arity,has_lbl) => defines,fulllist,disassem,execute
+    update generate_inc_final(defines,fulllist,disassem,execute,{*name,'_BIMM'},opb,op+(1<<b),a,1,z,s,sd,arity,has_lbl) => defines,fulllist,disassem,execute
+    -> defines,fulllist,disassem,execute;
+
+generate_inc_final(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd,arity,has_lbl)
+    update generate_define_list(defines,fulllist,name,op) => defines,fulllist
+    match println_any({opb,op,int_to_hex(3,{},op),name,a,b,z,s,sd,arity,has_lbl}) =>
+    -> defines,fulllist,disassem,execute;
+
+int_to_hex(0,sofar,_) -> sofar;
+int_to_hex(n,sofar,v) when v&15<10 -> int_to_hex(n-1,{'0'+(v&15),*sofar},v>>4);
+int_to_hex(n,sofar,v)-> int_to_hex(n-1,{'A'+(v&15)-10,*sofar},v>>4);
+
+generate_define_list(defines,fulllist,name,op)
+    match nth(op,fulllist) => {}
+    update nth_insert(op,name,fulllist) => fulllist
+    -> {*defines,'#define ',*name,' 0x',*int_to_hex(3,{},op),'\n'},fulllist;
+
+nth(0,{a,*_}) -> a;
+nth(n,{_,*rest}) -> nth(n-1,rest);
+
+nth_insert(n,v,target) -> nth_insert_aux(n,v,{},target);
+
+nth_insert_aux(0,v,sofar,{_,*rest}) -> {*sofar,v,*rest};
+nth_insert_aux(n,v,sofar,{a,*rest}) -> nth_insert_aux(n-1,v,{*sofar,a},rest);
+
+listnv(n,v) -> listn_aux(0,n,{},v);
+
+listn_aux(n,n,sofar,v) -> sofar;
+listn_aux(n,m,sofar,v) -> listn_aux(n+1,m,{*sofar,v},v);
+
+to_uppercase(c) when c>='a' when c<='z' -> c-32;
+to_uppercase(c) -> c;
+
+upper_snake_case(sofar,_,{}) -> sofar;
+upper_snake_case(sofar,false,{c,*rest}) when c>='A' when c<='Z' -> upper_snake_case({*sofar,'_',c},false,rest);
+upper_snake_case(sofar,_,{c,*rest}) -> upper_snake_case({*sofar,to_uppercase(c)},false,rest);
+

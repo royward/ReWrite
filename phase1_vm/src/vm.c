@@ -168,9 +168,8 @@ void rw_instance_unload(RWInstance* exe) {
 #define TYPE_I128 12
 #define TYPE_U128 13
 
-#define BIND_IMM 0
-#define BIND_REG 1
-#define BIND_MEM 2
+#define BIND_REG 0
+#define BIND_IMM 1
 
 void display_operand(FILE* out, uint8_t flag, int64_t val) {
     uint8_t bind=flag&0xF;
@@ -725,9 +724,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 rwu_get_header(exe,0)[1]++;
             } break;
             case OP_EXTRACT_LIST: {
-                if(operation->flags_src.a!=BIND_MEM) {
-                    exit(1);
-                }
+                // if(operation->flags_src.a!=BIND_MEM) {
+                //     exit(1);
+                // }
                 uint32_t* addr=(uint32_t*)(exe->registers[operation->fsrc1.a+sp]+operation->fsrc1.b);
                 uint64_t v1=addr[0];
                 uint64_t v2=addr[1];

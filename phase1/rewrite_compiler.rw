@@ -473,8 +473,8 @@ create_start_annotated_list(types,sofar,{t,*rest}) match lookup_type_size_pri(t,
 create_empty_types(sofar,{}) -> sofar;
 create_empty_types(sofar,{_,_,*rest}) -> create_empty_types({*sofar,{}},rest);
 
-const BindImm=0;
-const BindReg=1;
+const BindReg=0;
+const BindImm=1;
 const BindMem=2;
 
 annotate_type_list_reg(types,pri,max_reg,sofar,{}) -> max_reg,{},sofar;
