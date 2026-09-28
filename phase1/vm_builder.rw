@@ -200,9 +200,9 @@ generate_inc_files()
     match generate_inc_files_aux({},listnv(2048,""),{},{},all_gen_ops()) => defines,fulllist,disassem,execute
     update add_single_defines(defines,fulllist,all_single_ops()) => defines,fulllist
     match process_fulllist(0,{},fulllist) => oplist
-    -> println(defines),println(oplist);
+    -> println(defines),println(oplist),println(disassem);
 
-process_fulllist(n,full,{}) -> full;
+process_fulllist(n,full,{}) -> {*full,**listnv(n,"OP_BAD,")};
 process_fulllist(n,full,{"",*rest}) -> process_fulllist(n+1,full,rest);
 process_fulllist(n,full,{name,*rest}) -> process_fulllist(0,{*full,**listnv(n,"OP_BAD,"),*name,','},rest);
 
@@ -211,62 +211,148 @@ add_single_defines(defines,fulllist,{op,*rest}) -> add_single_defines(generate_d
 
 generate_inc_files_aux(defines,fulllist,disassem,execute,{}) -> defines,fulllist,disassem,execute;
 generate_inc_files_aux(defines,fulllist,disassem,execute,{op,*rest})
-    update generate_inc_files_op(defines,fulllist,disassem,execute,op,op,opclass(op),opclass_encode(opclass(op)),has_label(op)) => defines,fulllist,disassem,execute
+    update generate_inc_files_op(defines,fulllist,disassem,execute,op,op,opclass(op),opclass_encode(opclass(op))) => defines,fulllist,disassem,execute
     -> generate_inc_files_aux(defines,fulllist,disassem,execute,rest);
 
-generate_inc_files_op(defines,fulllist,disassem,execute,opb,op,class,a,b,z,s,sd,arity,has_lbl)
-    -> generate_inc_z(defines,fulllist,disassem,execute,{'OP_',*upper_snake_case({},true,op_name(op))},opb,op,class,a,b,z,s,sd,arity,has_lbl);
+generate_inc_files_op(defines,fulllist,disassem,execute,opb,op,class,a,b,z,s,sd,arity)
+    -> generate_inc_z(defines,fulllist,disassem,execute,{'OP_',*upper_snake_case({},true,op_name(op))},opb,op,class,a,b,z,s,sd);
 
-generate_inc_z(defines,fulllist,disassem,execute,name,opb,op,class,a,b,16,s,sd,arity,has_lbl) -> generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,16,s,sd,arity,has_lbl,'X');
-generate_inc_z(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,s,sd,arity,has_lbl)
-    update generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,0,s,sd,arity,has_lbl,'U') => defines,fulllist,disassem,execute
-    update generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op+(1<<z),class,a,b,1,s,sd,arity,has_lbl,'I') => defines,fulllist,disassem,execute
+generate_inc_z(defines,fulllist,disassem,execute,name,opb,op,class,a,b,16,s,sd) -> generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,16,s,sd,'X');
+generate_inc_z(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,s,sd)
+    update generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,0,s,sd,'U') => defines,fulllist,disassem,execute
+    update generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op+(1<<z),class,a,b,1,s,sd,'I') => defines,fulllist,disassem,execute
     -> defines,fulllist,disassem,execute;
 
-generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,16,sd,arity,has_lbl,'X') -> generate_inc_sd(defines,fulllist,disassem,execute,name,opb,op,a,b,z,16,sd,arity,has_lbl);
-generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,16,sd,arity,has_lbl,zc) -> generate_inc_sd(defines,fulllist,disassem,execute,{*name,zc},opb,op,a,b,z,16,sd,arity,has_lbl);
-generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,2,a,b,0,s,sd,arity,has_lbl,zc)
-    -> generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'64'},opb,op+(3<<s),a,b,0,3,sd,arity,has_lbl);
-generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,s,sd,arity,has_lbl,zc)
-    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'8'},opb,op,a,b,z,0,sd,arity,has_lbl) => defines,fulllist,disassem,execute
-    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'16'},opb,op+(1<<s),a,b,z,1,sd,arity,has_lbl) => defines,fulllist,disassem,execute
-    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'32'},opb,op+(2<<s),a,b,z,2,sd,arity,has_lbl) => defines,fulllist,disassem,execute
-    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'64'},opb,op+(3<<s),a,b,z,3,sd,arity,has_lbl) => defines,fulllist,disassem,execute
+generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,16,sd,'X') -> generate_inc_sd(defines,fulllist,disassem,execute,name,opb,op,a,b,z,16,sd);
+generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,16,sd,zc) -> generate_inc_sd(defines,fulllist,disassem,execute,{*name,zc},opb,op,a,b,z,16,sd);
+generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,2,a,b,0,s,sd,zc)
+    -> generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'64'},opb,op+(3<<s),a,b,0,3,sd);
+generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,s,sd,zc)
+    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'8'},opb,op,a,b,z,0,sd) => defines,fulllist,disassem,execute
+    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'16'},opb,op+(1<<s),a,b,z,1,sd) => defines,fulllist,disassem,execute
+    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'32'},opb,op+(2<<s),a,b,z,2,sd) => defines,fulllist,disassem,execute
+    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'64'},opb,op+(3<<s),a,b,z,3,sd) => defines,fulllist,disassem,execute
     -> defines,fulllist,disassem,execute;
 
-generate_inc_sd(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,16,arity,has_lbl) -> generate_inc_a(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,16,arity,has_lbl);
-generate_inc_sd(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd,arity,has_lbl)
-    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D8'},opb,op,a,b,z,s,0,arity,has_lbl) => defines,fulllist,disassem,execute
-    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D16'},opb,op+(1<<sd),a,b,z,s,1,arity,has_lbl) => defines,fulllist,disassem,execute
-    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D32'},opb,op+(2<<sd),a,b,z,s,2,arity,has_lbl) => defines,fulllist,disassem,execute
-    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D64'},opb,op+(3<<sd),a,b,z,s,3,arity,has_lbl) => defines,fulllist,disassem,execute
+generate_inc_sd(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,16) -> generate_inc_a(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,16);
+generate_inc_sd(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd)
+    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D8'},opb,op,a,b,z,s,0) => defines,fulllist,disassem,execute
+    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D16'},opb,op+(1<<sd),a,b,z,s,1) => defines,fulllist,disassem,execute
+    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D32'},opb,op+(2<<sd),a,b,z,s,2) => defines,fulllist,disassem,execute
+    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D64'},opb,op+(3<<sd),a,b,z,s,3) => defines,fulllist,disassem,execute
     -> defines,fulllist,disassem,execute;
 
-generate_inc_a(defines,fulllist,disassem,execute,name,opb,op,16,b,z,s,sd,arity,has_lbl) -> generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,16,b,z,s,sd,arity,has_lbl);
-generate_inc_a(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd,arity,has_lbl)
-    update generate_inc_b(defines,fulllist,disassem,execute,{*name,'_AREG'},opb,op,0,b,z,s,sd,arity,has_lbl) => defines,fulllist,disassem,execute
-    update generate_inc_b(defines,fulllist,disassem,execute,{*name,'_AIMM'},opb,op+(1<<a),1,b,z,s,sd,arity,has_lbl) => defines,fulllist,disassem,execute
+generate_inc_a(defines,fulllist,disassem,execute,name,opb,op,16,b,z,s,sd) -> generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,16,b,z,s,sd);
+generate_inc_a(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd)
+    update generate_inc_b(defines,fulllist,disassem,execute,{*name,'_AREG'},opb,op,0,b,z,s,sd) => defines,fulllist,disassem,execute
+    update generate_inc_b(defines,fulllist,disassem,execute,{*name,'_AIMM'},opb,op+(1<<a),1,b,z,s,sd) => defines,fulllist,disassem,execute
     -> defines,fulllist,disassem,execute;
 
-generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,a,16,z,s,sd,arity,has_lbl) -> generate_inc_final(defines,fulllist,disassem,execute,name,opb,op,a,16,z,s,sd,arity,has_lbl);
-generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd,arity,has_lbl)
-    update generate_inc_final(defines,fulllist,disassem,execute,{*name,'_BREG'},opb,op,a,0,z,s,sd,arity,has_lbl) => defines,fulllist,disassem,execute
-    update generate_inc_final(defines,fulllist,disassem,execute,{*name,'_BIMM'},opb,op+(1<<b),a,1,z,s,sd,arity,has_lbl) => defines,fulllist,disassem,execute
+generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,a,16,z,s,sd) -> generate_inc_final(defines,fulllist,disassem,execute,name,opb,op,a,16,z,s,sd);
+generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd)
+    update generate_inc_final(defines,fulllist,disassem,execute,{*name,'_BREG'},opb,op,a,0,z,s,sd) => defines,fulllist,disassem,execute
+    update generate_inc_final(defines,fulllist,disassem,execute,{*name,'_BIMM'},opb,op+(1<<b),a,1,z,s,sd) => defines,fulllist,disassem,execute
     -> defines,fulllist,disassem,execute;
 
-generate_inc_final(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd,arity,has_lbl)
+generate_inc_final(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd) when sd>s // extend only generates when actually an extend
     update generate_define_list(defines,fulllist,name,op) => defines,fulllist
-    match println_any({opb,op,int_to_hex(3,{},op),name,a,b,z,s,sd,arity,has_lbl}) =>
-    -> defines,fulllist,disassem,execute;
+    match opclass(opb) => class
+    match has_label(opb) => has_lbl,
+    match generate_disassem(class,has_lbl,opb,a,b,z,s,sd) => disassem1
+    //match println_any({opb,op,int_to_hex(3,{},op),name,a,b,z,s,sd}) =>
+    -> defines,fulllist,{*disassem,'case ',*name,':{fprintf(out,',*disassem1,');} break;\n'},execute;
+generate_inc_final(defines,fulllist,disassem,execute,_,_,_,_,_,_,_,_) -> defines,fulllist,disassem,execute;
 
-int_to_hex(0,sofar,_) -> sofar;
-int_to_hex(n,sofar,v) when v&15<10 -> int_to_hex(n-1,{'0'+(v&15),*sofar},v>>4);
-int_to_hex(n,sofar,v)-> int_to_hex(n-1,{'A'+(v&15)-10,*sofar},v>>4);
+//const OpPlus=0;
+//const OpMinus=1;
+//const OpTimes=2;
+//const OpShiftLeft=3;
+generate_disassem(1,_,opb,a,b,_,s,_) -> {'"let.x',*size_from_s(s),' r%u = ',*get_binding(a,1),*op_symbol(opb),*get_binding(b,1),'",opv->fdst.a,',*get_bind_val(a,1,'1'),',',*get_bind_val(b,1,'2')};
+generate_disassem(2,has_lbl,opb,a,b,z,s,_)
+    -> {*get_class2_start(has_lbl,z,s),*get_binding(a,z),*op_symbol(opb),*get_binding(b,z),'",',*get_class2_mid(has_lbl),*get_bind_val(a,z,'1'),',',*get_bind_val(b,z,'2'),*get_class2_end(has_lbl)};
+generate_disassem(3,_,OpStore,a,_,_,s,_) -> {'"store.x',*size_from_s(s),' (r%u+%d) = ',*get_binding(a,1),'",opv->fdst.a,(int32_t)opv->fdst.b,',*get_bind_val(a,1,'1')};
+generate_disassem(3,_,opb,a,_,_,s,_) -> {'"let.x',*size_from_s(s),' r%u = ',*op_symbol(opb),*get_binding(a,1),'",opv->fdst.a,',*get_bind_val(a,1,'1')};
+generate_disassem(4,_,OpTrunc,_,_,_,s,_) -> {'"trunc.x',*size_from_s(s),' r%u = r%u",opv->fdst.a,opv->fsrc1.a'};
+generate_disassem(4,_,OpLoad,_,_,_,s,_) -> {'"load.x',*size_from_s(s),' r%u = (r%u+%d)",opv->fdst.a,opv->fsrc1.a,(int32_t)opv->fsrc1.b'};
+generate_disassem(5,has_lbl,opb,a,b,_,_,_)
+    -> {*get_class5_start(has_lbl),*get_binding(a,1),*op_symbol(opb),*get_binding(b,1),'",',*get_class2_mid(has_lbl),*get_bind_val(a,1,'1'),',',*get_bind_val(b,1,'2'),*get_class2_end(has_lbl)};
+generate_disassem(6,_,OpSext,_,_,_,s,sd) -> {'"sext.i',*size_from_s(s),'.i',*size_from_s(sd),' r%u = r%u",opv->fdst.a,opv->fsrc1.a'};
+generate_disassem(7,_,opb,a,_,_,_,_) -> {'"let r%u = ',*op_symbol(opb),*get_binding(a,1),'",opv->fdst.a,',*get_bind_val(a,1,'1')};
+generate_disassem(class,has_lbl,op,a,b,z,s,sd) -> "unknown";
+
+// 7: unsized unary: +a
+//const OpMove=28; // +a
+//const OpNot=54; // +a
+// 5: E: unsized binary: + a0000000b
+//const OpEqual=84;
+//const OpNotEqual=86;
+//const OpCompEqBr=92;
+//const OpCompNeqBr=94;
+//const OpAnd=116;
+//const OpOr=118;
+//const OpXor=124;
+// D: Misc
+//const OpSext=60; // + destination ss, class 6
+
+get_class2_start(false,z,s) -> {'"let.',*signed_size_from_s(z,s),' r%u = '};
+get_class2_start(true,z,s) -> {'"if.',*signed_size_from_s(z,s),' '};
+
+get_class5_start(false) -> {'"let r%u = '};
+get_class5_start(true) -> {'"if '};
+
+get_class2_mid(false) -> "opv->fdst.a,";
+get_class2_mid(true) -> "";
+
+get_class2_end(false) -> "";
+get_class2_end(true) -> "); program_display_label_both(program,out,opv";
+
+get_binding(0,_) -> "r%u";
+get_binding(1,0) -> "%\" PRIu64 \"";
+get_binding(1,1) -> "%\" PRId64 \"";
+
+get_bind_val(0,_,c) -> {'opv->fsrc',c,'.a'};
+get_bind_val(1,0,c) -> {'(uint64_t)opv->src',c};
+get_bind_val(1,1,c) -> {'(int64_t)opv->src',c};
+
+op_symbol(OpPlus) -> "+";
+op_symbol(OpMinus) -> "-";
+op_symbol(OpTimes) -> "*";
+op_symbol(OpShiftLeft) -> "<<";
+op_symbol(OpLt) -> "<";
+op_symbol(OpLte) -> "<=";
+op_symbol(OpCompLtBr) -> "<";
+op_symbol(OpCompLteBr) -> "<=";
+op_symbol(OpShiftRight) -> ">>";
+op_symbol(OpDiv) -> "/";
+op_symbol(OpMod) -> "%%";
+op_symbol(OpUnaryMinus) -> "-";
+op_symbol(OpBitNot) -> "~";
+op_symbol(OpNot) -> "!";
+op_symbol(OpEqual) -> "==";
+op_symbol(OpNotEqual) -> "!=";
+op_symbol(OpCompEqBr) -> "==";
+op_symbol(OpCompNeqBr) -> "!=";
+op_symbol(OpAnd) -> "&";
+op_symbol(OpOr) -> "|";
+op_symbol(OpXor) -> "^";
+op_symbol(OpMove) -> "";
+
+size_from_s(0) -> "8";
+size_from_s(1) -> "16";
+size_from_s(2) -> "32";
+size_from_s(3) -> "64";
+
+signed_size_from_s(0,s) -> {'u',*size_from_s(s)};
+signed_size_from_s(1,s) -> {'i',*size_from_s(s)};
 
 generate_define_list(defines,fulllist,name,op)
     match nth(op,fulllist) => {}
     update nth_insert(op,name,fulllist) => fulllist
     -> {*defines,'#define ',*name,' 0x',*int_to_hex(3,{},op),'\n'},fulllist;
+
+int_to_hex(0,sofar,_) -> sofar;
+int_to_hex(n,sofar,v) when v&15<10 -> int_to_hex(n-1,{'0'+(v&15),*sofar},v>>4);
+int_to_hex(n,sofar,v)-> int_to_hex(n-1,{'A'+(v&15)-10,*sofar},v>>4);
 
 nth(0,{a,*_}) -> a;
 nth(n,{_,*rest}) -> nth(n-1,rest);
