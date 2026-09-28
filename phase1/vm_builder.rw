@@ -254,7 +254,7 @@ generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd)
     update generate_inc_final(defines,fulllist,disassem,execute,{*name,'_BIMM'},opb,op+(1<<b),a,1,z,s,sd) => defines,fulllist,disassem,execute
     -> defines,fulllist,disassem,execute;
 
-generate_inc_final(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd) when sd>s // extend only generates when actually an extend
+generate_inc_final(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd) when sd==16 || sd>s // extend only generates when actually an extend
     update generate_define_list(defines,fulllist,name,op) => defines,fulllist
     match opclass(opb) => class
     match has_label(opb) => has_lbl,
@@ -275,9 +275,17 @@ generate_disassem(5,has_lbl,opb,a,b,_,_,_)
 generate_disassem(6,_,OpSext,_,_,_,s,sd) -> {'"sext.i',*size_from_s(s),'.i',*size_from_s(sd),' r%u = r%u",opv->fdst.a,opv->fsrc1.a'};
 generate_disassem(7,_,opb,a,_,_,_,_) -> {'"let r%u = ',*op_symbol(opb),*d_get_binding(a,1),'",opv->fdst.a,',*d_get_bind_val(a,1,'1')};
 
-generate_execute(1,_,opb,a,b,_,s,_) -> {'R[opv->fdst.a]=',*e_size_from_s(s),'(',*e_get_bind_val(a,'1'),*op_symbol(opb),*e_get_bind_val(b,'2'),')'};
+generate_execute(1,_,opb,a,b,_,s,_) -> {'R[opv->fdst.a]=',*e_size_from_s(s),'(',*e_get_bind_val(a,'1'),*e_op_symbol(opb),*e_get_bind_val(b,'2'),')'};
 generate_execute(2,has_lbl,opb,a,b,z,s,_)
-    -> {*e_class2_start(has_lbl,z,s),'(',*e_signed_size_from_s(z,s),*e_get_bind_val(a,'1'),')',*e_op_symbol(opb),'(',*e_signed_size_from_s(z,s),*e_get_bind_val(b,'2'),')',*e_class2_end(has_lbl)};
+    -> {*e_class2_start(has_lbl),'(uint',*size_from_s(s),'_t)((',*e_signed_size_from_s(z,s),*e_get_bind_val(a,'1'),')',*e_op_symbol(opb),'(',*e_signed_size_from_s(z,s),*e_get_bind_val(b,'2'),'))',*e_class2_end(has_lbl)};
+generate_execute(3,_,OpStore,a,_,_,s,_) -> {'uint',*size_from_s(s),'_t v=',*e_get_bind_val(a,'1'),';\n\tmemcpy((void*)(R[opv->fdst.a]+(int32_t)opv->fdst.b),&v,sizeof(v))'};
+generate_execute(3,_,opb,a,_,_,s,_) -> {'R[opv->fdst.a]=',*e_size_from_s(s),'(',*e_op_symbol(opb),*e_get_bind_val(a,'1'),')'};
+generate_execute(4,_,OpTrunc,_,_,_,s,_) -> {'R[opv->fdst.a]=(uint',*size_from_s(s),'_t)',*e_get_bind_val(0,'1')};
+generate_execute(4,_,OpLoad,_,_,_,s,_) -> {'uint',*size_from_s(s),'_t v;\n\tmemcpy(&v,(void*)(R[opv->fsrc1.a]+(int32_t)opv->fsrc1.b),sizeof(v));\n\tR[opv->fdst.a]=v'};
+generate_execute(5,has_lbl,opb,a,b,_,_,_)
+    -> {*e_class2_start(has_lbl),*e_get_bind_val(a,'1'),*e_op_symbol(opb),*e_get_bind_val(b,'2'),*e_class2_end(has_lbl)};
+generate_execute(6,_,OpSext,_,_,_,s,sd) -> {'R[opv->fdst.a]=',*e_signed_size_from_s(0,sd),*e_signed_size_from_s(1,s),*e_get_bind_val(0,'1')};
+generate_execute(7,_,opb,a,_,_,_,_) -> {'R[opv->fdst.a]=',*e_op_symbol(opb),*e_get_bind_val(a,'1')};
 generate_execute(class,has_lbl,opb,a,b,z,s,sd) -> "unknown";
 
 d_class2_start(false,z,s) -> {'"let.',*d_signed_size_from_s(z,s),' r%u = '};
@@ -297,8 +305,8 @@ d_get_binding(1,0) -> "%\" PRIu64 \"";
 d_get_binding(1,1) -> "%\" PRId64 \"";
 
 d_get_bind_val(0,_,c) -> {'opv->fsrc',c,'.a'};
-d_get_bind_val(1,0,c) -> {'((uint64_t)opv->src)',c};
-d_get_bind_val(1,1,c) -> {'((int64_t)opv->src)',c};
+d_get_bind_val(1,0,c) -> {'((uint64_t)opv->src',c,')'};
+d_get_bind_val(1,1,c) -> {'((int64_t)opv->src',c,')'};
 
 size_from_s(0) -> "8";
 size_from_s(1) -> "16";
@@ -311,9 +319,8 @@ d_signed_size_from_s(1,s) -> {'i',*size_from_s(s)};
 e_signed_size_from_s(0,s) -> {'(uint',*size_from_s(s),'_t)'};
 e_signed_size_from_s(1,s) -> {'(int',*size_from_s(s),'_t)'};
 
-
-e_class2_start(false,z,s) -> "R[opv->fdst.a]=";
-e_class2_start(true,z,s) -> "if(";
+e_class2_start(false) -> "R[opv->fdst.a]=";
+e_class2_start(true) -> "if(";
 
 e_class2_end(false) -> "";
 e_class2_end(true) -> "){pc=opv->fdst.a;}";
@@ -327,6 +334,7 @@ e_get_bind_val(0,c) -> {'R[opv->fsrc',c,'.a]'};
 e_get_bind_val(1,c) -> {'opv->src',c};
 
 e_op_symbol(OpMod) -> "%";
+e_op_symbol(OpUnaryMinus) -> "0-";
 e_op_symbol(x) -> op_symbol(x);
 
 op_symbol(OpPlus) -> "+";
@@ -351,14 +359,6 @@ op_symbol(OpAnd) -> "&";
 op_symbol(OpOr) -> "|";
 op_symbol(OpXor) -> "^";
 op_symbol(OpMove) -> "";
-
-size_from_s(0) -> "8";
-size_from_s(1) -> "16";
-size_from_s(2) -> "32";
-size_from_s(3) -> "64";
-
-d_signed_size_from_s(0,s) -> {'u',*size_from_s(s)};
-d_signed_size_from_s(1,s) -> {'i',*size_from_s(s)};
 
 generate_define_list(defines,fulllist,name,op)
     match nth(op,fulllist) => {}
