@@ -29,27 +29,30 @@ public:
 DataElement do_call_internal(TokenKind op, const VecDataElement& args);
 void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& sofar);
 
-Program::Program(std::string_view source, bool fast) : fast(fast) {
+Program::Program(std::vector<std::pair<std::string,std::string> > sourcelist, bool fast) : fast(fast) {
     Parser parser;
-    parser.tokens=lex(source);
-    // for(auto t:parser.tokens) {
-    //     std::println("{}",t.to_string());
-    // }
     try {
-        while(!parser.eof()) {
-            if(parser.current().kind==ConstToken) {
-                parse_const(parser);
-            } else {
-                parse_rule(parser);
+        uint32_t file_id=0;
+        for(const auto& [filename, source] : sourcelist) {
+            filenames.push_back(filename);
+            parser.tokens=lex(filenames,file_id,source);
+            parser.pos=0;
+            while(!parser.eof()) {
+                if(parser.current().kind==ConstToken) {
+                    parse_const(parser);
+                } else {
+                    parse_rule(parser);
+                }
             }
+            file_id++;
         }
+        function_names=indices_to_names(function_map);
     } catch (const std::runtime_error& e) {
         Token t=parser.current();
         std::stringstream msg;
         msg << e.what() << " (row=" << t.row+1 << ", col=" << t.start_column+1 << ')';
         throw std::runtime_error(msg.str());
     }
-    function_names=indices_to_names(function_map);
 }
 
 bool compare_equal(const DataElement& x, const DataElement& y) {
@@ -414,7 +417,9 @@ start:
 
 std::vector<DataElement> Program::run_string(std::string& call) {
     Parser parser;
-    parser.tokens=lex(call);
+    std::vector<std::string> cmdline;
+    cmdline.push_back("command-line");
+    parser.tokens=lex(cmdline,0,call);
     std::unordered_map<std::string, std::size_t> param_id_map;
     std::vector<Expression> expressions=parse_expression_list(parser, param_id_map, SixTokenKind{Eof,Eof,Eof,Eof,Eof,Eof}, Comma);
     std::vector<DataElement> empty_bindings;

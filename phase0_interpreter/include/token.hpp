@@ -26,10 +26,11 @@
 struct Token {
     TokenKind kind;
     std::string text;
+    uint32_t file_id;
     uint32_t row;
     uint32_t start_column;
     uint32_t end_column;
     std::string to_string() const;
 };
 
-std::vector<Token> lex(std::string_view program);
+std::vector<Token> lex(std::vector<std::string>& files, uint32_t file_id, std::string_view code);

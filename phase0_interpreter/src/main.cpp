@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     try {
         std::string s=load_file(filename);
         //std::println("{}",s);
-        Program prog(s,fast);
+        Program prog(std::vector{std::make_pair(filename,s)},fast);
         std::vector<DataElement> results=prog.run_string(callexpr);
         std::cout << "Results:" << std::endl;
         for(auto& r : results) {
