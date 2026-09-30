@@ -98,6 +98,7 @@ public:
     //std::vector<DataElement> run(const std::string& fn, const std::vector<DataElement>& args) const;
     bool fast;
     std::vector<DataElement> run_string(std::string& call);
+    std::vector<DataElement> run_string_args(const std::string& call, std::unordered_map<std::string, std::size_t> param_id_map, std::vector<DataElement> args);
 private:
     void do_call_single(const Expression& expression, std::vector<DataElement>& bindings, VecDataElement& sofar) const;
     void do_call_multi(const std::vector<Expression>& expressions, std::vector<DataElement>& bindings, VecDataElement& sofar) const;

@@ -1,6 +1,6 @@
 // ============================================================================
-// File: token.hpp
-// Description: The Token type output by the lexer and used for parsing
+// File: main.cpp
+// Description: Command line wrapper
 // ============================================================================
 // Copyright 2026 Roy Ward
 //
@@ -15,22 +15,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#pragma once
 
-#include "token_kind.hpp"
+extern "C" {
+#include "vm.h"
+}
+#include <CLI/CLI.hpp>
+#include <fstream>
 #include <string>
-#include <vector>
-#include <string>
-#include <cstdint>
+#include <filesystem>
+#include <stdexcept>
+#include <format>
+#include <print>
+#include <cinttypes>
 
-struct Token {
-    TokenKind kind;
-    std::string text;
-    uint32_t file_id;
-    uint32_t row;
-    uint32_t start_column;
-    uint32_t end_column;
-    std::string to_string() const;
-};
-
-std::vector<Token> lex(uint32_t file_id, std::string_view code);
+int main(int argc, char** argv) {
+    CLI::App app{"ReWrite VM disassembler"};
+    std::string filename;
+    app.add_option("file", filename, "Source file to interpret")->required();
+    CLI11_PARSE(app, argc, argv);
+    Program p;
+    program_load(&p,filename.c_str());
+    program_disassemble(&p,stdout);
+    program_unload(&p);
+    return EXIT_SUCCESS;
+}

@@ -22,7 +22,7 @@ FetchContent_MakeAvailable(CLI11)
 add_library(rw_settings INTERFACE)
 target_compile_features(rw_settings INTERFACE cxx_std_17)
 target_compile_options(rw_settings INTERFACE
-    -Wall -Wextra -pedantic -Wredundant-move
+    -Wall -Wextra -pedantic -Wredundant-move -ggdb3
     $<$<CXX_COMPILER_ID:Clang>:-fno-limit-debug-info>
     $<$<BOOL:${RW_SANITIZE}>:-fsanitize=address,undefined -fno-omit-frame-pointer>
 )
@@ -47,11 +47,12 @@ target_link_libraries(rwinterp PUBLIC rw_settings)
 function(rw_app name source)
     add_executable(${name} ${source})
     target_link_libraries(${name} PRIVATE rwinterp CLI11::CLI11)
+    target_compile_definitions(${name} PRIVATE RW_ROOT="${CMAKE_SOURCE_DIR}")
 endfunction()
 
 rw_app(rewrite_cpp apps/rewrite.cpp)    # general-purpose runner (the old src/main.cpp)
-#rw_app(rw_vmgen    apps/vmgen.cpp)      # runs the VM generator, writes the .inc files
-#rw_app(rw_compile  apps/compile.cpp)    # runs the compiler, writes .rwo/.ll and .h
+rw_app(rw_vmgen    apps/vmgen.cpp)      # runs the VM generator, writes the .inc files
+rw_app(rw_compile  apps/compile.cpp)    # runs the compiler, writes .rwo/.ll and .h
 
 # add_executable(rewrite_cpp
 #     src/lexer.cpp

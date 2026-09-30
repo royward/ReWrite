@@ -129,3 +129,47 @@ namespace detail {
 std::string DataElement::to_string() const {
     return std::visit([](const auto& alt) { return detail::to_string_visit(alt); }, value);
 }
+
+std::vector<uint64_t> DataElement::get_vec_u64() const {
+    if (!std::holds_alternative<DataList>(value)) {
+        throw std::runtime_error("get_vec_u64::list expected");
+    }
+    const DataContainer& dc = std::get<DataList>(value).value;
+    const std::vector<DataElement>& de = DataVector::data_vectors[dc.pool_index].list;
+    std::vector<uint64_t> out;
+    for (size_t i = dc.offset; i < de.size(); ++i) {
+        if (!std::holds_alternative<DataInt>(de[i].value)) {
+            throw std::runtime_error("get_vec_u64::int expected");
+        }
+        out.push_back(std::get<DataInt>(de[i].value).value);
+    }
+    return out;
+}
+
+std::string DataElement::get_string() const {
+    if (!std::holds_alternative<DataList>(value)) {
+        throw std::runtime_error("get_string::string expected");
+    }
+    const DataContainer& dc = std::get<DataList>(value).value;
+    const std::vector<DataElement>& de = DataVector::data_vectors[dc.pool_index].list;
+    std::string out;
+    for (size_t i = dc.offset; i < de.size(); ++i) {
+        if (!std::holds_alternative<DataChar>(de[i].value)) {
+            throw std::runtime_error("get_string::char expected");
+        }
+        out+=std::get<DataChar>(de[i].value).value;
+    }
+    return out;
+}
+
+void DataElement::push_string(std::vector<DataElement>& sofar, std::string_view s) {
+    std::vector<DataElement> chars;
+    chars.reserve(s.size());
+    for(char c : s) {
+        chars.push_back(DataElement{DataChar{c}});
+    }
+    uint32_t newvec=DataVector::allocate();
+    DataVector::data_vectors[newvec].list=std::move(chars);
+    DataContainer dc(newvec,0);
+    sofar.push_back(DataElement{DataList{std::move(dc)}});
+}

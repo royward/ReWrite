@@ -48,7 +48,7 @@ std::string lex_string(std::string_view code, std::size_t& p, char term) {
     throw std::runtime_error(msg.str());
 }
 
-std::vector<Token> lex(std::vector<std::string>& files, uint32_t file_id, std::string_view code) {
+std::vector<Token> lex(uint32_t file_id, std::string_view code) {
     std::vector<Token> result;
     std::size_t len=code.length();
     std::size_t p=0;

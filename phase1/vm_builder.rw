@@ -18,75 +18,6 @@
 //
 // All other forms 1 each
 
-// 1: 3 bit: tttSSSab0xx
-const OpPlus=0;
-const OpMinus=1;
-const OpTimes=2;
-const OpShiftLeft=3;
-
-// 2: 5 bit: zabSSS0x1xx
-const OpLt=4;
-const OpLte=5;
-const OpCompLtBr=6;
-const OpCompLteBr=7;
-const OpShiftRight=12;
-const OpDiv=13;
-const OpMod=14;
-const OpReserved5_1=15; // future use
-
-// 8 bit: (var)XXX1x1xx (all the rest, except singletons, XXX cannot all be 1)
-// 3: Other sized operations: +SSS00000000 or +ss00000000
-const OpStore=20; // +a
-const OpLoad=22; // class 4
-const OpTrunc=23; // class 4
-const OpUnaryMinus=30; // +a
-const OpBitNot=52; // +a
-
-// 7: unsized unary: +a
-const OpMove=28; // +a
-const OpNot=54; // +a
-
-// 5: E: unsized binary: + a0000000b
-const OpEqual=84;
-const OpNotEqual=86;
-const OpCompEqBr=92;
-const OpCompNeqBr=94;
-const OpAnd=116;
-const OpOr=118;
-const OpXor=124;
-
-// D: Misc
-const OpSext=60; // + destination ss, class 6
-
-const OpZext=126; // Moved to handcode because it is a nop
-
-const OpLabel=224;
-const OpCall=225;
-const OpRet=226;
-const OpGoto=227;
-const OpLea=229;
-const OpLeaScale=230;
-
-const OpError=254;
-const OpCallIO=255;
-
-const OpAlloc=736;
-const OpRealloc=737;
-const OpEmptyList=738;
-
-const OpDerefFree=740;
-const OpDerefFreeList=741;
-const OpIncMem=742;
-const OpCont=743;
-
-const OpPrepend=744;
-const OpAppend=745;
-const OpAppendSplat=746;
-const OpAppendSplatConsume=747;
-const OpExtractList=748;
-
-const OpBuildIOList=1000000;
-
 op_name(OpPlus) -> "Plus";
 op_name(OpMinus) -> "Minus";
 op_name(OpTimes) -> "Times";
@@ -146,44 +77,6 @@ all_gen_ops() ->
 all_single_ops() -> {OpZext,OpLabel,OpCall,OpRet,OpGoto,OpLea,OpLeaScale,OpError,OpCallIO,
     OpAlloc,OpRealloc,OpEmptyList,OpDerefFree,OpDerefFreeList,OpIncMem,OpCont,OpPrepend,OpAppend,OpAppendSplat,OpAppendSplatConsume,OpExtractList};
 
-opclass(OpPlus) -> 1;
-opclass(OpMinus) -> 1;
-opclass(OpTimes) -> 1;
-opclass(OpShiftLeft) -> 1;
-opclass(OpLt) -> 2;
-opclass(OpLte) -> 2;
-opclass(OpCompLtBr) -> 2;
-opclass(OpCompLteBr) -> 2;
-opclass(OpShiftRight) -> 2;
-opclass(OpDiv) -> 2;
-opclass(OpMod) -> 2;
-opclass(OpStore) -> 3;
-opclass(OpLoad) -> 4;
-opclass(OpTrunc) -> 4;
-opclass(OpMove) -> 7;
-opclass(OpUnaryMinus) -> 3;
-opclass(OpBitNot) -> 3;
-opclass(OpNot) -> 7;
-opclass(OpEqual) -> 5;
-opclass(OpNotEqual) -> 5;
-opclass(OpCompEqBr) -> 5;
-opclass(OpCompNeqBr) -> 5;
-opclass(OpAnd) -> 5;
-opclass(OpOr) -> 5;
-opclass(OpXor) -> 5;
-opclass(OpSext) -> 6;
-
-
-// address encoding for each class - 16 means field not encoded
-//                    a  b  z  s sd
-opclass_encode(1) ->  4, 3,16, 5,16;
-opclass_encode(2) ->  9, 8,10, 5,16;
-opclass_encode(3) ->  0,16,16, 8,16;
-opclass_encode(4) -> 16,16,16, 8,16;
-opclass_encode(5) ->  8, 0,16,16,16;
-opclass_encode(6) -> 16,16,16, 8, 0;
-opclass_encode(7) ->  0,16,16,16,16;
-
 has_label(OpCompLtBr) -> true;
 has_label(OpCompLteBr) -> true;
 has_label(OpCompEqBr) -> true;
@@ -191,102 +84,105 @@ has_label(OpCompNeqBr) -> true;
 has_label(_) -> false;
 
 // generate 4 text artifacts that each go in a separate file
-// * a file of #defines
+// * a file of #defs
 // * an ordered list of all opcodes
-// * the disassembler cases
+// * the disbler cases
 // * the execution cases
 
 generate_inc_files()
-    match generate_inc_files_aux({},listnv(2048,""),{},{},all_gen_ops()) => defines,fulllist,disassem,execute
-    update add_single_defines(defines,fulllist,all_single_ops()) => defines,fulllist
-    match process_fulllist(0,{},fulllist) => oplist
-    -> println(defines),println(oplist),println(disassem),println(execute);
+    match generate_inc_files_aux({},listnv(2048,""),{},{},{},all_gen_ops()) => defs,oplist,dis,exec,branch
+    update add_single_defs(defs,oplist,all_single_ops()) => defs,oplist
+    match process_oplist(0,{},oplist) => oplist2
+    -> defs,oplist2,dis,exec,branch;
 
-process_fulllist(n,full,{}) -> {*full,**listnv(n,"OP_BAD,")};
-process_fulllist(n,full,{"",*rest}) -> process_fulllist(n+1,full,rest);
-process_fulllist(n,full,{name,*rest}) -> process_fulllist(0,{*full,**listnv(n,"OP_BAD,"),*name,','},rest);
+process_oplist(n,full,{}) -> {*full,**listnv(n,"OP_BAD,")};
+process_oplist(n,full,{"",*rest}) -> process_oplist(n+1,full,rest);
+process_oplist(n,full,{name,*rest}) -> process_oplist(0,{*full,**listnv(n,"OP_BAD,"),*name,','},rest);
 
-add_single_defines(defines,fulllist,{}) -> defines,fulllist;
-add_single_defines(defines,fulllist,{op,*rest}) -> add_single_defines(generate_define_list(defines,fulllist,{'OP_',*upper_snake_case({},true,op_name(op))},op),rest);
+add_single_defs(defs,oplist,{}) -> defs,oplist;
+add_single_defs(defs,oplist,{op,*rest}) -> add_single_defs(generate_define_list(defs,oplist,{'OP_',*upper_snake_case({},true,op_name(op))},op),rest);
 
-generate_inc_files_aux(defines,fulllist,disassem,execute,{}) -> defines,fulllist,disassem,execute;
-generate_inc_files_aux(defines,fulllist,disassem,execute,{op,*rest})
-    update generate_inc_files_op(defines,fulllist,disassem,execute,op,op,opclass(op),opclass_encode(opclass(op))) => defines,fulllist,disassem,execute
-    -> generate_inc_files_aux(defines,fulllist,disassem,execute,rest);
+generate_inc_files_aux(defs,oplist,dis,exec,branch,{}) -> defs,oplist,dis,exec,branch;
+generate_inc_files_aux(defs,oplist,dis,exec,branch,{op,*rest})
+    update generate_inc_files_op(defs,oplist,dis,exec,branch,op,op,opclass(op),opclass_encode(opclass(op))) => defs,oplist,dis,exec,branch
+    -> generate_inc_files_aux(defs,oplist,dis,exec,branch,rest);
 
-generate_inc_files_op(defines,fulllist,disassem,execute,opb,op,class,a,b,z,s,sd)
-    -> generate_inc_z(defines,fulllist,disassem,execute,{'OP_',*upper_snake_case({},true,op_name(op))},opb,op,class,a,b,z,s,sd);
+generate_inc_files_op(defs,oplist,dis,exec,branch,opb,op,class,a,b,z,s,sd)
+    -> generate_inc_z(defs,oplist,dis,exec,branch,{'OP_',*upper_snake_case({},true,op_name(op))},opb,op,class,a,b,z,s,sd);
 
-generate_inc_z(defines,fulllist,disassem,execute,name,opb,op,class,a,b,16,s,sd) -> generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,16,s,sd,'X');
-generate_inc_z(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,s,sd)
-    update generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,0,s,sd,'U') => defines,fulllist,disassem,execute
-    update generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op+(1<<z),class,a,b,1,s,sd,'I') => defines,fulllist,disassem,execute
-    -> defines,fulllist,disassem,execute;
+generate_inc_z(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,16,s,sd) -> generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,16,s,sd,'X');
+generate_inc_z(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,z,s,sd)
+    update generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,0,s,sd,'U') => defs,oplist,dis,exec,branch
+    update generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op+(1<<z),class,a,b,1,s,sd,'I') => defs,oplist,dis,exec,branch
+    -> defs,oplist,dis,exec,branch;
 
-generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,16,sd,'X') -> generate_inc_sd(defines,fulllist,disassem,execute,name,opb,op,a,b,z,16,sd);
-generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,16,sd,zc) -> generate_inc_sd(defines,fulllist,disassem,execute,{*name,zc},opb,op,a,b,z,16,sd);
-generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,2,a,b,0,s,sd,zc)
-    -> generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'64'},opb,op+(3<<s),a,b,0,3,sd);
-generate_inc_ss(defines,fulllist,disassem,execute,name,opb,op,class,a,b,z,s,sd,zc)
-    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'8'},opb,op,a,b,z,0,sd) => defines,fulllist,disassem,execute
-    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'16'},opb,op+(1<<s),a,b,z,1,sd) => defines,fulllist,disassem,execute
-    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'32'},opb,op+(2<<s),a,b,z,2,sd) => defines,fulllist,disassem,execute
-    update generate_inc_sd(defines,fulllist,disassem,execute,{*name,'_',zc,'64'},opb,op+(3<<s),a,b,z,3,sd) => defines,fulllist,disassem,execute
-    -> defines,fulllist,disassem,execute;
+generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,z,16,sd,'X') -> generate_inc_sd(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,16,sd);
+generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,z,16,sd,zc) -> generate_inc_sd(defs,oplist,dis,exec,branch,{*name,zc},opb,op,a,b,z,16,sd);
+generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,2,a,b,0,s,sd,zc)
+    -> generate_inc_sd(defs,oplist,dis,exec,branch,{*name,'_',zc,'64'},opb,op+(3<<s),a,b,0,3,sd);
+generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,z,s,sd,zc)
+    update generate_inc_sd(defs,oplist,dis,exec,branch,{*name,'_',zc,'8'},opb,op,a,b,z,0,sd) => defs,oplist,dis,exec,branch
+    update generate_inc_sd(defs,oplist,dis,exec,branch,{*name,'_',zc,'16'},opb,op+(1<<s),a,b,z,1,sd) => defs,oplist,dis,exec,branch
+    update generate_inc_sd(defs,oplist,dis,exec,branch,{*name,'_',zc,'32'},opb,op+(2<<s),a,b,z,2,sd) => defs,oplist,dis,exec,branch
+    update generate_inc_sd(defs,oplist,dis,exec,branch,{*name,'_',zc,'64'},opb,op+(3<<s),a,b,z,3,sd) => defs,oplist,dis,exec,branch
+    -> defs,oplist,dis,exec,branch;
 
-generate_inc_sd(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,16) -> generate_inc_a(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,16);
-generate_inc_sd(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd)
-    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D8'},opb,op,a,b,z,s,0) => defines,fulllist,disassem,execute
-    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D16'},opb,op+(1<<sd),a,b,z,s,1) => defines,fulllist,disassem,execute
-    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D32'},opb,op+(2<<sd),a,b,z,s,2) => defines,fulllist,disassem,execute
-    update generate_inc_a(defines,fulllist,disassem,execute,{*name,'_D64'},opb,op+(3<<sd),a,b,z,s,3) => defines,fulllist,disassem,execute
-    -> defines,fulllist,disassem,execute;
+generate_inc_sd(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,16) -> generate_inc_a(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,16);
+generate_inc_sd(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,sd)
+    update generate_inc_a(defs,oplist,dis,exec,branch,{*name,'_D8'},opb,op,a,b,z,s,0) => defs,oplist,dis,exec,branch
+    update generate_inc_a(defs,oplist,dis,exec,branch,{*name,'_D16'},opb,op+(1<<sd),a,b,z,s,1) => defs,oplist,dis,exec,branch
+    update generate_inc_a(defs,oplist,dis,exec,branch,{*name,'_D32'},opb,op+(2<<sd),a,b,z,s,2) => defs,oplist,dis,exec,branch
+    update generate_inc_a(defs,oplist,dis,exec,branch,{*name,'_D64'},opb,op+(3<<sd),a,b,z,s,3) => defs,oplist,dis,exec,branch
+    -> defs,oplist,dis,exec,branch;
 
-generate_inc_a(defines,fulllist,disassem,execute,name,opb,op,16,b,z,s,sd) -> generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,16,b,z,s,sd);
-generate_inc_a(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd)
-    update generate_inc_b(defines,fulllist,disassem,execute,{*name,'_AREG'},opb,op,0,b,z,s,sd) => defines,fulllist,disassem,execute
-    update generate_inc_b(defines,fulllist,disassem,execute,{*name,'_AIMM'},opb,op+(1<<a),1,b,z,s,sd) => defines,fulllist,disassem,execute
-    -> defines,fulllist,disassem,execute;
+generate_inc_a(defs,oplist,dis,exec,branch,name,opb,op,16,b,z,s,sd) -> generate_inc_b(defs,oplist,dis,exec,branch,name,opb,op,16,b,z,s,sd);
+generate_inc_a(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,sd)
+    update generate_inc_b(defs,oplist,dis,exec,branch,{*name,'_AREG'},opb,op,0,b,z,s,sd) => defs,oplist,dis,exec,branch
+    update generate_inc_b(defs,oplist,dis,exec,branch,{*name,'_AIMM'},opb,op+(1<<a),1,b,z,s,sd) => defs,oplist,dis,exec,branch
+    -> defs,oplist,dis,exec,branch;
 
-generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,a,16,z,s,sd) -> generate_inc_final(defines,fulllist,disassem,execute,name,opb,op,a,16,z,s,sd);
-generate_inc_b(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd)
-    update generate_inc_final(defines,fulllist,disassem,execute,{*name,'_BREG'},opb,op,a,0,z,s,sd) => defines,fulllist,disassem,execute
-    update generate_inc_final(defines,fulllist,disassem,execute,{*name,'_BIMM'},opb,op+(1<<b),a,1,z,s,sd) => defines,fulllist,disassem,execute
-    -> defines,fulllist,disassem,execute;
+generate_inc_b(defs,oplist,dis,exec,branch,name,opb,op,a,16,z,s,sd) -> generate_inc_final(defs,oplist,dis,exec,branch,name,opb,op,a,16,z,s,sd);
+generate_inc_b(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,sd)
+    update generate_inc_final(defs,oplist,dis,exec,branch,{*name,'_BREG'},opb,op,a,0,z,s,sd) => defs,oplist,dis,exec,branch
+    update generate_inc_final(defs,oplist,dis,exec,branch,{*name,'_BIMM'},opb,op+(1<<b),a,1,z,s,sd) => defs,oplist,dis,exec,branch
+    -> defs,oplist,dis,exec,branch;
 
-generate_inc_final(defines,fulllist,disassem,execute,name,opb,op,a,b,z,s,sd) when sd==16 || sd>s // extend only generates when actually an extend
-    update generate_define_list(defines,fulllist,name,op) => defines,fulllist
+generate_inc_final(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,sd) when sd==16 || sd>s // extend only generates when actually an extend
+    update generate_define_list(defs,oplist,name,op) => defs,oplist
     match opclass(opb) => class
     match has_label(opb) => has_lbl,
-    match generate_disassem(class,has_lbl,opb,a,b,z,s,sd) => disassem1
-    match generate_execute(class,has_lbl,opb,a,b,z,s,sd) => execute1
-    -> defines,fulllist,{*disassem,'case ',*name,':{fprintf(out,',*disassem1,');} break;\n'},{*execute,'case ',*name,':{\n\t',*execute1,';\n} break;\n'};
-generate_inc_final(defines,fulllist,disassem,execute,_,_,_,_,_,_,_,_) -> defines,fulllist,disassem,execute;
+    match generate_dis(class,has_lbl,opb,a,b,z,s,sd) => dis1
+    match generate_exec(class,has_lbl,opb,a,b,z,s,sd) => exec1
+    -> defs,oplist,{*dis,'case ',*name,':{fprintf(out,',*dis1,');} break;\n'},{*exec,'case ',*name,':{\n\t',*exec1,';\n} break;\n'},{*branch,*add_label_case(has_lbl,name)};
+generate_inc_final(defs,oplist,dis,exec,branch,_,_,_,_,_,_,_,_) -> defs,oplist,dis,exec,branch;
 
-generate_disassem(1,_,opb,a,b,_,s,_) -> {'"let.x',*size_from_s(s),' r%u = ',*d_get_binding(a,1),*op_symbol(opb),*d_get_binding(b,1),'",opv->fdst.a,',*d_get_bind_val(a,1,'1'),',',*d_get_bind_val(b,1,'2')};
-generate_disassem(2,has_lbl,opb,a,b,z,s,_)
+add_label_case(false,_) -> "";
+add_label_case(true,name) -> {'case ',*name,':\n'};
+
+generate_dis(1,_,opb,a,b,_,s,_) -> {'"let.x',*size_from_s(s),' r%u = ',*d_get_binding(a,1),*op_symbol(opb),*d_get_binding(b,1),'",opv->fdst.a,',*d_get_bind_val(a,1,'1'),',',*d_get_bind_val(b,1,'2')};
+generate_dis(2,has_lbl,opb,a,b,z,s,_)
     -> {*d_class2_start(has_lbl,z,s),*d_get_binding(a,z),*op_symbol(opb),*d_get_binding(b,z),'",',*d_class2_mid(has_lbl),*d_get_bind_val(a,z,'1'),',',*d_get_bind_val(b,z,'2'),*d_class2_end(has_lbl)};
-generate_disassem(3,_,OpStore,a,_,_,s,_) -> {'"store.x',*size_from_s(s),' (r%u+%d) = ',*d_get_binding(a,1),'",opv->fdst.a,(int32_t)opv->fdst.b,',*d_get_bind_val(a,1,'1')};
-generate_disassem(3,_,opb,a,_,_,s,_) -> {'"let.x',*size_from_s(s),' r%u = ',*op_symbol(opb),*d_get_binding(a,1),'",opv->fdst.a,',*d_get_bind_val(a,1,'1')};
-generate_disassem(4,_,OpTrunc,_,_,_,s,_) -> {'"trunc.x',*size_from_s(s),' r%u = r%u",opv->fdst.a,opv->fsrc1.a'};
-generate_disassem(4,_,OpLoad,_,_,_,s,_) -> {'"load.x',*size_from_s(s),' r%u = (r%u+%d)",opv->fdst.a,opv->fsrc1.a,(int32_t)opv->fsrc1.b'};
-generate_disassem(5,has_lbl,opb,a,b,_,_,_)
+generate_dis(3,_,OpStore,a,_,_,s,_) -> {'"store.x',*size_from_s(s),' (r%u+%d) = ',*d_get_binding(a,1),'",opv->fdst.a,(int32_t)opv->fdst.b,',*d_get_bind_val(a,1,'1')};
+generate_dis(3,_,opb,a,_,_,s,_) -> {'"let.x',*size_from_s(s),' r%u = ',*op_symbol(opb),*d_get_binding(a,1),'",opv->fdst.a,',*d_get_bind_val(a,1,'1')};
+generate_dis(4,_,OpTrunc,_,_,_,s,_) -> {'"trunc.x',*size_from_s(s),' r%u = r%u",opv->fdst.a,opv->fsrc1.a'};
+generate_dis(4,_,OpLoad,_,_,_,s,_) -> {'"load.x',*size_from_s(s),' r%u = (r%u+%d)",opv->fdst.a,opv->fsrc1.a,(int32_t)opv->fsrc1.b'};
+generate_dis(5,has_lbl,opb,a,b,_,_,_)
     -> {*d_class5_start(has_lbl),*d_get_binding(a,1),*op_symbol(opb),*d_get_binding(b,1),'",',*d_class2_mid(has_lbl),*d_get_bind_val(a,1,'1'),',',*d_get_bind_val(b,1,'2'),*d_class2_end(has_lbl)};
-generate_disassem(6,_,OpSext,_,_,_,s,sd) -> {'"sext.i',*size_from_s(s),'.i',*size_from_s(sd),' r%u = r%u",opv->fdst.a,opv->fsrc1.a'};
-generate_disassem(7,_,opb,a,_,_,_,_) -> {'"let r%u = ',*op_symbol(opb),*d_get_binding(a,1),'",opv->fdst.a,',*d_get_bind_val(a,1,'1')};
+generate_dis(6,_,OpSext,_,_,_,s,sd) -> {'"sext.i',*size_from_s(s),'.i',*size_from_s(sd),' r%u = r%u",opv->fdst.a,opv->fsrc1.a'};
+generate_dis(7,_,opb,a,_,_,_,_) -> {'"let r%u = ',*op_symbol(opb),*d_get_binding(a,1),'",opv->fdst.a,',*d_get_bind_val(a,1,'1')};
 
-generate_execute(1,_,opb,a,b,_,s,_) -> {'R[opv->fdst.a]=',*e_size_from_s(s),'(',*e_get_bind_val(a,'1'),*e_op_symbol(opb),*e_get_bind_val(b,'2'),')'};
-generate_execute(2,has_lbl,opb,a,b,z,s,_)
+generate_exec(1,_,opb,a,b,_,s,_) -> {'R[opv->fdst.a]=',*e_size_from_s(s),'(',*e_get_bind_val(a,'1'),*e_op_symbol(opb),*e_get_bind_val(b,'2'),')'};
+generate_exec(2,has_lbl,opb,a,b,z,s,_)
     -> {*e_class2_start(has_lbl),'(uint',*size_from_s(s),'_t)((',*e_signed_size_from_s(z,s),*e_get_bind_val(a,'1'),')',*e_op_symbol(opb),'(',*e_signed_size_from_s(z,s),*e_get_bind_val(b,'2'),'))',*e_class2_end(has_lbl)};
-generate_execute(3,_,OpStore,a,_,_,s,_) -> {'uint',*size_from_s(s),'_t v=',*e_get_bind_val(a,'1'),';\n\tmemcpy((void*)(R[opv->fdst.a]+(int32_t)opv->fdst.b),&v,sizeof(v))'};
-generate_execute(3,_,opb,a,_,_,s,_) -> {'R[opv->fdst.a]=',*e_size_from_s(s),'(',*e_op_symbol(opb),*e_get_bind_val(a,'1'),')'};
-generate_execute(4,_,OpTrunc,_,_,_,s,_) -> {'R[opv->fdst.a]=(uint',*size_from_s(s),'_t)',*e_get_bind_val(0,'1')};
-generate_execute(4,_,OpLoad,_,_,_,s,_) -> {'uint',*size_from_s(s),'_t v;\n\tmemcpy(&v,(void*)(R[opv->fsrc1.a]+(int32_t)opv->fsrc1.b),sizeof(v));\n\tR[opv->fdst.a]=v'};
-generate_execute(5,has_lbl,opb,a,b,_,_,_)
+generate_exec(3,_,OpStore,a,_,_,s,_) -> {'uint',*size_from_s(s),'_t v=',*e_get_bind_val(a,'1'),';\n\tmemcpy((void*)(R[opv->fdst.a]+(int32_t)opv->fdst.b),&v,sizeof(v))'};
+generate_exec(3,_,opb,a,_,_,s,_) -> {'R[opv->fdst.a]=',*e_size_from_s(s),'(',*e_op_symbol(opb),*e_get_bind_val(a,'1'),')'};
+generate_exec(4,_,OpTrunc,_,_,_,s,_) -> {'R[opv->fdst.a]=(uint',*size_from_s(s),'_t)',*e_get_bind_val(0,'1')};
+generate_exec(4,_,OpLoad,_,_,_,s,_) -> {'uint',*size_from_s(s),'_t v;\n\tmemcpy(&v,(void*)(R[opv->fsrc1.a]+(int32_t)opv->fsrc1.b),sizeof(v));\n\tR[opv->fdst.a]=v'};
+generate_exec(5,has_lbl,opb,a,b,_,_,_)
     -> {*e_class2_start(has_lbl),*e_get_bind_val(a,'1'),*e_op_symbol(opb),*e_get_bind_val(b,'2'),*e_class2_end(has_lbl)};
-generate_execute(6,_,OpSext,_,_,_,s,sd) -> {'R[opv->fdst.a]=',*e_signed_size_from_s(0,sd),*e_signed_size_from_s(1,s),*e_get_bind_val(0,'1')};
-generate_execute(7,_,opb,a,_,_,_,_) -> {'R[opv->fdst.a]=',*e_op_symbol(opb),*e_get_bind_val(a,'1')};
-generate_execute(class,has_lbl,opb,a,b,z,s,sd) -> "unknown";
+generate_exec(6,_,OpSext,_,_,_,s,sd) -> {'R[opv->fdst.a]=',*e_signed_size_from_s(0,sd),*e_signed_size_from_s(1,s),*e_get_bind_val(0,'1')};
+generate_exec(7,_,opb,a,_,_,_,_) -> {'R[opv->fdst.a]=',*e_op_symbol(opb),*e_get_bind_val(a,'1')};
+generate_exec(class,has_lbl,opb,a,b,z,s,sd) -> "unknown";
 
 d_class2_start(false,z,s) -> {'"let.',*d_signed_size_from_s(z,s),' r%u = '};
 d_class2_start(true,z,s) -> {'"if.',*d_signed_size_from_s(z,s),' '};
@@ -360,10 +256,10 @@ op_symbol(OpOr) -> "|";
 op_symbol(OpXor) -> "^";
 op_symbol(OpMove) -> "";
 
-generate_define_list(defines,fulllist,name,op)
-    match nth(op,fulllist) => {}
-    update nth_insert(op,name,fulllist) => fulllist
-    -> {*defines,'#define ',*name,' 0x',*int_to_hex(3,{},op),'\n'},fulllist;
+generate_define_list(defs,oplist,name,op)
+    match nth(op,oplist) => {}
+    update nth_insert(op,name,oplist) => oplist
+    -> {*defs,'#define ',*name,' 0x',*int_to_hex(3,{},op),'\n'},oplist;
 
 int_to_hex(0,sofar,_) -> sofar;
 int_to_hex(n,sofar,v) when v&15<10 -> int_to_hex(n-1,{'0'+(v&15),*sofar},v>>4);
