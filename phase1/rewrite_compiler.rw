@@ -78,80 +78,43 @@ basename_aux({}, last) -> last;
 basename_aux({'/', *rest}, _) -> basename_aux(rest, rest);
 basename_aux({_, *rest}, last) -> basename_aux(rest, last);
 
-full_compile(filename,source)
+full_compile_vm(filename,source)
     match TargetVM =>target
     match parse(target,lex(source)) => rules,table,symtext,symsz,types
     match annotate_table(types,{},table) => annotated_table
-    match compile1x(target,types,length(table)-1,0,annotated_table,symtext,symsz,{},rules) => header,binary
+    update compile1(target,types,length(table)-1,0,annotated_table,symtext,symsz,{},rules) => types,lbl_id,table,symtext,symsz,sofar
+    match compile1_vm(target,types,lbl_id,table,symtext,sofar) => header,binary
     -> c_headerx(target,basename(filename),header),binary;
 
-compile1x(TargetVM,types,lbl_id,_,table,symtext,_,sofar,{}) -> compile1x_vm(TargetVM,types,lbl_id,table,symtext,sofar);
-compile1x(TargetVMLL,types,lbl_id,_,table,symtext,_,sofar,{}) -> compile1x_vm(TargetVMLL,types,lbl_id,table,symtext,sofar);
-// compile1x(target,types,lbl_id,_,table,symtext,symsz,sofar,{})
-//     match create_export_wrappers_ll(target,types,{},{},lbl_id,table) => wrapper_code,wrapperh ->
-//     save_text_file({*outfile,'.ll'},{*convert_to_llvm(target,table,symtext,symsz,{},sofar),*wrapper_code,*ll_boilerplate_end()}),
-//     save_c_header(target,wrapperh);
-compile1x(target,types,lbl_id,n,table,symtext,symsz,sofar,{rules,*rest})
+full_compile_native(filename,source)
+    match TargetX86_64 =>target
+    match parse(target,lex(source)) => rules,table,symtext,symsz,types
+    match annotate_table(types,{},table) => annotated_table
+    update compile1(target,types,length(table)-1,0,annotated_table,symtext,symsz,{},rules) => types,lbl_id,table,symtext,symsz,sofar
+    update compile1_native(target,types,lbl_id,table,symtext,symsz,sofar) => header,code
+    -> c_headerx(target,basename(filename),header),code;
+
+compile1(target,types,lbl_id,_,table,symtext,symsz,sofar,{}) -> types,lbl_id,table,symtext,symsz,sofar;
+compile1(target,types,lbl_id,n,table,symtext,symsz,sofar,{rules,*rest})
     match nth(n,table) => {_,_,_,name,reg_count1,bitmask1,type_left,regs_left,reg_count2,bitmask2,type_right,_}
     update compile_function(types,target,reg_count1,true,lbl_id,n,table,0,
         {{n,0,OpLabel,0,0,0,n}},
         rules,0,bitmask_or({},bitmask1,bitmask2),reg_count1,type_left,reg_count2,type_right) => lbl_id,code
-    -> compile1x(target,types,lbl_id,n+1,table,symtext,symsz,{*sofar,{n,code}},rest);
+    -> compile1(target,types,lbl_id,n+1,table,symtext,symsz,{*sofar,{n,code}},rest);
 
-compile1x_vm(target,types,lbl_id,table,symtext,sofar)
+compile1_vm(target,types,lbl_id,table,symtext,sofar)
     match create_export_wrappers_vm(target,types,{},{},0,lbl_id,table) => wrapper_code,wrapperh
     match {*sofar,*wrapper_code} => vmcode
     match convert_to_binary({0,0,0,(code_length(0,vmcode)+1)<<32},vmcode) => binary
     match text_to_u64({},symtext) => binsyms
     -> wrapperh,{*binary,*binsyms};
-//    -> save_c_header(target,wrapperh),
-//    save_binary_file({*outfile,'.rwo'},{*convert_to_binary({*emitb(28,0),*emitb(4,code_length(0,vmcode)+1)},vmcode),*text_to_byte({},symtext)});
 
-//{0,0,0,51539607552,224,0,0,0,95,-4294967295,0,0,29,1,1,0,226,0,1,1,4294967520,1,0,0,4294967401,-4294967294,0,1,225,262145,0,1,4294967394,-4294967291,0,4,226,1,1,5,131296,2,0,0,131327,0,0,1}
+compile1_native(target,types,lbl_id,table,symtext,symsz,sofar)
+    match create_export_wrappers_ll(target,types,{},{},lbl_id,table) => wrapper_code,wrapperh ->
+    wrapperh,{*convert_to_llvm(target,table,symtext,symsz,{},sofar),*wrapper_code,*ll_boilerplate_end()};
 
 const Max_u16=65535;
 const Max_u32=4294967295;
-
-convert_to_binary(sofar,{}) -> sofar;
-convert_to_binary(sofar,{{fnid,code},*rest}) -> convert_to_binary({*sofar,*convert_to_binary_aux({},code)},rest);
-
-convert_to_binary_aux(sofar,{}) -> sofar;
-convert_to_binary_aux(sofar,{instr,*rest}) -> convert_to_binary_aux({*sofar,*xemit_instruction(instr)},rest);
-
-xemit_instruction({OpBuildIOList,_,*a}) -> println_any(a),println_any({*xemit_instruction_build({},4,a)}),{*xemit_instruction_build({},4,a)};
-xemit_instruction({fn_id,rule_id,op,sz,z}) -> xemit_instruction({fn_id,rule_id,op,sz,z,0,0,0,0,0,0,0});
-xemit_instruction({fn_id,rule_id,op,sz,z,flags_dst,dst}) -> xemit_instruction({fn_id,rule_id,op,sz,z,flags_dst,dst,0,0,0,0,0});
-xemit_instruction({fn_id,rule_id,op,sz,z,flags_dst,dst,flags_src1,src1}) -> xemit_instruction({fn_id,rule_id,op,sz,z,flags_dst,dst,flags_src1,src1,0,0,0});
-xemit_instruction({fn_id,rule_id,op,sz,z,flags_dst,dst,flags_src1,src1,flags_src2,src2}) -> xemit_instruction({fn_id,rule_id,op,sz,z,flags_dst,dst,flags_src1,src1,flags_src2,src2,Max_u32});
-xemit_instruction({fn_id,rule_id,op,sz,zz,flags_dst,dst,flags_src1,src1,flags_src2,src2,dst2})
-    match opclass(op) => class
-    match opclass_encode(class) => a,b,z,s,_
-    update xemit_size_collapse(class,zz,sz) => sz
-    //match println_any({op,(op+(flags_src1<<a)+(flags_src2<<b)+(zz<<z)+(xemit_conv_size(sz)<<s))}) =>
-    -> {((op+(flags_src1<<a)+(flags_src2<<b)+(zz<<z)+(xemit_conv_size(sz)<<s))&Max_u16)+(fn_id<<16)+((rule_id&255)<<32),(dst&Max_u32)+(dst2<<32),src1,src2};
-
-xemit_size_collapse(2,0,s) when s<4 -> 4;
-xemit_size_collapse(_,_,s) -> s;
-
-xemit_conv_size(0) -> 0;
-xemit_conv_size(sz) -> sz-1;
-
-xemit_instruction_build(sofar,0,_) -> sofar;
-xemit_instruction_build(sofar,n,{}) -> xemit_instruction_build({*sofar,0},n-1,{});
-xemit_instruction_build(sofar,n,{a}) -> xemit_instruction_build({*sofar,a},n-1,{});
-xemit_instruction_build(sofar,n,{a,b,*rest}) -> xemit_instruction_build({*sofar,a+(b<<32)},n-1,rest);
-
-:- text_to_u64([i64], string) -> [i64];
-text_to_u64(sofar, {}) -> sofar;
-text_to_u64(sofar, s)
-    update pack8(s, 0, 0) => word, rest
-    -> text_to_u64({*sofar, word}, rest);
-
-// pack8(remaining, shift, acc): pack up to 8 chars, first char in the low byte
-:- pack8(string, i64, i64) -> i64, string;
-pack8({}, _, acc) -> acc, {};
-pack8(s, 64, acc) -> acc, s;
-pack8({c, *rest}, shift, acc) -> pack8(rest, shift + 8, acc + ((c - '\0') << shift));
 
 c_headerx(target,outfile,content)
     match to_upper_sanitize({},outfile) => file_upper
@@ -547,10 +510,6 @@ bitmask_or(sofar,{b1,*rest1},{b2,*rest2}) -> bitmask_or({*sofar,b1|b2},rest1,res
 length({}) -> 0;
 length({_,*rest}) -> length(rest)+1;
 
-compile_aux(target,outfile,rules,table,symtext,symsz,types)
-    match annotate_table(types,{},table) => annotated_table ->
-    compile1(target,types,outfile,length(table)-1,0,annotated_table,symtext,symsz,{},rules);
-
 const Borrow=0;
 const Consume=1;
 
@@ -580,46 +539,6 @@ annotate_type_list_reg(types,pri,max_reg,sofar,{{{r,{}},t,_},*rest}) match looku
 annotate_type_list_reg(types,pri,max_reg,sofar,todo) -> annotate_type_list_reg(types,pri+1,max_reg,sofar,todo);
 
 lookup_type_size_pri(t,types) match nth(t,types) => {_,_,_,size_pri} -> size_pri;
-
-// const OpLabel=1;
-// const OpError=2;
-// const OpRet=5;
-// const OpMove=16;
-// const OpLoad=17;
-// const OpStore=18;
-// const OpIncMem=19;
-// const OpPlus=24;
-// const OpMinus=25;
-// const OpTimes=26;
-// const OpDiv=27;
-// const OpMod=28;
-// const OpLt=29;
-// const OpLte=30;
-// const OpLea=40;
-// const OpLeaScale=41;
-// const OpAnd=54;
-// const OpOr=55;
-// const OpUnaryMinus=56;
-// const OpEqual=64;
-// const OpNotEqual=72;
-// const OpAlloc=192;
-// const OpDerefFree=193;
-// const OpRealloc=194;
-// const OpPrepend=195;
-// const OpAppend=196;
-// const OpAppendSplat=198;
-// const OpAppendSplatConsume=199;
-// const OpDerefFreeList=200;
-// const OpEmptyList=201;
-// const OpExtractList=202;
-// const OpCont=207;
-// const OpCallIO=237;
-// const OpGoto=238;
-// const OpCall=239;
-// const OpCompNeqBr=240;
-// const OpCompLtBr=246;
-// const OpCompareLessThanEqualBranch=247;
-// const OpCompEqBr=248;
 
 calc_counts(table,bindings,{_,_,params},clauses,exprs)
     match calc_counts_setup_bind(0,length(bindings),{}) => counts
@@ -686,28 +605,6 @@ calc_counts_clause_map_rev(types,counts,{{upd_flag,decline,{_,_,params},exprs},*
     update calc_counts_clear_touched(upd_flag,{},counts) => counts
     update calc_counts_expr_map_rev(types,true,counts,exprs) => counts,exprs
     -> next_maydecline,counts,{{upd_flag,decline,{pf1,pf2,params},exprs},*rest};
-
-compile1(TargetVM,types,outfile,lbl_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVM,types,outfile,lbl_id,table,symtext,sofar);
-compile1(TargetVMLL,types,outfile,lbl_id,_,table,symtext,_,sofar,{}) -> compile1_vm(TargetVMLL,types,outfile,lbl_id,table,symtext,sofar);
-compile1(target,types,outfile,lbl_id,_,table,symtext,symsz,sofar,{})
-    match create_export_wrappers_ll(target,types,{},{},lbl_id,table) => wrapper_code,wrapperh ->
-    save_text_file({*outfile,'.ll'},{*convert_to_llvm(target,table,symtext,symsz,{},sofar),*wrapper_code,*ll_boilerplate_end()}),
-    save_c_header(target,outfile,wrapperh);
-compile1(target,types,outfile,lbl_id,n,table,symtext,symsz,sofar,{rules,*rest})
-    match nth(n,table) => {_,_,_,name,reg_count1,bitmask1,type_left,regs_left,reg_count2,bitmask2,type_right,_}
-    update compile_function(types,target,reg_count1,true,lbl_id,n,table,0,
-        {{n,0,OpLabel,0,0,0,n}},
-        rules,0,bitmask_or({},bitmask1,bitmask2),reg_count1,type_left,reg_count2,type_right) => lbl_id,code
-    -> compile1(target,types,outfile,lbl_id,n+1,table,symtext,symsz,{*sofar,{n,code}},rest);
-
-compile1_vm(target,types,outfile,lbl_id,table,symtext,sofar)
-    match create_export_wrappers_vm(target,types,{},{},0,lbl_id,table) => wrapper_code,wrapperh
-    match {*sofar,*wrapper_code} => vmcode
-    -> save_c_header(target,outfile,wrapperh),
-    save_binary_file({*outfile,'.rwo'},{*convert_to_binary({*emitb(28,0),*emitb(4,code_length(0,vmcode)+1)},vmcode),*text_to_byte({},symtext)});
-
-//text_to_byte(sofar,{}) -> sofar;
-//text_to_byte(sofar,{c,*rest}) -> text_to_byte({*sofar,c-'\0'},rest);
 
 code_length(n,{}) -> n;
 code_length(n,{{_,a},*rest}) -> code_length(n+length(a),rest);
@@ -1218,23 +1115,45 @@ op_infer(NotEqual,t,_) -> {1,t,t};
 // VM
 ///////////////////////////////////////////////////////////
 
-// emit_instruction({OpBuildIOList,_,*a}) -> {*emit_instruction_build({},8,a)};
-// emit_instruction({fn_id,rule_id,op,tp}) -> emit_instruction({fn_id,rule_id,op,tp,0,0,0,0,0,0});
-// emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst}) -> emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,0,0,0,0});
-// emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1}) -> emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1,0,0});
-// emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1,flags_src2,src2}) ->
-//     {op,tp,*emitb(2,fn_id),rule_id&255,flags_dst&255,flags_src1&255,flags_src2&255,*emitb(4,dst),*emitb(4,-1),*emitb(8,src1),*emitb(8,src2)};
-// emit_instruction({fn_id,rule_id,op,tp,flags_dst,dst,flags_src1,src1,flags_src2,src2,lbl2}) ->
-//     {op,tp,*emitb(2,fn_id),rule_id&255,flags_dst&255,flags_src1&255,flags_src2&255,*emitb(4,dst),*emitb(4,lbl2),*emitb(8,src1),*emitb(8,src2)};
-//
-// emit_instruction_build(sofar,0,_) -> sofar;
-// emit_instruction_build(sofar,n,{}) -> emit_instruction_build({*sofar,*emitb(4,0)},n-1,{});
-// emit_instruction_build(sofar,n,{a,*rest}) -> emit_instruction_build({*sofar,*emitb(4,a)},n-1,rest);
-//
-// emitb(n,v) -> emitb_aux(n,{},v);
-//
-// emitb_aux(0,sofar,_) -> sofar;
-// emitb_aux(n,sofar,v) -> emitb_aux(n-1,{*sofar,v&255},v>>8);
+convert_to_binary(sofar,{}) -> sofar;
+convert_to_binary(sofar,{{fnid,code},*rest}) -> convert_to_binary({*sofar,*convert_to_binary_aux({},code)},rest);
+
+convert_to_binary_aux(sofar,{}) -> sofar;
+convert_to_binary_aux(sofar,{instr,*rest}) -> convert_to_binary_aux({*sofar,*xemit_instruction(instr)},rest);
+
+xemit_instruction({OpBuildIOList,_,*a}) -> {*xemit_instruction_build({},4,a)};
+xemit_instruction({fn_id,rule_id,op,sz,z}) -> xemit_instruction({fn_id,rule_id,op,sz,z,0,0,0,0,0,0,0});
+xemit_instruction({fn_id,rule_id,op,sz,z,flags_dst,dst}) -> xemit_instruction({fn_id,rule_id,op,sz,z,flags_dst,dst,0,0,0,0,0});
+xemit_instruction({fn_id,rule_id,op,sz,z,flags_dst,dst,flags_src1,src1}) -> xemit_instruction({fn_id,rule_id,op,sz,z,flags_dst,dst,flags_src1,src1,0,0,0});
+xemit_instruction({fn_id,rule_id,op,sz,z,flags_dst,dst,flags_src1,src1,flags_src2,src2}) -> xemit_instruction({fn_id,rule_id,op,sz,z,flags_dst,dst,flags_src1,src1,flags_src2,src2,Max_u32});
+xemit_instruction({fn_id,rule_id,op,sz,zz,flags_dst,dst,flags_src1,src1,flags_src2,src2,dst2})
+    match opclass(op) => class
+    match opclass_encode(class) => a,b,z,s,_
+    update xemit_size_collapse(class,zz,sz) => sz
+    -> {((op+(flags_src1<<a)+(flags_src2<<b)+(zz<<z)+(xemit_conv_size(sz)<<s))&Max_u16)+(fn_id<<16)+((rule_id&255)<<32),(dst&Max_u32)+(dst2<<32),src1,src2};
+
+xemit_size_collapse(2,0,s) when s<4 -> 4;
+xemit_size_collapse(_,_,s) -> s;
+
+xemit_conv_size(0) -> 0;
+xemit_conv_size(sz) -> sz-1;
+
+xemit_instruction_build(sofar,0,_) -> sofar;
+xemit_instruction_build(sofar,n,{}) -> xemit_instruction_build({*sofar,0},n-1,{});
+xemit_instruction_build(sofar,n,{a}) -> xemit_instruction_build({*sofar,a},n-1,{});
+xemit_instruction_build(sofar,n,{a,b,*rest}) -> xemit_instruction_build({*sofar,a+(b<<32)},n-1,rest);
+
+:- text_to_u64([i64], string) -> [i64];
+text_to_u64(sofar, {}) -> sofar;
+text_to_u64(sofar, s)
+    update pack8(s, 0, 0) => word, rest
+    -> text_to_u64({*sofar, word}, rest);
+
+// pack8(remaining, shift, acc): pack up to 8 chars, first char in the low byte
+:- pack8(string, i64, i64) -> i64, string;
+pack8({}, _, acc) -> acc, {};
+pack8(s, 64, acc) -> acc, s;
+pack8({c, *rest}, shift, acc) -> pack8(rest, shift + 8, acc + ((c - '\0') << shift));
 
 ///////////////////////////////////////////////////////////
 // LLVM
@@ -1298,10 +1217,10 @@ ll_emit_instruction(z,_,{_,_,OpCompNeqBr,sz,_,_,lbl,flag_src,src,flag_src2,src2,
     z,{'\t%c',*id,'=icmp ne ',*intsize(sz),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2),'\n\tbr i1 %c',*id,',label %L',*int2s36(lbl),',label %L',*id};
 ll_emit_instruction(z,_,{_,_,OpCompEqBr,sz,_,_,lbl,flag_src,src,flag_src2,src2,lbl2}) match int2s36(lbl2) => id ->
     z,{'\t%c',*id,'=icmp eq ',*intsize(sz),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2),'\n\tbr i1 %c',*id,',label %L',*int2s36(lbl),',label %L',*id};
-ll_emit_instruction(z,_,{_,_,op,tp,BindReg,dst,flag_src,src,flag_src2,src2}) when op>=OpPlus when op<=OpLte ->
-    z,{'\t',*ll_emit_arg(BindReg,dst),'=',*ll_binop(op,tp),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2)};
 ll_emit_instruction(z,_,{_,_,OpError,0,0,BindImm,code,_,line,_,sym,0}) ->
     z,{'\tcall void @__rw__error(ptr %A,i32 ',*int2s(code),',i32 ',*int2s(line),',i32 ',*int2s(sym),',ptr @.fn.syms)\n\tunreachable'};
+ll_emit_instruction(z,_,{_,_,op,sz,zz,BindReg,dst,flag_src,src,flag_src2,src2}) ->
+    z,{'\t',*ll_emit_arg(BindReg,dst),'=',*ll_binop(op,sz,z),' ',*ll_emit_arg(flag_src,src),',',*ll_emit_arg(flag_src2,src2)};
 ll_emit_instruction(z,_,{OpBuildIOList,0,*_}) -> z,"";
 ll_emit_instruction(z,_,{OpBuildIOList,OpRet,_,_,0}) -> z,"\tret void";
 ll_emit_instruction(z,table,{OpBuildIOList,OpRet,fnid16,_,1,v})
@@ -1321,7 +1240,7 @@ ll_emit_instruction(z,table,{OpBuildIOList,OpCall,_,spinc16,callid,rleft,rright,
 ll_emit_instruction(z,table,{OpBuildIOList,OpGoto,_,spinc16,callid,rleft,*rest})
     match nth(callid,table) => {_,fnlineno,_,name,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
     -> z+1,ll_handle_call(true,'x','t',name,regleft,params_left,regright,type_right,0,callid,int2s36(z),rest);
-ll_emit_instruction(z,_,{_,_,op,*_}) -> z,{'\tunknown:',*int2s(op)};
+ll_emit_instruction(z,_,{_,_,op,*rest}) -> println_any({op,*rest}),z,{'\tunknown:',*int2s(op)};
 
 ll_handle_call(isgoto,c,d,name,regleft,params_left,regright,type_right,spinc,callid,callctr,rest)
     match ll_ret_type(regright) => retname
@@ -1376,19 +1295,17 @@ output_undef(sofar,i,n) -> output_undef({*sofar,'i64 undef,'},i+1,n);
 ll_emit_arg(BindReg,src) -> {'%t',*int2s36(src)};
 ll_emit_arg(BindImm,src) -> int2s(src);
 
-ll_binop(OpPlus,tp) -> {'add ',*ll_tp(tp)};
-ll_binop(OpMinus,tp) -> {'sub ',*ll_tp(tp)};
-ll_binop(OpTimes,tp) -> {'mul ',*ll_tp(tp)};
-ll_binop(OpDiv,tp) when is_unsigned(tp) -> {'udiv ',*ll_tp(tp)};
-ll_binop(OpDiv,tp) -> {'sdiv ',*ll_tp(tp)};
-ll_binop(OpMod,tp) when is_unsigned(tp) -> {'urem ',*ll_tp(tp)};
-ll_binop(OpMod,tp) -> {'srem ',*ll_tp(tp)};
-ll_binop(OpLt,tp) when is_unsigned(tp) -> {'icmp ult ',*ll_tp(tp)};
-ll_binop(OpLt,tp) -> {'icmp slt ',*ll_tp(tp)};
-ll_binop(OpLte,tp) when is_unsigned(tp) -> {'icmp ule ',*ll_tp(tp)};
-ll_binop(OpLte,tp) -> {'icmp sle ',*ll_tp(tp)};
-
-is_unsigned(_) -> false;
+ll_binop(OpPlus,sz,_) -> {'add ',*intsize(sz)};
+ll_binop(OpMinus,sz,_) -> {'sub ',*intsize(sz)};
+ll_binop(OpTimes,sz,_) -> {'mul ',*intsize(sz)};
+ll_binop(OpDiv,sz,0) -> {'udiv ',*intsize(sz)};
+ll_binop(OpDiv,sz,1) -> {'sdiv ',*intsize(sz)};
+ll_binop(OpMod,sz,0) -> {'urem ',*intsize(sz)};
+ll_binop(OpMod,sz,1) -> {'srem ',*intsize(sz)};
+ll_binop(OpLt,sz,0) -> {'icmp ult ',*intsize(sz)};
+ll_binop(OpLt,sz,1) -> {'icmp slt ',*intsize(sz)};
+ll_binop(OpLte,sz,0)-> {'icmp ule ',*intsize(sz)};
+ll_binop(OpLte,sz,1) -> {'icmp sle ',*intsize(sz)};
 
 ll_tp(TypeBool) -> "i1";
 ll_tp(TypeChar) -> "i32";
@@ -1466,8 +1383,10 @@ ctype_in_extra({_,_,{1},_},tp,name) -> "";
 ctype_in_extra({_,_,_,_},TypeString,name) -> "";
 ctype_in_extra({_,_,{2,_},_},tp,name) -> {',size_t ',*name,'_len'};
 
-z_or_s(tp) when is_unsigned(tp) -> 'z';
-z_or_s(_) -> 's';
+// is_unsigned(_) -> false;
+//
+// z_or_s(tp) when is_unsigned(tp) -> 'z';
+// z_or_s(_) -> 's';
 
 create_export_vm_in(types,code,sofar,_,{},{}) -> code,sofar;
 create_export_vm_in(types,code,sofar,n,{{_,TypeString,_},*rest},{val,*vrest}) match val => true

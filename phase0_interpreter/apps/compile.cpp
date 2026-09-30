@@ -90,11 +90,12 @@ void write_binary_to_file(const std::string& filename, const uint8_t* data, size
 int main(int argc, char** argv) {
     CLI::App app{"ReWrite Stage 1 interpreter"};
     bool fast = false;
+    bool native = false;
     std::string infile;
     std::string outfile;
     app.add_option("infile", infile, "Source file to interpret")->required();
-    //app.add_option("outfile", outfile, "Expression to evaluate")->required();
     app.add_flag("--fast", fast, "Enable fast execution mode");
+    app.add_flag("--native", native, "Compile native");
     CLI11_PARSE(app, argc, argv);
     std::string popcodes="opcodes.rw";
     std::string pcompile="rewrite_compiler.rw";
@@ -110,45 +111,20 @@ int main(int argc, char** argv) {
         std::unordered_map<std::string, std::size_t> param_id_map;
         param_id_map["f0"]=0;
         param_id_map["s0"]=1;
-        //cout << "###" << args.size();
-        std::vector<DataElement> results=prog.run_string_args(std::string("full_compile(f0,s0)"),param_id_map,args);
-        write_string_to_file(infile+".h",results[0].get_string());
-        std::vector<uint64_t> data=results[1].get_vec_u64();
-        write_binary_to_file(infile+".rwo",(const uint8_t*)data.data(),data.size()*8);
-        // std::string cmdline="generate_inc_files()";
-        // std::vector<DataElement> results=prog.run_string(cmdline);
-        // write_string_to_file(RW_ROOT+pathout+"defines.inc",results[0].get_string());
-        // write_string_to_file(RW_ROOT+pathout+"oplist.inc",results[1].get_string());
-        // write_string_to_file(RW_ROOT+pathout+"disassemble.inc",results[2].get_string());
-        // write_string_to_file(RW_ROOT+pathout+"execute.inc",results[3].get_string());
-        // write_string_to_file(RW_ROOT+pathout+"oplabels.inc",results[4].get_string());
+        if(native) {
+            std::cout << "native\n";
+            std::vector<DataElement> results=prog.run_string_args(std::string("full_compile_native(f0,s0)"),param_id_map,args);
+            write_string_to_file(infile+"_native.h",results[0].get_string());
+            write_string_to_file(infile+"_native.ll",results[1].get_string());
+        } else {
+            std::vector<DataElement> results=prog.run_string_args(std::string("full_compile_vm(f0,s0)"),param_id_map,args);
+            write_string_to_file(infile+".h",results[0].get_string());
+            std::vector<uint64_t> data=results[1].get_vec_u64();
+            write_binary_to_file(infile+".rwo",(const uint8_t*)data.data(),data.size()*8);
+        }
         return 0;
     } catch(const std::runtime_error& e) {
         std::cout << "Error: " << e.what() << std::endl;
         return 1;
     }
-    // CLI::App app{"ReWrite Stage 1 interpreter"};
-    // std::string filename;
-    // std::string callexpr;
-    // bool fast = false;
-    // app.add_option("file", filename, "Source file to interpret")->required();
-    // app.add_option("call", callexpr, "Expression to evaluate")->required();
-    // app.add_flag("--fast", fast, "Enable fast execution mode");
-    // CLI11_PARSE(app, argc, argv);
-    // try {
-    //     std::string s=load_file(filename);
-    //     //std::println("{}",s);
-    //     Program prog(std::vector{std::make_pair(filename,s)},fast);
-    //     std::vector<DataElement> results=prog.run_string(callexpr);
-    //     std::cout << "Results:" << std::endl;
-    //     for(auto& r : results) {
-    //         std::cout << r.to_string() << std::endl;
-    //     }
-    //     uint32_t free_size=DataVector::count_free();
-    //     std::cout << "List use: " << free_size << '/' << DataVector::data_vectors.size()-1 << " freed" << std::endl;
-    //     return 0;
-    // } catch(const std::runtime_error& e) {
-    //     std::cout << "Error: " << e.what() << std::endl;
-    //     return 1;
-    // }
 }
