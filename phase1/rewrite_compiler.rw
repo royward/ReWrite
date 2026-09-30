@@ -895,6 +895,7 @@ get_size_scale(sz) -> 64-count_leading_zeros(sz>>3),0;
 
 xt(TypeBool) -> 0,0;
 xt(TypeChar) -> 3,0;
+xt(TypeU32) -> 3,0;
 xt(TypeI64) -> 4,1;
 
 generate_conditional(ctx,target,0,lbl_decline,lbl_id,op,tp,sz,src_flag,src,src_flag2,src2) -> lbl_decline,ctx,{};
@@ -908,7 +909,7 @@ generate_conditional(ctx,_,_,lbl_decline,lbl_id,op,tp,sz,src_flag,src,src_flag2,
 
 gen_cond_op(OpCompNeqBr,tp,sz) -> OpCompNeqBr,get_size_scale(sz);
 gen_cond_op(OpCompEqBr,tp,sz) -> OpCompEqBr,get_size_scale(sz);
-gen_cond_op(op,tp,sz) -> op,tp;
+gen_cond_op(op,tp,sz) -> op,xt(tp);
 
 use_binding(ctx,id) match nth(id,ctx_bindings(ctx)) => {bind_level,tp,storage,name} -> ctx_newbindings(ctx,nth_insert(id,{bind_level,tp,storage,name},ctx_bindings(ctx))),tp,storage;
 

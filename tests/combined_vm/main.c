@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
     printf("h:");
     exe->allocated=0;
     ret_code=rw_h(exe,"test","hex",0,&resultc1,&resultc);
-    if(!ret_code && strcmp(resultc1,"test")==0 && (char)resultc=='e') { printf("success\n"); } else { printf("fail:%d %ld %c %s\n",ret_code,result0,resultc,resultc1); };
+    if(!ret_code && strcmp(resultc1,"test")==0 && (char)resultc=='e') { printf("success\n"); } else { printf("fail:%d %c %s\n",ret_code,resultc,resultc1); };
     free(resultc1);
 
     printf("cdr:");

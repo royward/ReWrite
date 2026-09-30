@@ -189,7 +189,7 @@ void display_xreg_assignments(FILE* out, bool outx, const char* r, uint32_t sz, 
 uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
     Operation* opv=&program->code[i];
     uint32_t ret=0;
-    fprintf(out,"%6d %4d %3d: %02x: ",i,opv->fn_id,opv->rule_id,opv->op);
+    fprintf(out,"%6d %4d %3d: %03x: ",i,opv->fn_id,opv->rule_id,opv->op);
     uint16_t op=opv->op;
     switch(op) {
 #include "disassemble.inc"
@@ -489,19 +489,18 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 }
                 pc = opv->fdst.a;
             } break;
-           //  case OP_LEA: {
-           //      uint64_t val = operand_load(exe, 64, opv->flags_src.a, opv->src1, sp);
-           //      operand_store(exe, opv, ((uint64_t)exe->heap8)+val*8, 64, sp);
-           //  } break;
-           //  case OP_LEA_SCALE: {
-           //      uint64_t val = operand_load(exe, 64, opv->flags_src.a, opv->src1, sp);
-           //      uint64_t offset = operand_load(exe, 32, opv->flags_src.b, opv->src2, sp);
-           //      operand_store(exe, opv, val+offset*opv->fdst.b, 64, sp);
-           //  } break;
-           //  case OP_ALLOC: {
-           //      uint32_t ret=alloc(exe,operand_load(exe,64,opv->flags_src.a,opv->src1,sp),operand_load(exe,64,opv->flags_src.a,opv->src2,sp));
-           //      operand_store(exe, opv, ret, 64, sp);
-           //  } break;
+            case OP_LEA: {
+                uint64_t val = R[opv->fsrc1.a];
+                R[opv->fdst.a] = ((uint64_t)exe->heap8)+val*8;
+            } break;
+            case OP_LEA_SCALE: {
+                uint64_t val = R[opv->fsrc1.a];
+                uint64_t offset = R[opv->fsrc2.a];
+                R[opv->fdst.a] = val+offset*opv->fdst.b;
+            } break;
+            case OP_ALLOC: {
+                R[opv->fdst.a] = alloc(exe,opv->src1,opv->src2);
+            } break;
            //  case OP_EMPTY_LIST: {
            //      operand_store(exe, opv, 0, 32, sp);
            //      exe->registers[opv->fsrc1.a+sp]=0;
@@ -612,21 +611,21 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
            //      pdstarray[2]=dstend+len;
            //      deref_free(exe,array);
            //  } break;
-           //  case OP_DEREF_FREE: {
-           //      uint32_t array=operand_load(exe,32,opv->flags_src.a, opv->src1, sp);
-           //      deref_free(exe,array);
-           //  } break;
-           //  case OP_DEREF_FREE_LIST: {
-           //      uint32_t array=operand_load(exe,32,opv->flags_src.a, opv->src1, sp);
-           //      //uint32_t start=operand_load(exe,32,opv->flags_src.b, opv->src2, sp);
-           //      uint32_t* parray=rwu_get_header(exe,array);
-           //      uint32_t* data=rwu_get_data(parray);
-           //      uint32_t end=parray[2];
-           //      for(uint32_t i=0;i<end;i++) {
-           //          deref_free(exe,data[i+i]);
-           //      }
-           //      deref_free(exe,array);
-           //  } break;
+            case OP_DEREF_FREE: {
+                uint32_t array=R[opv->fsrc1.a];
+                deref_free(exe,array);
+            } break;
+            case OP_DEREF_FREE_LIST: {
+                uint32_t array=R[opv->fsrc1.a];
+                uint32_t start=R[opv->fsrc2.b];
+                uint32_t* parray=rwu_get_header(exe,array);
+                uint32_t* data=rwu_get_data(parray);
+                uint32_t end=parray[2];
+                for(uint32_t i=0;i<end;i++) {
+                    deref_free(exe,data[i+i]);
+                }
+                deref_free(exe,array);
+            } break;
            // case OP_INC_MEM: {
            //      uint8_t* addr=(uint8_t*)(exe->registers[opv->fdst.a+sp]+opv->fdst.b);
            //      uint32_t sz=opv->type==0?1:(8<<((opv->type-1)&7));

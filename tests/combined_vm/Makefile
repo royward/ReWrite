@@ -1,5 +1,5 @@
 # Define tools and paths
-REWRITE_CPP = ../../build/release/phase0_interpreter/rewrite_cpp
+REWRITE_CPP = ../../build-release/phase0_interpreter/rw_compile
 COMPILER_RW = ../../phase1/rewrite_compiler.rw
 CORE_DEPS = combined_vm.rw $(REWRITE_CPP) $(COMPILER_RW)
 
@@ -9,9 +9,9 @@ CORE_DEPS = combined_vm.rw $(REWRITE_CPP) $(COMPILER_RW)
 test_vm: combined.exe
 	./combined.exe
 
-combined.exe: ../../phase1_vm/src/vm.c main.c $(CORE_DEPS)
-	$(REWRITE_CPP) $(COMPILER_RW) 'compile("combined_vm.rw","combined_vm","vm")'
-	clang -ggdb3 -Wall -Wextra -pedantic -I../../phase1_vm/include/ ../../phase1_vm/src/vm.c main.c -o $@
+combined.exe: ../../vm/src/vm.c main.c $(CORE_DEPS)
+	$(REWRITE_CPP) combined_vm
+	clang -ggdb3 -Wall -Wextra -pedantic -I../../vm/include/ -I../../vm/generated/ ../../vm/src/vm.c main.c -o $@
 
 test_native: combined_native.exe
 	./combined_native.exe
