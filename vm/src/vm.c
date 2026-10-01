@@ -298,66 +298,6 @@ void program_disassemble(Program* program, FILE* out) {
     }
 }
 
-// void operand_store(RWInstance* exe, Operation* opv, uint64_t value, uint32_t sz, uint32_t sp) {
-//     switch(opv->flags_dst&0xF) {
-//         case BIND_IMM: {
-//             fprintf(stderr,"Fatal error trying to store to an immediate\n");
-//             exit(EXIT_FAILURE);
-//         } break;
-//         case BIND_REG: {
-//             value&=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
-//             exe->registers[opv->fdst.a+sp]=value;
-//         } break;
-//         default: {
-//             fprintf(stderr,"unknown flag in operand_store\n");
-//             exit(EXIT_FAILURE);
-//         }
-//     }
-// }
-//
-// void operand_store_mem(RWInstance* exe, Operation* opv, uint64_t value, uint32_t sz, uint32_t sp) {
-//     uint8_t* addr=(uint8_t*)(exe->registers[opv->fdst.a+sp]+opv->fdst.b);
-//     switch(sz) { // alignment is guaranteed by the compiler
-//         case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
-//         case 16:*((uint16_t*)addr)=(uint16_t)value; break;
-//         case 32:*((uint32_t*)addr)=(uint32_t)value; break;
-//         case 64:*((uint64_t*)addr)=(uint64_t)value; break;
-//         default: fprintf(stderr,"unknown size in operand_store\n"); exit(EXIT_FAILURE);
-//     }
-// }
-//
-// uint64_t operand_load(RWInstance* exe, uint32_t sz, uint32_t flags_src, uint64_t srcfull, uint32_t sp) {
-//     uint32_t src=srcfull&0xFFFFFFFF;
-//     uint64_t mask=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
-//     switch(flags_src&0xF) {
-//         case BIND_IMM: {
-//             return src&mask;
-//         } break;
-//         case BIND_REG: {
-//             return exe->registers[src+sp]&mask;
-//         } break;
-//         default: {
-//             fprintf(stderr,"unknown flag in operand_load %d\n",flags_src);
-//             exit(EXIT_FAILURE);
-//         }
-//     }
-// }
-//
-// uint64_t operand_load_mem(RWInstance* exe, uint32_t sz, uint64_t srcfull, uint32_t sp) {
-//     uint32_t src=srcfull&0xFFFFFFFF;
-//     uint64_t mask=(sz>=64)?(uint64_t)-1LL:(uint64_t)((1LL<<sz)-1);
-//     uint8_t* addr=(uint8_t*)(exe->registers[src+sp]+(srcfull>>32));
-//     uint64_t value;
-//     switch(sz) { // alignment is guaranteed by the compiler
-//         case 1:case 8: value=*((uint8_t*)addr); break;
-//         case 16:value=*((uint16_t*)addr); break;
-//         case 32:value=*((uint32_t*)addr); break;
-//         case 64:value=*((uint64_t*)addr); break;
-//         default: fprintf(stderr,"unknown size in operand_load\n"); exit(EXIT_FAILURE);
-//     }
-//     return value&mask;
-// }
-
 uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
     uint64_t sz=((uint64_t)count)*size;
     uint64_t alloc=exe->end_of_heap;
@@ -487,8 +427,6 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 rwu_get_header(exe,0)[1]++;
             } break;
             case OP_EXTRACT_LIST: {
-                //generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,{ctx_fnr(ctx),OpExtractList,0,0,0,array,src_flag1,src1,src_flag2,src2,srcp},*code0},{*sofar1,*code1},type_left,rest);
-                //fprintf(out,"extractlist uniq(r%u) (r%u,r%u) = (r%u,r%u)",opv->fdst.b,opv->fdst.a,opv->fdst.a+1,opv->fsrc1.a,opv->fsrc1.b);
                 uint32_t* addr=(uint32_t*)(R[opv->fsrc1.a]+opv->fsrc1.b);
                 uint64_t v1=addr[0];
                 uint64_t v2=addr[1];
