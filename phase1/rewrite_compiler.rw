@@ -958,7 +958,7 @@ generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprId,{id,count,consumed}})
 generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprCallInternal,op,args})
     match decompose_stypes(stypes) => typex,_
     match op_infer(op,typex,args) => infer_types
-    update generate_expr_code_aux_map(post_arrow,types,ctx,{},infer_types,args) => ctx,args_code
+    update generate_expr_code_aux_map(post_arrow,ctx,{},infer_types,args) => ctx,args_code
     update generate_expr_code_infix(ctx,op,args_code) => ctx,code,x ->
     ctx,false,code,x;
 generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprCall,fn_id,args})
@@ -985,7 +985,7 @@ generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprList,elements}) @match d
     update ctx_newreg(ctx,32) => ctx,newstart
     match nth(t,types) => {_,_,_,subsz}
     match sum_sub_alloc(0,subsz) => sz
-    update generate_expr_code_aux_map(post_arrow,types,ctx,{},{0,t},elements) => ctx,args_code
+    update generate_expr_code_aux_map(post_arrow,ctx,{},{0,t},elements) => ctx,args_code
     update split_splat({},args_code) => pre_splat,splat,post_splat
     -> generate_expr_code_list(types,ctx,newarray,parray,newstart,sz,stype,pre_splat,splat,post_splat);
 // generate_expr_code_aux(post_arrow,types,ctx,{0,0},{ExprList,{e1,*elements}}) // Deal with type derivation for anonymous list. might need to create type
@@ -1031,12 +1031,12 @@ generate_expr_code_list(types,ctx,newarray,parray,newstart,sz,stype,pre_splat,{{
         {ctx_fnr(ctx),OpCont,0,0,BindReg,newstart,start_flag,start,sum_src_flag,sum_src,sum_const_post},*code_pre,*code_post},
     {{{{BindReg,newarray,32},{BindReg,newstart,32}},stype,Consume}};
 
-generate_expr_code_aux_map(post_arrow,types,ctx,sofar,{0,_},{}) -> ctx,sofar;
-generate_expr_code_aux_map(post_arrow,types,ctx,sofar,{1},{}) -> ctx,sofar;
-generate_expr_code_aux_map(post_arrow,types,ctx,sofar,stypelist,{expr,*rest})
+generate_expr_code_aux_map(post_arrow,ctx,sofar,{0,_},{}) -> ctx,sofar;
+generate_expr_code_aux_map(post_arrow,ctx,sofar,{1},{}) -> ctx,sofar;
+generate_expr_code_aux_map(post_arrow,ctx,sofar,stypelist,{expr,*rest})
     match decompose_stypes(stypelist) => typex,trest
-    update generate_expr_code_aux(post_arrow,types,ctx,{0,typex},expr) => ctx,splat,code,results ->
-    generate_expr_code_aux_map(post_arrow,types,ctx,{*sofar,{splat,code,results}},trest,rest);
+    update generate_expr_code_aux(post_arrow,ctx_get_types(ctx),ctx,{0,typex},expr) => ctx,splat,code,results ->
+    generate_expr_code_aux_map(post_arrow,ctx,{*sofar,{splat,code,results}},trest,rest);
 
 split_splat(sofar,{}) -> sofar,{},{};
 split_splat(sofar,{{_,{},{}},*rest}) -> split_splat(sofar,rest);
