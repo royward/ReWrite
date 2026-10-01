@@ -616,7 +616,7 @@ compile_function(types,target,reg_count,active,lbl_id,fn_id,table,rule_id,sofar,
 compile_function(types,target,reg_count,active,lbl_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,regs_left,type_left,regs_right,type_right)
     match rule => {linerule,bindings,params,clauses,exprs}
     update calc_counts(table,bindings,params,clauses,exprs) => params,clauses,exprs
-    update compile_rule(target,types,linerule,{types,target,0,active,0,lbl_id,fn_id,rule_id,linerule,create_compiler_bindings({},bindings),reg_count,table},{},params,clauses,exprs,regs_left,type_left,regs_right,type_right) => types,reg_count,active,oldlbl_decline,lbl_id,code
+    update compile_rule(target,linerule,{types,target,0,active,0,lbl_id,fn_id,rule_id,linerule,create_compiler_bindings({},bindings),reg_count,table},{},params,clauses,exprs,regs_left,type_left,regs_right,type_right) => types,reg_count,active,oldlbl_decline,lbl_id,code
     update {*sofar,*code,*code_or_not(active,{{fn_id,rule_id+1,OpLabel,0,0,0,oldlbl_decline}})} => code
     update compile_function(types,target,reg_count,active,lbl_id,fn_id,table,rule_id+1,code,rest,dummy,bitmask,regs_left,type_left,regs_right,type_right) => types,lbl_id,code
     -> types,lbl_id,code;
@@ -666,25 +666,25 @@ gen_types_addref(ctx,tp,{{src_flag1,src1,sz1},_},v)
     update ctx_newreg(ctx,64) => ctx,parray
     -> ctx,{{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},{ctx_fnr(ctx),OpIncMem,0,0,0,parray,0,32,BindImm,v,4}};
 
-gen_types_do_compare(noteq,types,ctx,result,tp,{{srcflag1,src1,sz}},{{srcflag2,src2,sz}})
+gen_types_do_compare(noteq,ctx,result,tp,{{srcflag1,src1,sz}},{{srcflag2,src2,sz}})
     -> ctx,{{ctx_fnr(ctx),if(noteq,OpNotEqual,OpEqual),get_size_scale(sz),BindReg,result,srcflag1,src1,srcflag2,src2}};
 
 // deal with tail recursion (error if sigs don't match)
-compile_rule(target,types,linerule,ctx,sofar,{pf1,pf2,params},clauses,{{ExprCall,fn_id,args}},regs_left,type_left,regs_right,type_right)
+compile_rule(target,linerule,ctx,sofar,{pf1,pf2,params},clauses,{{ExprCall,fn_id,args}},regs_left,type_left,regs_right,type_right)
     @match ctx_get_tail(ctx) => 0
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,_,_,_,regs_left_new,type_left_new,_,_,_,type_right,_} ->
-    compile_rule(target,types,linerule,ctx_set_tail(ctx,fn_id+1),sofar,{pf1,pf2,params},clauses,args,regs_left,type_left,regs_left_new,type_left_new);
-compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type_left,regs_right,type_right)
+    compile_rule(target,linerule,ctx_set_tail(ctx,fn_id+1),sofar,{pf1,pf2,params},clauses,args,regs_left,type_left,regs_left_new,type_left_new);
+compile_rule(target,linerule,ctx,sofar,params,clauses,exprs,regs_left,type_left,regs_right,type_right)
     @match ctx_get_tail(ctx) => 0
-    update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
+    update generate_params_clauses(target,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
     update generate_expr_code(true,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
     match slice_iolist(ctx_get_reg_count(ctx),5,{},{},outlist) => {first_slice,*slices}
     -> ctx_get_types(ctx),ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lbl_decline(ctx)!=0,ctx_get_lbl_decline(ctx),ctx_lbl(ctx),
         code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_ret(ctx_fnr(ctx),length(slices),regs_right,first_slice),*slices});
-compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type_left,regs_right,type_right)
+compile_rule(target,linerule,ctx,sofar,params,clauses,exprs,regs_left,type_left,regs_right,type_right)
     match ctx_get_tail(ctx)-1 => call_id
     update ctx_get_fn_sig(ctx,call_id) => {_,_,_,_,regs_right,_,type_right,_,_,_,_,_}
-    update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
+    update generate_params_clauses(target,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
     update generate_expr_code(true,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
     match slice_iolist(ctx_get_reg_count(ctx),4,{},{},outlist) => {first_slice,*slices}
     -> ctx_get_types(ctx),ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lbl_decline(ctx)!=0,ctx_get_lbl_decline(ctx),ctx_lbl(ctx),
@@ -705,24 +705,24 @@ slice_iolist(maxreg,n,sofar,part,{a,*rest}) -> slice_iolist(maxreg,n-1,sofar,{*p
 extract_types(sofar,{}) -> {1,*sofar};
 extract_types(sofar,{{_,tp,consume},*rest}) -> extract_types({*sofar,tp,consume},rest);
 
-generate_params_clauses(target,types,ctx,{pf1,pf2,params},clauses,exprs,regs_left,type_left,regs_right)
+generate_params_clauses(target,ctx,{pf1,pf2,params},clauses,exprs,regs_left,type_left,regs_right)
     //update generate_llvm_alloc_code(target,ctx_fnr(ctx),{},0,max(regs_left,regs_right)) => code
     //update generate_llvm_store_code(target,ctx_fnr(ctx),code,0,type_left) => code
     update generate_param_code(false,1,{},ctx,{},{},type_left,params) => ctx,code0,code1
     update generate_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
-    update generate_clause_code(types,2,ctx,code0,{*code1,*cleanup_code},clauses) => ctx,code0,code1 ->
+    update generate_clause_code(2,ctx,code0,{*code1,*cleanup_code},clauses) => ctx,code0,code1 ->
     ctx,{*code0,*code1};
 
-generate_clause_code(types,bind_level,ctx,code0,code1,{}) -> ctx,code0,code1;
-generate_clause_code(types,bind_level,ctx,code0,code1,{{update_flag,decline,matchx,expr},*rest})
+generate_clause_code(bind_level,ctx,code0,code1,{}) -> ctx,code0,code1;
+generate_clause_code(bind_level,ctx,code0,code1,{{update_flag,decline,matchx,expr},*rest})
     update update_bind_level(bind_level,update_flag) => bind_level,this_bind_level
-    update generate_clause_code_aux(types,this_bind_level,!decline,ctx,code0,code1,expr,matchx) => ctx,code0,code1 ->
-    generate_clause_code(types,bind_level,ctx,code0,code1,rest);
+    update generate_clause_code_aux(this_bind_level,!decline,ctx,code0,code1,expr,matchx) => ctx,code0,code1 ->
+    generate_clause_code(bind_level,ctx,code0,code1,rest);
 
 update_bind_level(bind_level,false) -> bind_level,1;
 update_bind_level(bind_level,_) -> bind_level+1,bind_level;
 
-generate_clause_code_aux(types,bind_level,post_arrow,ctx,code0,code1,expr,{pf1,pf2,matchx})
+generate_clause_code_aux(bind_level,post_arrow,ctx,code0,code1,expr,{pf1,pf2,matchx})
     update generate_expr_code_untyped(post_arrow,ctx,code0,{},expr) => ctx,etypes,code0
     update generate_param_code(post_arrow,bind_level,{},ctx,code0,code1,etypes,matchx) => ctx,code0,code1,
     update generate_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
@@ -1100,11 +1100,11 @@ generate_expr_code_infix(ctx,op,{{false,code1,{{{{src_flag1,src1,sz1}},tp1,_}}},
     -> ctx,{*code1,*code2,{ctx_fnr(ctx),machine_op,xt(tp1),BindReg,newreg,opt_swap_sources(swap,src_flag1,src1,src_flag2,src2)}},{{{{BindReg,newreg,sz_res}},tp_res,Consume}};
 generate_expr_code_infix(ctx,EqualEqual,{{false,code1,{{storage1,tp,_}}},{false,code2,{{storage2,tp,_}}}})
     update ctx_newreg(ctx,1) => ctx,result
-    update gen_types_do_compare(false,ctx_get_types(ctx),ctx,result,tp,storage1,storage2) => ctx,compare
+    update gen_types_do_compare(false,ctx,result,tp,storage1,storage2) => ctx,compare
     -> ctx,{*code1,*code2,*compare},{{{{BindReg,result,1}},TypeBool,Consume}};
 generate_expr_code_infix(ctx,NotEqual,{{false,code1,{{storage1,tp,_}}},{false,code2,{{storage2,tp,_}}}})
     update ctx_newreg(ctx,1) => ctx,result
-    update gen_types_do_compare(true,ctx_get_types(ctx),ctx,result,tp,storage1,storage2) => ctx,compare
+    update gen_types_do_compare(true,ctx,result,tp,storage1,storage2) => ctx,compare
     -> ctx,{*code1,*code2,*compare},{{{{BindReg,result,1}},TypeBool,Consume}};
 
 opt_swap_sources(false,src_flag1,src1,src_flag2,src2) -> src_flag1,src1,src_flag2,src2;
