@@ -723,16 +723,16 @@ update_bind_level(bind_level,false) -> bind_level,1;
 update_bind_level(bind_level,_) -> bind_level+1,bind_level;
 
 generate_clause_code_aux(types,bind_level,post_arrow,ctx,code0,code1,expr,{pf1,pf2,matchx})
-    update generate_expr_code_untyped(post_arrow,types,ctx,code0,{},expr) => ctx,etypes,code0
+    update generate_expr_code_untyped(post_arrow,ctx,code0,{},expr) => ctx,etypes,code0
     update generate_param_code(types,post_arrow,bind_level,{},ctx,code0,code1,etypes,matchx) => ctx,code0,code1,
     update generate_commit_cleanup(types,ctx,pf1,pf2) => ctx,cleanup_code
     -> ctx,{*code0,*cleanup_code},code1;
 
-generate_expr_code_untyped(post_arrow,types,ctx,code,etypes,{}) -> ctx,etypes,code;
+generate_expr_code_untyped(post_arrow,ctx,code,etypes,{}) -> ctx,etypes,code;
 // TODO deal with lists and splats first
-generate_expr_code_untyped(post_arrow,types,ctx,sofar,etypes,{expr,*rest})
+generate_expr_code_untyped(post_arrow,ctx,sofar,etypes,{expr,*rest})
     update generate_expr_code_aux(post_arrow,ctx,{0,0},expr) => ctx,false,newcode,callout_ret
-    -> generate_expr_code_untyped(post_arrow,types,ctx,{*sofar,*newcode},{*etypes,*callout_ret},rest);
+    -> generate_expr_code_untyped(post_arrow,ctx,{*sofar,*newcode},{*etypes,*callout_ret},rest);
 
 generate_commit_cleanup(types,ctx,1,cleanup) -> generate_commit_cleanup_aux(types,ctx,{},ctx_bindings(ctx),cleanup);
 generate_commit_cleanup(_,ctx,_,_) -> ctx,{};
