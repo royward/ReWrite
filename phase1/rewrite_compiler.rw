@@ -708,7 +708,7 @@ extract_types(sofar,{{_,tp,consume},*rest}) -> extract_types({*sofar,tp,consume}
 generate_params_clauses(target,types,ctx,{pf1,pf2,params},clauses,exprs,regs_left,type_left,regs_right)
     //update generate_llvm_alloc_code(target,ctx_fnr(ctx),{},0,max(regs_left,regs_right)) => code
     //update generate_llvm_store_code(target,ctx_fnr(ctx),code,0,type_left) => code
-    update generate_param_code(types,false,1,{},ctx,{},{},type_left,params) => ctx,code0,code1
+    update generate_param_code(false,1,{},ctx,{},{},type_left,params) => ctx,code0,code1
     update generate_commit_cleanup(types,ctx,pf1,pf2) => ctx,cleanup_code
     update generate_clause_code(types,2,ctx,code0,{*code1,*cleanup_code},clauses) => ctx,code0,code1 ->
     ctx,{*code0,*code1};
@@ -724,7 +724,7 @@ update_bind_level(bind_level,_) -> bind_level+1,bind_level;
 
 generate_clause_code_aux(types,bind_level,post_arrow,ctx,code0,code1,expr,{pf1,pf2,matchx})
     update generate_expr_code_untyped(post_arrow,ctx,code0,{},expr) => ctx,etypes,code0
-    update generate_param_code(types,post_arrow,bind_level,{},ctx,code0,code1,etypes,matchx) => ctx,code0,code1,
+    update generate_param_code(post_arrow,bind_level,{},ctx,code0,code1,etypes,matchx) => ctx,code0,code1,
     update generate_commit_cleanup(types,ctx,pf1,pf2) => ctx,cleanup_code
     -> ctx,{*code0,*cleanup_code},code1;
 
@@ -746,62 +746,62 @@ generate_commit_cleanup_aux(types,ctx,code,{{_,tp,storage,_},*bindrest},{{n,_},*
     update gen_types_addref(types,ctx,tp,storage,n-1) => ctx,codeaddref
     -> generate_commit_cleanup_aux(types,ctx,{*code,*codeaddref},bindrest,cleanrest);
 
-generate_param_code(types,post_arrow,bindlevel,{},ctx,sofar0,sofar1,{},{}) -> ctx,sofar0,sofar1;
-generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,_,_,_},ctx,sofar0,sofar1,{},{})
+generate_param_code(post_arrow,bindlevel,{},ctx,sofar0,sofar1,{},{}) -> ctx,sofar0,sofar1;
+generate_param_code(post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,_,_,_},ctx,sofar0,sofar1,{},{})
     -> ctx,sofar0,sofar1;
-generate_param_code(types,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
+generate_param_code(false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{storage,tp,_},type_left
     update move_mem_to_reg(ctx,{},{},storage) => ctx,mv_code,{{src_flag,src,sz}}
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompNeqBr,tp,sz,src_flag,src,BindImm,val) => lbl_decline,ctx,code
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx ->
-    generate_param_code(types,false,bindlevel,newstride,ctx,{*sofar0,*mv_code,*code},sofar1,type_left,rest);
-generate_param_code(types,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
+    generate_param_code(false,bindlevel,newstride,ctx,{*sofar0,*mv_code,*code},sofar1,type_left,rest);
+generate_param_code(true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag,src,sz}},tp,_},type_left
     update generate_conditional_rhs(ctx,sofar0,tp,{{src_flag,src,sz},{BindImm,val,sz}}) => ctx,code ->
-    generate_param_code(types,true,bindlevel,newstride,ctx,code,sofar1,type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
+    generate_param_code(true,bindlevel,newstride,ctx,code,sofar1,type_left,rest);
+generate_param_code(post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
     @match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,_},type_left
     @match newstride => {_,psrc_flagp,srcp,*_}
-    @match nth(tp,types) => {_,_,{2,sub_type},_}
+    @match nth(tp,ctx_get_types(ctx)) => {_,_,{2,sub_type},_}
     update ctx_bindings(ctx) => bindings
     update nth(id,bindings) => bind
     update ctx_newreg(ctx,64) => ctx,array
     update ctx_newreg(ctx,32) => ctx,begin
-    update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,{{BindReg,array,sz},{BindReg,begin,sz}},tp,bind) => ctx,newbind,code0,code1
+    update generate_bind_variable(count,post_arrow,bindlevel,ctx,{{BindReg,array,sz},{BindReg,begin,sz}},tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(id,newbind,bindings)) => ctx ->
-    generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,{ctx_fnr(ctx),OpExtractList,0,0,0,array,src_flag1,src1,src_flag2,src2,srcp},*code0},{*sofar1,*code1},type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
+    generate_param_code(post_arrow,bindlevel,newstride,ctx,{*sofar0,{ctx_fnr(ctx),OpExtractList,0,0,0,array,src_flag1,src1,src_flag2,src2,srcp},*code0},{*sofar1,*code1},type_left,rest);
+generate_param_code(post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{storage,tp,_},type_left
     update ctx_bindings(ctx) => bindings
     update nth(id,bindings) => bind
     update move_mem_to_reg(ctx,{},{},storage) => ctx,mv_code,mv_storage
-    update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,mv_storage,tp,bind) => ctx,newbind,code0,code1
+    update generate_bind_variable(count,post_arrow,bindlevel,ctx,mv_storage,tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(id,newbind,bindings)) => ctx ->
-    generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,*mv_code,*code0},{*sofar1,*code1},type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest})
+    generate_param_code(post_arrow,bindlevel,newstride,ctx,{*sofar0,*mv_code,*code0},{*sofar1,*code1},type_left,rest);
+generate_param_code(post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest})
     @match gen_param_code_next_type(stride,typex) => {},{{{src_flag,src,sz},_},tp,_},type_left
-    @match nth(tp,types) => {_,_,{2,_},_}
+    @match nth(tp,ctx_get_types(ctx)) => {_,_,{2,_},_}
     update ctx_newreg(ctx,32) => ctx,newreg
-    -> generate_param_code(types,post_arrow,bindlevel,{},ctx,sofar0,
+    -> generate_param_code(post_arrow,bindlevel,{},ctx,sofar0,
         {*sofar1,{ctx_fnr(ctx),OpMove,get_size_scale(sz),BindReg,newreg,src_flag,src},{ctx_fnr(ctx),OpDerefFree,0,0,0,0,BindReg,newreg}},type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest})
+generate_param_code(post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,_,type_left
-    -> generate_param_code(types,post_arrow,bindlevel,newstride,ctx,sofar0,sofar1,type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,{}},*rest})
+    -> generate_param_code(post_arrow,bindlevel,newstride,ctx,sofar0,sofar1,type_left,rest);
+generate_param_code(post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,{}},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,pend
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompNeqBr,TypeU32,32,src_flag2,src2,BindReg,pend) => lbl_decline,ctx,code
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
-    update gen_types_deref_free(true,types,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
-    -> generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
+    update gen_types_deref_free(true,ctx_get_types(ctx),ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
+    -> generate_param_code(post_arrow,bindlevel,newstride,ctx,{*sofar0,
         {ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},
         {ctx_fnr(ctx),OpLoad,3,0,BindReg,pend,0,parray+(8<<32)},*code},
         {*sofar1,*codefree},type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,elements},*rest})
+generate_param_code(post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,elements},*rest})
     match gen_param_code_next_type(stride,typex) => newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
-    match nth(tp,types) => {_,_,{2,sub_type},_}
-    match nth(sub_type,types) => {_,_,_,sub_alloc}
+    match nth(tp,ctx_get_types(ctx)) => {_,_,{2,sub_type},_}
+    match nth(sub_type,ctx_get_types(ctx)) => {_,_,_,sub_alloc}
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,pend
     update ctx_newreg(ctx,32) => ctx,len
@@ -810,22 +810,22 @@ generate_param_code(types,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update generate_list_min_size(0,0,elements) => min_size,splatcount
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),if(splatcount!=0,OpCompLtBr,OpCompNeqBr),TypeU32,32,BindReg,len,BindImm,min_size) => lbl_decline,ctx,code
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
-    update gen_types_deref_free(splatcount==0,types,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
-    update generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,(sz_one>>3),0,min_size+splatcount},ctx,{},{},{{memindex,sub_type,Consume}},elements) => ctx,code1,code2 ->
-    generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,
+    update gen_types_deref_free(splatcount==0,ctx_get_types(ctx),ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
+    update generate_param_code(post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,(sz_one>>3),0,min_size+splatcount},ctx,{},{},{{memindex,sub_type,Consume}},elements) => ctx,code1,code2 ->
+    generate_param_code(post_arrow,bindlevel,newstride,ctx,{*sofar0,
         {ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},
         {ctx_fnr(ctx),OpLoad,3,0,BindReg,pend,0,parray+(8<<32)},
         {ctx_fnr(ctx),OpMinus,xt(TypeU32),BindReg,len,BindReg,pend,src_flag2,src2},*code,
         {ctx_fnr(ctx),OpLeaScale,0,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,sz_tot>>3},
         *code1},{*sofar1,*codefree,*code2},type_left,rest);
-generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{access,t,_},*_},{{ParamSplatWild,{}}}) // note: no rest here
-    match gen_types_deref_free(true,types,ctx,tp,{{src_flag1,src1,32},{src_flag2,src2,32}}) => codefree
+generate_param_code(post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{access,t,_},*_},{{ParamSplatWild,{}}}) // note: no rest here
+    match gen_types_deref_free(true,ctx_get_types(ctx),ctx,tp,{{src_flag1,src1,32},{src_flag2,src2,32}}) => codefree
     -> ctx,sofar0,{*sofar1,*codefree};
-generate_param_code(types,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{access,t,_},*_},{{ParamSplat,{id,count}}}) // note: no rest here
+generate_param_code(post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{access,t,_},*_},{{ParamSplat,{id,count}}}) // note: no rest here
     update ctx_bindings(ctx) => bindings
     update ctx_newreg(ctx,32) => ctx,start
     update nth(id,bindings) => bind
-    update generate_bind_variable(types,count,post_arrow,bindlevel,ctx,{{src_flag1,src1,32},{BindReg,start,32}},tp,bind) => ctx,newbind,code0,code1
+    update generate_bind_variable(count,post_arrow,bindlevel,ctx,{{src_flag1,src1,32},{BindReg,start,32}},tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(id,newbind,bindings)) => ctx
     -> ctx,{*sofar0,{ctx_fnr(ctx),OpPlus,xt(TypeU32),BindReg,start,src_flag2,src2,BindImm,pos},*code0},{*sofar1,*code1};
 
@@ -868,19 +868,19 @@ generate_conditional_rhs(ctx,code,tp,{{src_flag,src,sz},{src_flag2,src2,sz}})
     ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,BindImm,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset,0},{ctx_fnr(ctx),OpLabel,0,0,0,lbl_id}};
 
 // TODO have comparison deal with non-scalars, and reduce refcount where appropriate
-generate_bind_variable(types,count,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
+generate_bind_variable(count,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
     update generate_bind_variable_aux(ctx,{},{},storage) => ctx,bind,code
     -> ctx,{bindlevel,tp,bind,name},code,{};
-// generate_bind_variable(types,count,false,bindlevel,ctx,{{BindImm,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
+// generate_bind_variable(count,false,bindlevel,ctx,{{BindImm,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
 //     update ctx_newreg(ctx,sz) => ctx,newreg
 //     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompNeqBr,tp,sz,BindReg,newreg,src_flag2,src2) => lbl_decline,ctx,code
 //     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
 //     -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},{{ctx_fnr(ctx),OpLoad,sz,BindReg,newreg,BindImm,src},*code},{};
-generate_bind_variable(types,count,false,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
+generate_bind_variable(count,false,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompNeqBr,tp,sz,src_flag,src,src_flag2,src2) => lbl_decline,ctx,code
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
     -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
-generate_bind_variable(types,count,true,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
+generate_bind_variable(count,true,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
     update generate_conditional_rhs(ctx,{},tp,{{src_flag,src,sz},{src_flag2,src2,sz}}) => ctx,code
     -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
 
