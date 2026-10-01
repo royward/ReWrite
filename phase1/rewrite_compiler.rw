@@ -959,7 +959,7 @@ generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprCallInternal,op,args})
     match decompose_stypes(stypes) => typex,_
     match op_infer(op,typex,args) => infer_types
     update generate_expr_code_aux_map(post_arrow,types,ctx,{},infer_types,args) => ctx,args_code
-    update generate_expr_code_infix(types,ctx,op,args_code) => ctx,code,x ->
+    update generate_expr_code_infix(ctx,op,args_code) => ctx,code,x ->
     ctx,false,code,x;
 generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprCall,fn_id,args})
     match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
