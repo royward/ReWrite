@@ -112,11 +112,11 @@ int main(int argc, char** argv) {
     ret_code=rw_testprime(exe,11,&resultb);
     if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
 
-    //printf("nprime:");
-    //exe->allocated=0;
-    //ret_code=rw_nprime(exe,200000,&array,&sz);
-    //if(!ret_code && sz==200000 && array[199999]==2750159) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
-    //free(array);
+    // printf("nprime:");
+    // exe->allocated=0;
+    // ret_code=rw_nprime(exe,200000,&array,&sz);
+    // if(!ret_code && sz==200000 && array[199999]==2750159) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
+    // free(array);
 
     printf("len_nqueens:");
     exe->allocated=0;
@@ -131,21 +131,9 @@ int main(int argc, char** argv) {
 
     printf("nprime:");
     exe->allocated=0;
-    ret_code=rw_nprime(exe,256,&array,&sz);
-    if(!ret_code && sz==256 && array[255]==1619) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
+    ret_code=rw_nprime(exe,1000,&array,&sz);
+    if(!ret_code && sz==1000 && array[999]==7919) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
     free(array);
-
-    printf("nprime:");
-    exe->allocated=0;
-    ret_code=rw_nprime(exe,257,&array,&sz);
-    if(!ret_code && sz==257 && array[256]==1621) { printf("success\n"); } else { printf("fail:%d %ld %ld\n",ret_code,sz,array[256]); };
-    free(array);
-
-    // printf("nprime:");
-    // exe->allocated=0;
-    // ret_code=rw_nprime(exe,1000,&array,&sz);
-    // if(!ret_code && sz==1000 && array[999]==7919) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
-    // free(array);
 
     printf("Heap size=%d\n",exe->end_of_heap*8);
 

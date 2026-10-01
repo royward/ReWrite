@@ -51,19 +51,21 @@ const OpError=254;
 const OpCallIO=255;
 
 const OpAlloc=736;
-const OpRealloc=737;
-const OpEmptyList=738;
-
+const OpReallocFixed=737;
+const OpReallocVar=738;
+const OpEmptyList=739;
 const OpDerefFree=740;
 const OpDerefFreeList=741;
 const OpIncMem=742;
 const OpCont=743;
 
-const OpPrepend=744;
-const OpAppend=745;
-const OpAppendSplat=746;
-const OpAppendSplatConsume=747;
-const OpExtractList=748;
+const OpPrependImm=744;
+const OpPrependReg=745;
+const OpAppendImm=746;
+const OpAppendReg=747;
+const OpAppendSplat=748;
+const OpAppendSplatConsume=749;
+const OpExtractList=750;
 
 opclass(OpPlus) -> 1;
 opclass(OpMinus) -> 1;

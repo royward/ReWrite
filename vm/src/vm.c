@@ -227,7 +227,7 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
         } break;
         case OP_GOTO: {
             uint32_t pc_inc=opv->flags_dst;
-            fprintf(out,"goto ");
+            fprintf(out,"tail");
             program_display_label(program,out,opv);
             display_xreg_assignments(out,true,"r",opv->fdst.b,(int32_t*)(&opv->fsrc1.a));
             ret=pc_inc;
@@ -245,7 +245,7 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
             fprintf(out,"empty_list (r%u,r%u)",opv->fdst.a,opv->fsrc1.a);
         } break;
         case OP_EXTRACT_LIST: {
-            fprintf(out,"extractlist uniq(r%u) (r%u,r%u) = (r%u,r%u)",opv->fdst.b,opv->fdst.a,opv->fdst.a+1,opv->fsrc1.a,opv->fsrc1.b);
+            fprintf(out,"extractlist uniq(r%u) (r%u,r%u) = (r%u+%d)",opv->fdst.b,opv->fdst.a,opv->fdst.a+1,opv->fsrc1.a,opv->fsrc1.b);
         } break;
         case OP_DEREF_FREE: {
             fprintf(out,"deref_free r%u",opv->fsrc1.a);
@@ -253,58 +253,37 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
         case OP_DEREF_FREE_LIST: {
             fprintf(out,"deref_free_list (r%u,r%u)",opv->fsrc1.a,opv->fsrc1.b);
         } break;
-        // case OP_REALLOC: {
-        //     Operation* opv2=&program->code[i+1];
-        //     fprintf(out,"let (");
-        //     display_operand(out,opv->flags_dst,opv->dst);
-        //     fprintf(out,",");
-        //     display_operand(out,opv2->flags_dst,opv2->dst);
-        //     fprintf(out,") = realloc (");
-        //     display_operand(out,opv->flags_src.a,opv->src1);
-        //     fprintf(out,",");
-        //     display_operand(out,opv2->flags_src.a,opv2->src1);
-        //     fprintf(out,") stride=");
-        //     display_operand(out,opv->flags_src.b,opv->src2);
-        //     fprintf(out," pre=%d post=%d+",opv->fdst.b,opv2->fdst.b);
-        //     display_operand(out,opv2->flags_src.b,opv2->src2);
-        // } break;
-        // case OP_PREPEND: {
-        //     fprintf(out,"prepend.%d (",opv->fdst.b);
-        //     display_operand(out,opv->flags_dst,opv->fdst.a);
-        //     fprintf(out,",");
-        //     display_operand(out,opv->flags_src.b,opv->fsrc2.a);
-        //     fprintf(out,"+%d) <- ",opv->fsrc2.b);
-        //     display_operand(out,opv->flags_src.a,opv->src1);
-        // } break;
-        // case OP_APPEND: {
-        //     fprintf(out,"append.%d ",opv->fdst.b);
-        //     display_operand(out,opv->flags_dst,opv->fdst.a);
-        //     fprintf(out," <- ");
-        //     display_operand(out,opv->flags_src.a,opv->src1);
-        // } break;
-        // case OP_APPEND_SPLAT: {
-        //     fprintf(out,"append_splat.%d (",opv->fdst.b);
-        //     display_operand(out,opv->flags_dst,opv->dst);
-        //     fprintf(out,") <- (");
-        //     display_operand(out,opv->flags_src.a,opv->src1);
-        //     fprintf(out,",");
-        //     display_operand(out,opv->flags_src.b,opv->src2);
-        //     fprintf(out,")");
-        // } break;
-        // case OP_APPEND_SPLAT_CONSUME: {
-        //     fprintf(out,"append_splat_consume.%d (",opv->fdst.b);
-        //     display_operand(out,opv->flags_dst,opv->dst);
-        //     fprintf(out,") <- (");
-        //     display_operand(out,opv->flags_src.a,opv->src1);
-        //     fprintf(out,",");
-        //     display_operand(out,opv->flags_src.b,opv->src2);
-        //     fprintf(out,")");
-        // } break;
+        case OP_REALLOC_VAR: {
+            Operation* opv2=&program->code[i+1];
+            fprintf(out,"let (r%u,r%u) = realloc_var (r%u,r%u) stride=%ld pre=%d post=%d+r%u",opv->fdst.a,opv2->fdst.a,opv->fsrc1.a,opv2->fsrc1.a,opv->src2,opv->fdst.b,opv2->fdst.b,opv2->fsrc2.a);
+        } break;
+        case OP_REALLOC_FIXED: {
+            Operation* opv2=&program->code[i+1];
+            fprintf(out,"let (r%u,r%u) = realloc_fixed (r%u,r%u) stride=%ld pre=%d post=%d",opv->fdst.a,opv2->fdst.a,opv->fsrc1.a,opv2->fsrc1.a,opv->src2,opv->fdst.b,opv2->fdst.b);
+        } break;
+        case OP_PREPEND_IMM: {
+            fprintf(out,"prepend_imm.%d (r%u,r%u+%d) <- %ld",opv->fdst.b,opv->fdst.a,opv->fsrc2.a,opv->fsrc2.b,opv->src1);
+        } break;
+        case OP_PREPEND_REG: {
+            fprintf(out,"prepend_reg.%d (r%u,r%u+%d) <- r%u",opv->fdst.b,opv->fdst.a,opv->fsrc2.a,opv->fsrc2.b,opv->fsrc1.a);
+        } break;
+        case OP_APPEND_IMM: {
+            fprintf(out,"append_imm.%d (r%u) <- %ld",opv->fdst.b,opv->fdst.a,opv->src1);
+        } break;
+        case OP_APPEND_REG: {
+            fprintf(out,"append_reg.%d (r%u) <- r%u",opv->fdst.b,opv->fdst.a,opv->fsrc1.a);
+        } break;
+        case OP_APPEND_SPLAT: {
+            fprintf(out,"append_splat.%d (r%u) <- (r%u,r%u)",opv->fdst.b,opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a);
+        } break;
+        case OP_APPEND_SPLAT_CONSUME: {
+             fprintf(out,"append_splat_consume.%d (r%u) <- (r%u,r%u)",opv->fdst.b,opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a);
+        } break;
         case OP_CONT: {
             fprintf(out,"(continuation)");
         } break;
         case OP_INC_MEM: {
-            fprintf(out,"inc" "(r%u+%d) += %d",opv->fdst.a, opv->fdst.b, opv->fsrc2.a);
+            fprintf(out,"inc_mem.%d (r%u+%d) += %d",opv->fsrc1.a, opv->fdst.a, opv->fdst.b, opv->fsrc2.a);
         } break;
         default: fprintf(out,"unknown");
     }
@@ -422,9 +401,10 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
     uint32_t sp=2; // make sure we are start, even if it was run before
     uint64_t* R=exe->registers+sp;
     uint32_t pc=program->labels[in_lbl];
+    Operation* const code = program->code;
     while(true) {
         //printf("'%d ",pc);
-        Operation* opv=&program->code[pc++];
+        Operation* opv=&code[pc++];
         uint16_t op=opv->op;
         switch(op) {
 #include "execute.inc"
@@ -440,8 +420,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 int32_t* p0=(int32_t*)(&opv->fdst.b);
                 if(sp==2) {
                     pc=exe->registers[1];
-                    int32_t* p1=(int32_t*)(&program->code[pc].fsrc1.b)+program->code[pc].fdst.b;
-                    for(uint32_t index1=0;index1<program->code[pc].fsrc1.a;index1++) {
+                    int32_t* p1=(int32_t*)(&code[pc].fsrc1.b)+code[pc].fdst.b;
+                    for(uint32_t index1=0;index1<code[pc].fsrc1.a;index1++) {
                         ((uint64_t*)exe->registers[0])[p1[index1]]=R[(p0[index1])];
                     }
                     return 0;
@@ -451,12 +431,12 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     }
                     uint32_t* r=(uint32_t*)(&exe->registers[sp-1]);
                     pc=r[0];
-                    for(uint32_t index1=0;index1<program->code[pc].fsrc1.a;index1++) {
+                    for(uint32_t index1=0;index1<code[pc].fsrc1.a;index1++) {
                         R[index1]=R[index1+1000];
                     }
-                    sp-=program->code[pc].offset16; // restore the stack to the old value
+                    sp-=code[pc].offset16; // restore the stack to the old value
                     R=exe->registers+sp;
-                    pc+=program->code[pc].flags_dst+1;
+                    pc+=code[pc].flags_dst+1;
                 }
             } break;
             case OP_CALL: {
@@ -501,123 +481,178 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
             case OP_ALLOC: {
                 R[opv->fdst.a] = alloc(exe,opv->src1,opv->src2);
             } break;
-           //  case OP_EMPTY_LIST: {
-           //      operand_store(exe, opv, 0, 32, sp);
-           //      exe->registers[opv->fsrc1.a+sp]=0;
-           //      rwu_get_header(exe,0)[1]++;
-           //  } break;
-           //  case OP_EXTRACT_LIST: {
-           //      // if(opv->flags_src.a!=BIND_MEM) {
-           //      //     exit(1);
-           //      // }
-           //      uint32_t* addr=(uint32_t*)(exe->registers[opv->fsrc1.a+sp]+opv->fsrc1.b);
-           //      uint64_t v1=addr[0];
-           //      uint64_t v2=addr[1];
-           //      uint32_t* parray=rwu_get_header(exe,exe->registers[opv->fdst.b+sp]);
-           //      exe->registers[opv->fdst.a+sp]=v1;
-           //      exe->registers[opv->fdst.a+sp+1]=v2;
-           //      if(parray[1]==1) { // unique, replace with tombstone
-           //          addr[0]=0;
-           //          addr[1]=0;
-           //          rwu_get_header(exe,0)[1]++;
-           //      } else {
-           //          rwu_get_header(exe,v1)[1]++;
-           //      }
-           //  } break;
-           //  case OP_REALLOC: {
-           //      Operation* opv2=&program->code[pc];
-           //      pc++;
-           //      uint32_t pre=opv->fdst.b;
-           //      uint32_t post=opv2->fdst.b + operand_load(exe, 32, opv2->flags_src.b, opv2->src2, sp);
-           //      uint32_t array=operand_load(exe,32,opv->flags_src.a,opv->src1,sp);
-           //      uint32_t start=operand_load(exe,32,opv2->flags_src.a,opv2->src1,sp);
-           //      uint32_t stride=operand_load(exe, 32, opv->flags_src.b, opv->src2, sp);
-           //      uint32_t* parray=rwu_get_header(exe,array);
-           //      uint32_t end=parray[2];
-           //      if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
-           //          operand_store(exe, opv, array, 32, sp);
-           //          operand_store(exe, opv2, start-pre, 32, sp);
-           //      } else {
-           //          uint32_t sz=max_uint32(pre+post+end-start+2,8);
-           //          uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
-           //          //printf("realloc %d\n",full_size);
-           //          uint32_t ret=alloc(exe,full_size,stride);
-           //          uint32_t* parray2=rwu_get_header(exe,ret);
-           //          memcpy((uint8_t*)(&parray2[4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
-           //          parray2[2]=pre+end;
-           //          deref_free(exe,array);
-           //          operand_store(exe, opv, ret, 32, sp);
-           //          operand_store(exe, opv2, 0, 32, sp);
-           //      }
-           //  } break;
-           //  case OP_PREPEND: {
-           //      uint32_t array=operand_load(exe,32,opv->flags_dst,opv->fdst.a,sp);
-           //      uint32_t start=operand_load(exe,32,opv->flags_src.b,opv->fsrc2.a,sp);
-           //      uint32_t value=operand_load(exe,32,opv->flags_src.a,opv->src1,sp);
-           //      uint32_t offset=opv->fsrc2.b;
-           //      uint32_t* parray=rwu_get_header(exe,array);
-           //      uint8_t* addr=((uint8_t*)parray)+16+(start+offset)*(opv->fdst.b>>3);
-           //      switch(opv->fdst.b) { // alignment is guaranteed by the compiler
-           //          case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
-           //          case 16:*((uint16_t*)addr)=(uint16_t)value; break;
-           //          case 32:*((uint32_t*)addr)=(uint32_t)value; break;
-           //          case 64:*((uint64_t*)addr)=(uint64_t)value; break;
-           //          default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
-           //      } break;
-           //  } break;
-           //  case OP_APPEND: {
-           //      uint32_t array=operand_load(exe,32,opv->flags_dst,opv->dst,sp);
-           //      uint32_t value=operand_load(exe,32,opv->flags_src.a,opv->src1, sp);
-           //      uint32_t* parray=rwu_get_header(exe,array);
-           //      uint32_t end=parray[2];
-           //      parray[2]=end+1;
-           //      uint8_t* addr=((uint8_t*)parray)+16+end*(opv->fdst.b>>3);
-           //      switch(opv->fdst.b) { // alignment is guaranteed by the compiler
-           //          case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
-           //          case 16:*((uint16_t*)addr)=(uint16_t)value; break;
-           //          case 32:*((uint32_t*)addr)=(uint32_t)value; break;
-           //          case 64:*((uint64_t*)addr)=(uint64_t)value; break;
-           //          default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
-           //      } break;
-           //  } break;
-           //  case OP_APPEND_SPLAT: {
-           //      uint32_t dstarray=operand_load(exe,32,opv->flags_dst,opv->dst,sp);
-           //      uint32_t array=operand_load(exe,32,opv->flags_src.a, opv->src1, sp);
-           //      uint32_t start=operand_load(exe,32,opv->flags_src.b, opv->src2, sp);
-           //      uint32_t* pdstarray=rwu_get_header(exe,dstarray);
-           //      uint32_t* parray=rwu_get_header(exe,array);
-           //      uint32_t dstend=pdstarray[2];
-           //      uint32_t end=parray[2];
-           //      uint32_t stride=opv->fdst.b>>3;
-           //      uint8_t* dstaddr=((uint8_t*)pdstarray)+16+dstend*(opv->fdst.b>>3);
-           //      uint8_t* addr=((uint8_t*)parray)+16+start*(opv->fdst.b>>3);
-           //      uint32_t len=end-start;
-           //      memcpy(dstaddr,addr,len*stride);
-           //      pdstarray[2]=dstend+len;
-           //  } break;
-           //  case OP_APPEND_SPLAT_CONSUME: {
-           //      uint32_t dstarray=operand_load(exe,32,opv->flags_dst,opv->dst,sp);
-           //      uint32_t array=operand_load(exe,32,opv->flags_src.a, opv->src1, sp);
-           //      uint32_t start=operand_load(exe,32,opv->flags_src.b, opv->src2, sp);
-           //      uint32_t* pdstarray=rwu_get_header(exe,dstarray);
-           //      uint32_t* parray=rwu_get_header(exe,array);
-           //      uint32_t dstend=pdstarray[2];
-           //      uint32_t end=parray[2];
-           //      uint32_t stride=opv->fdst.b>>3;
-           //      uint8_t* dstaddr=((uint8_t*)pdstarray)+16+dstend*(opv->fdst.b>>3);
-           //      uint8_t* addr=((uint8_t*)parray)+16+start*(opv->fdst.b>>3);
-           //      uint32_t len=end-start;
-           //      memcpy(dstaddr,addr,len*stride);
-           //      pdstarray[2]=dstend+len;
-           //      deref_free(exe,array);
-           //  } break;
+            case OP_EMPTY_LIST: {
+                R[opv->fdst.a]=0;
+                R[opv->fsrc1.a]=0;
+                rwu_get_header(exe,0)[1]++;
+            } break;
+            case OP_EXTRACT_LIST: {
+                //generate_param_code(types,post_arrow,bindlevel,newstride,ctx,{*sofar0,{ctx_fnr(ctx),OpExtractList,0,0,0,array,src_flag1,src1,src_flag2,src2,srcp},*code0},{*sofar1,*code1},type_left,rest);
+                //fprintf(out,"extractlist uniq(r%u) (r%u,r%u) = (r%u,r%u)",opv->fdst.b,opv->fdst.a,opv->fdst.a+1,opv->fsrc1.a,opv->fsrc1.b);
+                uint32_t* addr=(uint32_t*)(R[opv->fsrc1.a]+opv->fsrc1.b);
+                uint64_t v1=addr[0];
+                uint64_t v2=addr[1];
+                uint32_t* parray=rwu_get_header(exe,R[opv->fdst.b]);
+                R[opv->fdst.a]=v1;
+                R[opv->fdst.a+1]=v2;
+                if(parray[1]==1) { // unique, replace with tombstone
+                    addr[0]=0;
+                    addr[1]=0;
+                    rwu_get_header(exe,0)[1]++;
+                } else {
+                    rwu_get_header(exe,v1)[1]++;
+                }
+            } break;
+            case OP_REALLOC_VAR: {
+                Operation* opv2=&code[pc];
+                pc++;
+                uint32_t pre=opv->fdst.b;
+                uint32_t post=opv2->fdst.b + R[opv2->fsrc2.a];
+                uint32_t array=R[opv->fsrc1.a];
+                uint32_t start=R[opv2->fsrc1.a];
+                uint32_t stride=opv->src2;
+                uint32_t* parray=rwu_get_header(exe,array);
+                uint32_t end=parray[2];
+                if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
+                    R[opv->fdst.a]=array;
+                    R[opv2->fdst.a]=start-pre;
+                } else {
+                    uint32_t sz=max_uint32(pre+post+end-start+2,8);
+                    uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
+                    //printf("realloc %d\n",full_size);
+                    uint32_t ret=alloc(exe,full_size,stride);
+                    uint32_t* parray2=rwu_get_header(exe,ret);
+                    memcpy((uint8_t*)(&parray2[4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
+                    parray2[2]=pre+end;
+                    deref_free(exe,array);
+                    R[opv->fdst.a]=ret;
+                    R[opv2->fdst.a]=0;
+                }
+            } break;
+            case OP_REALLOC_FIXED: {
+                Operation* opv2=&code[pc];
+                pc++;
+                uint32_t pre=opv->fdst.b;
+                uint32_t post=opv2->fdst.b;
+                uint32_t array=R[opv->fsrc1.a];
+                uint32_t start=R[opv2->fsrc1.a];
+                uint32_t stride=opv->src2;
+                uint32_t* parray=rwu_get_header(exe,array);
+                uint32_t end=parray[2];
+                if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
+                    R[opv->fdst.a]=array;
+                    R[opv2->fdst.a]=start-pre;
+                } else {
+                    uint32_t sz=max_uint32(pre+post+end-start+2,8);
+                    uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
+                    uint32_t ret=alloc(exe,full_size,stride);
+                    uint32_t* parray2=rwu_get_header(exe,ret);
+                    //printf("realloc %lx <= %lx sz=%d\n",(uint8_t*)(&parray2[4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
+                    memcpy((uint8_t*)(&parray2[4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
+                    parray2[2]=pre+end;
+                    deref_free(exe,array);
+                    R[opv->fdst.a]=ret;
+                    R[opv2->fdst.a]=0;
+                }
+            } break;
+            case OP_PREPEND_IMM: {
+                uint32_t array=R[opv->fdst.a];
+                uint32_t start=R[opv->fsrc2.a];
+                uint32_t value=opv->src1;
+                uint32_t offset=opv->fsrc2.b;
+                uint32_t* parray=rwu_get_header(exe,array);
+                uint8_t* addr=((uint8_t*)parray)+16+(start+offset)*(opv->fdst.b>>3);
+                switch(opv->fdst.b) { // alignment is guaranteed by the compiler
+                    case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
+                    case 16:*((uint16_t*)addr)=(uint16_t)value; break;
+                    case 32:*((uint32_t*)addr)=(uint32_t)value; break;
+                    case 64:*((uint64_t*)addr)=(uint64_t)value; break;
+                    default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
+                } break;
+            } break;
+           case OP_PREPEND_REG: {
+                uint32_t array=R[opv->fdst.a];
+                uint32_t start=R[opv->fsrc2.a];
+                uint32_t value=R[opv->fsrc1.a];
+                uint32_t offset=opv->fsrc2.b;
+                uint32_t* parray=rwu_get_header(exe,array);
+                uint8_t* addr=((uint8_t*)parray)+16+(start+offset)*(opv->fdst.b>>3);
+                switch(opv->fdst.b) { // alignment is guaranteed by the compiler
+                    case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
+                    case 16:*((uint16_t*)addr)=(uint16_t)value; break;
+                    case 32:*((uint32_t*)addr)=(uint32_t)value; break;
+                    case 64:*((uint64_t*)addr)=(uint64_t)value; break;
+                    default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
+                } break;
+            } break;
+            case OP_APPEND_IMM: {
+                uint32_t array=R[opv->fdst.a];
+                uint32_t value=opv->src1;
+                uint32_t* parray=rwu_get_header(exe,array);
+                uint32_t end=parray[2];
+                parray[2]=end+1;
+                uint8_t* addr=((uint8_t*)parray)+16+end*(opv->fdst.b>>3);
+                switch(opv->fdst.b) { // alignment is guaranteed by the compiler
+                    case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
+                    case 16:*((uint16_t*)addr)=(uint16_t)value; break;
+                    case 32:*((uint32_t*)addr)=(uint32_t)value; break;
+                    case 64:*((uint64_t*)addr)=(uint64_t)value; break;
+                    default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
+                } break;
+            } break;
+            case OP_APPEND_REG: {
+                uint32_t array=R[opv->fdst.a];
+                uint32_t value=R[opv->fsrc1.a];
+                uint32_t* parray=rwu_get_header(exe,array);
+                uint32_t end=parray[2];
+                parray[2]=end+1;
+                uint8_t* addr=((uint8_t*)parray)+16+end*(opv->fdst.b>>3);
+                switch(opv->fdst.b) { // alignment is guaranteed by the compiler
+                    case 1:case 8:*((uint8_t*)addr)=(uint8_t)value; break;
+                    case 16:*((uint16_t*)addr)=(uint16_t)value; break;
+                    case 32:*((uint32_t*)addr)=(uint32_t)value; break;
+                    case 64:*((uint64_t*)addr)=(uint64_t)value; break;
+                    default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
+                } break;
+            } break;
+            case OP_APPEND_SPLAT: {
+                uint32_t dstarray=R[opv->fdst.a];
+                uint32_t array=R[opv->fsrc1.a];
+                uint32_t start=R[opv->fsrc2.a];
+                uint32_t* pdstarray=rwu_get_header(exe,dstarray);
+                uint32_t* parray=rwu_get_header(exe,array);
+                uint32_t dstend=pdstarray[2];
+                uint32_t end=parray[2];
+                uint32_t stride=opv->fdst.b>>3;
+                uint8_t* dstaddr=((uint8_t*)pdstarray)+16+dstend*(opv->fdst.b>>3);
+                uint8_t* addr=((uint8_t*)parray)+16+start*(opv->fdst.b>>3);
+                uint32_t len=end-start;
+                memcpy(dstaddr,addr,len*stride);
+                pdstarray[2]=dstend+len;
+            } break;
+            case OP_APPEND_SPLAT_CONSUME: {
+                uint32_t dstarray=R[opv->fdst.a];
+                uint32_t array=R[opv->fsrc1.a];
+                uint32_t start=R[opv->fsrc2.a];
+                uint32_t* pdstarray=rwu_get_header(exe,dstarray);
+                uint32_t* parray=rwu_get_header(exe,array);
+                uint32_t dstend=pdstarray[2];
+                uint32_t end=parray[2];
+                uint32_t stride=opv->fdst.b>>3;
+                uint8_t* dstaddr=((uint8_t*)pdstarray)+16+dstend*(opv->fdst.b>>3);
+                uint8_t* addr=((uint8_t*)parray)+16+start*(opv->fdst.b>>3);
+                uint32_t len=end-start;
+                memcpy(dstaddr,addr,len*stride);
+                pdstarray[2]=dstend+len;
+                deref_free(exe,array);
+            } break;
             case OP_DEREF_FREE: {
                 uint32_t array=R[opv->fsrc1.a];
                 deref_free(exe,array);
             } break;
             case OP_DEREF_FREE_LIST: {
                 uint32_t array=R[opv->fsrc1.a];
-                uint32_t start=R[opv->fsrc2.b];
+                //uint32_t start=R[opv->fsrc2.b];
                 uint32_t* parray=rwu_get_header(exe,array);
                 uint32_t* data=rwu_get_data(parray);
                 uint32_t end=parray[2];
@@ -626,17 +661,17 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 }
                 deref_free(exe,array);
             } break;
-           // case OP_INC_MEM: {
-           //      uint8_t* addr=(uint8_t*)(exe->registers[opv->fdst.a+sp]+opv->fdst.b);
-           //      uint32_t sz=opv->type==0?1:(8<<((opv->type-1)&7));
-           //      switch(sz) { // alignment is guaranteed by the compiler
-           //          case 1:case 8:*((uint8_t*)addr)+=(uint8_t)opv->fsrc2.a; break;
-           //          case 16:*((uint16_t*)addr)+=(uint16_t)opv->fsrc2.a; break;
-           //          case 32:*((uint32_t*)addr)+=(uint32_t)opv->fsrc2.a; break;
-           //          case 64:*((uint64_t*)addr)+=(uint64_t)opv->fsrc2.a; break;
-           //          default: fprintf(stderr,"unknown size in operand_store\n"); exit(EXIT_FAILURE);
-           //      }
-           //  } break;
+           case OP_INC_MEM: {
+                uint8_t* addr=(uint8_t*)(R[opv->fdst.a]+opv->fdst.b);
+                uint32_t sz=opv->fsrc1.a;
+                switch(sz) { // alignment is guaranteed by the compiler
+                    case 1:case 8:*((uint8_t*)addr)+=(uint8_t)opv->fsrc2.a; break;
+                    case 16:*((uint16_t*)addr)+=(uint16_t)opv->fsrc2.a; break;
+                    case 32:*((uint32_t*)addr)+=(uint32_t)opv->fsrc2.a; break;
+                    case 64:*((uint64_t*)addr)+=(uint64_t)opv->fsrc2.a; break;
+                    default: fprintf(stderr,"unknown size in operand_store\n"); exit(EXIT_FAILURE);
+                }
+            } break;
             default: {
                 fprintf(stderr,"Illegal Instruction %x\n",op);
                 exe->errtype=1;
