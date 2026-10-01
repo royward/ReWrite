@@ -333,6 +333,29 @@ static inline uint32_t max_uint32(uint32_t a, uint32_t b) {
     return (a > b) ? a : b;
 }
 
+#if defined(__GNUC__) && !defined(RW_NO_THREADING)
+#define RW_THREADED 1
+#endif
+
+#ifdef RW_THREADED
+  #define CASE(op)     L_##op:
+  #define DEFAULT      L_OP_BAD:
+  #define DISPATCH()   { opv = opvb++; goto *dispatch_table[opv->op]; }
+  #define NEXT()       DISPATCH()
+  #if defined(__clang__)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wgnu-label-as-value"
+  #elif defined(__GNUC__)
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wpedantic"
+  #endif
+#else
+  #define CASE(op)     case op:
+  #define DEFAULT      default:
+  #define DISPATCH()   opv = opvb++; switch (opv->op)
+  #define NEXT()       goto dispatch
+#endif
+
 int program_execute(RWInstance* exe, uint32_t in_lbl) {
     Program* program=exe->program;
     exe->errtype=0;
@@ -340,28 +363,35 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
     exe->errsym=NULL;
     uint32_t sp=2; // make sure we are start, even if it was run before
     uint64_t* R=exe->registers+sp;
-    uint32_t pc=program->labels[in_lbl];
+    //uint32_t pc=program->labels[in_lbl];
     Operation* const code = program->code;
-    while(true) {
-        //printf("'%d ",pc);
-        Operation* opv=&code[pc++];
-        uint16_t op=opv->op;
-        switch(op) {
+    Operation* opvb = code + program->labels[in_lbl];
+    Operation* opv;
+#ifdef RW_THREADED
+    static const void* const dispatch_table[2048] = {
+        #include "oplist.inc"
+    };
+#endif
+#ifndef RW_THREADED
+dispatch:
+#endif
+    DISPATCH()
+    {
 #include "execute.inc"
-            case OP_LABEL: {
-            } break;
-             case OP_ERROR: {
+            CASE(OP_LABEL) {
+            } NEXT();
+            CASE(OP_ERROR) {
                 exe->errtype=opv->fdst.a;
                 exe->errline=opv->src1;
                 exe->errsym=program->symbols+opv->src2;
                 return exe->errtype;
             };
-            case OP_RET: {
+            CASE(OP_RET) {
                 int32_t* p0=(int32_t*)(&opv->fdst.b);
                 if(sp==2) {
-                    pc=exe->registers[1];
-                    int32_t* p1=(int32_t*)(&code[pc].fsrc1.b)+code[pc].fdst.b;
-                    for(uint32_t index1=0;index1<code[pc].fsrc1.a;index1++) {
+                    opvb=(Operation*)exe->registers[1];
+                    int32_t* p1=(int32_t*)(&opvb->fsrc1.b)+opvb->fdst.b;
+                    for(uint32_t index1=0;index1<opvb->fsrc1.a;index1++) {
                         ((uint64_t*)exe->registers[0])[p1[index1]]=R[(p0[index1])];
                     }
                     return 0;
@@ -369,17 +399,17 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     for(uint32_t index0=0;index0<opv->fdst.a;index0++) {
                         R[index0+1000]=exe->registers[(p0[index0])+sp];
                     }
-                    uint32_t* r=(uint32_t*)(&exe->registers[sp-1]);
-                    pc=r[0];
-                    for(uint32_t index1=0;index1<code[pc].fsrc1.a;index1++) {
+                    uint64_t* r=&exe->registers[sp-1];
+                    opvb=(Operation*)r[0];
+                    for(uint32_t index1=0;index1<opvb->fsrc1.a;index1++) {
                         R[index1]=R[index1+1000];
                     }
-                    sp-=code[pc].offset16; // restore the stack to the old value
+                    sp-=opvb->offset16; // restore the stack to the old value
                     R=exe->registers+sp;
-                    pc+=code[pc].flags_dst+1;
+                    opvb+=opvb->flags_dst+1;
                 }
-            } break;
-            case OP_CALL: {
+            } NEXT();
+            CASE(OP_CALL) {
                 uint32_t newsp=sp+(int32_t)opv->offset16;
                 int32_t* p=(int32_t*)(&opv->fsrc1.b);
                 for(uint32_t index=0;index<opv->fdst.b;index++) {
@@ -387,19 +417,19 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 }
                 sp=newsp;
                 R=exe->registers+sp;
-                uint32_t* r=(uint32_t*)(&exe->registers[sp-1]);
-                r[0]=pc-1;
-                pc = opv->fdst.a;
-            } break;
-            case OP_CALL_I_O: {
+                uint64_t* r=&exe->registers[sp-1];
+                r[0]=(uint64_t)(opv);
+                opvb = code + opv->fdst.a;
+            } NEXT();
+            CASE(OP_CALL_I_O) {
                 int32_t* p=(int32_t*)(&opv->fsrc1.b);
                 for(uint32_t index=0;index<opv->fdst.b;index++) {
                     R[index]=((uint64_t*)exe->registers[0])[p[index]];
                 }
-                exe->registers[1]=pc-1;
-                pc = opv->fdst.a;
-            } break;
-            case OP_GOTO: {
+                exe->registers[1]=(uint64_t)(opv);
+                opvb = code + opv->fdst.a;
+            } NEXT();
+            CASE(OP_GOTO) {
                 int32_t* p=(int32_t*)(&opv->fsrc1.a);
                 for(uint32_t index=0;index<opv->fdst.b;index++) {
                     R[index+1000]=R[p[index]];
@@ -407,26 +437,26 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 for(uint32_t index=0;index<opv->fdst.b;index++) {
                     R[index]=R[index+1000];
                 }
-                pc = opv->fdst.a;
-            } break;
-            case OP_LEA: {
+                opvb = code + opv->fdst.a;
+            } NEXT();
+            CASE(OP_LEA) {
                 uint64_t val = R[opv->fsrc1.a];
                 R[opv->fdst.a] = ((uint64_t)exe->heap8)+val*8;
-            } break;
-            case OP_LEA_SCALE: {
+            } NEXT();
+            CASE(OP_LEA_SCALE) {
                 uint64_t val = R[opv->fsrc1.a];
                 uint64_t offset = R[opv->fsrc2.a];
                 R[opv->fdst.a] = val+offset*opv->fdst.b;
-            } break;
-            case OP_ALLOC: {
+            } NEXT();
+            CASE(OP_ALLOC) {
                 R[opv->fdst.a] = alloc(exe,opv->src1,opv->src2);
-            } break;
-            case OP_EMPTY_LIST: {
+            } NEXT();
+            CASE(OP_EMPTY_LIST) {
                 R[opv->fdst.a]=0;
                 R[opv->fsrc1.a]=0;
                 rwu_get_header(exe,0)[1]++;
-            } break;
-            case OP_EXTRACT_LIST: {
+            } NEXT();
+            CASE(OP_EXTRACT_LIST) {
                 uint32_t* addr=(uint32_t*)(R[opv->fsrc1.a]+opv->fsrc1.b);
                 uint64_t v1=addr[0];
                 uint64_t v2=addr[1];
@@ -440,10 +470,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 } else {
                     rwu_get_header(exe,v1)[1]++;
                 }
-            } break;
-            case OP_REALLOC_VAR: {
-                Operation* opv2=&code[pc];
-                pc++;
+            } NEXT();
+            CASE(OP_REALLOC_VAR) {
+                Operation* opv2=opvb;
                 uint32_t pre=opv->fdst.b;
                 uint32_t post=opv2->fdst.b + R[opv2->fsrc2.a];
                 uint32_t array=R[opv->fsrc1.a];
@@ -466,10 +495,10 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     R[opv->fdst.a]=ret;
                     R[opv2->fdst.a]=0;
                 }
-            } break;
-            case OP_REALLOC_FIXED: {
-                Operation* opv2=&code[pc];
-                pc++;
+                opvb++;
+            } NEXT();
+            CASE(OP_REALLOC_FIXED) {
+                Operation* opv2=opvb;
                 uint32_t pre=opv->fdst.b;
                 uint32_t post=opv2->fdst.b;
                 uint32_t array=R[opv->fsrc1.a];
@@ -492,8 +521,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     R[opv->fdst.a]=ret;
                     R[opv2->fdst.a]=0;
                 }
-            } break;
-            case OP_PREPEND_IMM: {
+                opvb++;
+            } NEXT();
+            CASE(OP_PREPEND_IMM) {
                 uint32_t array=R[opv->fdst.a];
                 uint32_t start=R[opv->fsrc2.a];
                 uint32_t value=opv->src1;
@@ -506,9 +536,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     case 32:*((uint32_t*)addr)=(uint32_t)value; break;
                     case 64:*((uint64_t*)addr)=(uint64_t)value; break;
                     default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
-                } break;
-            } break;
-           case OP_PREPEND_REG: {
+                } NEXT();
+            } NEXT();
+           CASE(OP_PREPEND_REG) {
                 uint32_t array=R[opv->fdst.a];
                 uint32_t start=R[opv->fsrc2.a];
                 uint32_t value=R[opv->fsrc1.a];
@@ -521,9 +551,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     case 32:*((uint32_t*)addr)=(uint32_t)value; break;
                     case 64:*((uint64_t*)addr)=(uint64_t)value; break;
                     default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
-                } break;
-            } break;
-            case OP_APPEND_IMM: {
+                } NEXT();
+            } NEXT();
+            CASE(OP_APPEND_IMM) {
                 uint32_t array=R[opv->fdst.a];
                 uint32_t value=opv->src1;
                 uint32_t* parray=rwu_get_header(exe,array);
@@ -536,9 +566,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     case 32:*((uint32_t*)addr)=(uint32_t)value; break;
                     case 64:*((uint64_t*)addr)=(uint64_t)value; break;
                     default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
-                } break;
-            } break;
-            case OP_APPEND_REG: {
+                } NEXT();
+            } NEXT();
+            CASE(OP_APPEND_REG) {
                 uint32_t array=R[opv->fdst.a];
                 uint32_t value=R[opv->fsrc1.a];
                 uint32_t* parray=rwu_get_header(exe,array);
@@ -551,9 +581,9 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     case 32:*((uint32_t*)addr)=(uint32_t)value; break;
                     case 64:*((uint64_t*)addr)=(uint64_t)value; break;
                     default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
-                } break;
-            } break;
-            case OP_APPEND_SPLAT: {
+                } NEXT();
+            } NEXT();
+            CASE(OP_APPEND_SPLAT) {
                 uint32_t dstarray=R[opv->fdst.a];
                 uint32_t array=R[opv->fsrc1.a];
                 uint32_t start=R[opv->fsrc2.a];
@@ -567,8 +597,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 uint32_t len=end-start;
                 memcpy(dstaddr,addr,len*stride);
                 pdstarray[2]=dstend+len;
-            } break;
-            case OP_APPEND_SPLAT_CONSUME: {
+            } NEXT();
+            CASE(OP_APPEND_SPLAT_CONSUME) {
                 uint32_t dstarray=R[opv->fdst.a];
                 uint32_t array=R[opv->fsrc1.a];
                 uint32_t start=R[opv->fsrc2.a];
@@ -583,12 +613,12 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                 memcpy(dstaddr,addr,len*stride);
                 pdstarray[2]=dstend+len;
                 deref_free(exe,array);
-            } break;
-            case OP_DEREF_FREE: {
+            } NEXT();
+            CASE(OP_DEREF_FREE) {
                 uint32_t array=R[opv->fsrc1.a];
                 deref_free(exe,array);
-            } break;
-            case OP_DEREF_FREE_LIST: {
+            } NEXT();
+            CASE(OP_DEREF_FREE_LIST) {
                 uint32_t array=R[opv->fsrc1.a];
                 //uint32_t start=R[opv->fsrc2.b];
                 uint32_t* parray=rwu_get_header(exe,array);
@@ -598,8 +628,8 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     deref_free(exe,data[i+i]);
                 }
                 deref_free(exe,array);
-            } break;
-           case OP_INC_MEM: {
+            } NEXT();
+           CASE(OP_INC_MEM) {
                 uint8_t* addr=(uint8_t*)(R[opv->fdst.a]+opv->fdst.b);
                 uint32_t sz=opv->fsrc1.a;
                 switch(sz) { // alignment is guaranteed by the compiler
@@ -609,15 +639,26 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
                     case 64:*((uint64_t*)addr)+=(uint64_t)opv->fsrc2.a; break;
                     default: fprintf(stderr,"unknown size in operand_store\n"); exit(EXIT_FAILURE);
                 }
-            } break;
-            default: {
-                fprintf(stderr,"Illegal Instruction %x\n",op);
+            } NEXT();
+            CASE(OP_ZEXT) {
+            } NEXT();
+            CASE(OP_CONT) {
+            } NEXT();
+            DEFAULT {
+                fprintf(stderr,"Illegal Instruction %x\n",opv->op);
                 exe->errtype=1;
                 return exe->errtype;
             }
         }
-    }
 }
+
+#ifdef RW_THREADED
+#if defined(__clang__)
+  #pragma clang diagnostic pop
+#elif defined(__GNUC__)
+  #pragma GCC diagnostic pop
+#endif
+#endif
 
 int RW__vmcall(RWInstance* a, uint32_t label, uint64_t* inout) {
     a->registers[0]=(uint64_t)inout;

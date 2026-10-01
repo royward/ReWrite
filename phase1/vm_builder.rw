@@ -98,9 +98,9 @@ generate_inc_files()
     match process_oplist(0,{},oplist) => oplist2
     -> defs,oplist2,dis,exec,branch;
 
-process_oplist(n,full,{}) -> {*full,**listnv(n,"OP_BAD,")};
+process_oplist(n,full,{}) -> {*full,**listnv(n,"&&L_OP_BAD,")};
 process_oplist(n,full,{"",*rest}) -> process_oplist(n+1,full,rest);
-process_oplist(n,full,{name,*rest}) -> process_oplist(0,{*full,**listnv(n,"OP_BAD,"),*name,','},rest);
+process_oplist(n,full,{name,*rest}) -> process_oplist(0,{*full,**listnv(n,"&&L_OP_BAD,"),'&&L_',*name,','},rest);
 
 add_single_defs(defs,oplist,{}) -> defs,oplist;
 add_single_defs(defs,oplist,{op,*rest}) -> add_single_defs(generate_define_list(defs,oplist,{'OP_',*upper_snake_case({},true,op_name(op))},op),rest);
@@ -156,7 +156,7 @@ generate_inc_final(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,sd) when sd==
     match has_label(opb) => has_lbl,
     match generate_dis(class,has_lbl,opb,a,b,z,s,sd) => dis1
     match generate_exec(class,has_lbl,opb,a,b,z,s,sd) => exec1
-    -> defs,oplist,{*dis,'case ',*name,':{fprintf(out,',*dis1,');} break;\n'},{*exec,'case ',*name,':{\n\t',*exec1,';\n} break;\n'},{*branch,*add_label_case(has_lbl,name)};
+    -> defs,oplist,{*dis,'case ',*name,':{fprintf(out,',*dis1,');} break;\n'},{*exec,'CASE(',*name,') {\n\t',*exec1,';\n} NEXT();\n'},{*branch,*add_label_case(has_lbl,name)};
 generate_inc_final(defs,oplist,dis,exec,branch,_,_,_,_,_,_,_,_) -> defs,oplist,dis,exec,branch;
 
 add_label_case(false,_) -> "";
@@ -222,7 +222,7 @@ e_class2_start(false) -> "R[opv->fdst.a]=";
 e_class2_start(true) -> "if(";
 
 e_class2_end(false) -> "";
-e_class2_end(true) -> "){pc=opv->fdst.a;}";
+e_class2_end(true) -> "){opvb=code+opv->fdst.a;}";
 
 e_size_from_s(0) -> "(uint8_t)";
 e_size_from_s(1) -> "(uint16_t)";

@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
 
     printf("len_nqueens:");
     exe->allocated=0;
-    ret_code=rw_len_nqueens(exe,8,&result0);
+    ret_code=rw_len_nqueens(exe,12,&result0);
     if(!ret_code && result0==92) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
     printf("car_nqueens:");
