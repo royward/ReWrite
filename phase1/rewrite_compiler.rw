@@ -677,7 +677,7 @@ compile_rule(target,types,linerule,ctx,sofar,{pf1,pf2,params},clauses,{{ExprCall
 compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type_left,regs_right,type_right)
     @match ctx_get_tail(ctx) => 0
     update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
-    update generate_expr_code(true,types,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
+    update generate_expr_code(true,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
     match slice_iolist(ctx_get_reg_count(ctx),5,{},{},outlist) => {first_slice,*slices}
     -> ctx_get_types(ctx),ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lbl_decline(ctx)!=0,ctx_get_lbl_decline(ctx),ctx_lbl(ctx),
         code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_ret(ctx_fnr(ctx),length(slices),regs_right,first_slice),*slices});
@@ -685,7 +685,7 @@ compile_rule(target,types,linerule,ctx,sofar,params,clauses,exprs,regs_left,type
     match ctx_get_tail(ctx)-1 => call_id
     update ctx_get_fn_sig(ctx,call_id) => {_,_,_,_,regs_right,_,type_right,_,_,_,_,_}
     update generate_params_clauses(target,types,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code
-    update generate_expr_code(true,types,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
+    update generate_expr_code(true,ctx,listnv(regs_right,-2),code,{},type_right,exprs) => ctx,outlist,code
     match slice_iolist(ctx_get_reg_count(ctx),4,{},{},outlist) => {first_slice,*slices}
     -> ctx_get_types(ctx),ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lbl_decline(ctx)!=0,ctx_get_lbl_decline(ctx),ctx_lbl(ctx),
         code_or_not(ctx_get_lbl_active(ctx),{*code,slice_build_goto(ctx_fnr(ctx),length(slices),call_id,regs_right,first_slice),*slices});
@@ -919,11 +919,11 @@ gen_cond_op(op,tp,sz) -> op,xt(tp);
 
 use_binding(ctx,id) match nth(id,ctx_bindings(ctx)) => {bind_level,tp,storage,name} -> ctx_newbindings(ctx,nth_insert(id,{bind_level,tp,storage,name},ctx_bindings(ctx))),tp,storage;
 
-generate_expr_code(post_arrow,types,ctx,outlist,code1,code2,{},{}) -> ctx,outlist,{*code1,*code2};
-generate_expr_code(post_arrow,types,ctx,outlist,sofar1,sofar2,typelist,{expr,*rest})
+generate_expr_code(post_arrow,ctx,outlist,code1,code2,{},{}) -> ctx,outlist,{*code1,*code2};
+generate_expr_code(post_arrow,ctx,outlist,sofar1,sofar2,typelist,{expr,*rest})
     update generate_expr_code_aux(post_arrow,ctx,extract_types({},typelist),expr) => ctx,false,newcode,callout_ret
     update callout_insert(ctx,outlist,{},callout_ret,typelist) => ctx,outlist,code_insert,typelist_rest
-    -> generate_expr_code(post_arrow,types,ctx,outlist,{*sofar1,*newcode},{*sofar2,*code_insert},typelist_rest,rest);
+    -> generate_expr_code(post_arrow,ctx,outlist,{*sofar1,*newcode},{*sofar2,*code_insert},typelist_rest,rest);
 
 callout_insert(ctx,outlist,sofar,{},type_left_rest) -> ctx,outlist,sofar,type_left_rest;
 callout_insert(ctx,outlist,sofar,{{{},_,_},*rest0},{{{},_,_},*rest1}) -> callout_insert(ctx,outlist,sofar,rest0,rest1);
@@ -963,7 +963,7 @@ generate_expr_code_aux(post_arrow,ctx,stypes,{ExprCallInternal,op,args})
     ctx,false,code,x;
 generate_expr_code_aux(post_arrow,ctx,stypes,{ExprCall,fn_id,args})
     match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
-    update generate_expr_code(post_arrow,ctx_get_types(ctx),ctx,listnv(regleft,-2),{},{},params_left,args) => ctx,inlist,args_code
+    update generate_expr_code(post_arrow,ctx,listnv(regleft,-2),{},{},params_left,args) => ctx,inlist,args_code
     match ctx_get_reg_count(ctx)+1 => spinc
     update callout_enter(spinc,listnv(regright,-2),{},type_right) => _,newtyperight
     update ctx_put_reg_count(ctx,spinc+regright) => ctx
