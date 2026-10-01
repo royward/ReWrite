@@ -731,7 +731,7 @@ generate_clause_code_aux(types,bind_level,post_arrow,ctx,code0,code1,expr,{pf1,p
 generate_expr_code_untyped(post_arrow,types,ctx,code,etypes,{}) -> ctx,etypes,code;
 // TODO deal with lists and splats first
 generate_expr_code_untyped(post_arrow,types,ctx,sofar,etypes,{expr,*rest})
-    update generate_expr_code_aux(post_arrow,types,ctx,{0,0},expr) => ctx,false,newcode,callout_ret
+    update generate_expr_code_aux(post_arrow,ctx,{0,0},expr) => ctx,false,newcode,callout_ret
     -> generate_expr_code_untyped(post_arrow,types,ctx,{*sofar,*newcode},{*etypes,*callout_ret},rest);
 
 generate_commit_cleanup(types,ctx,1,cleanup) -> generate_commit_cleanup_aux(types,ctx,{},ctx_bindings(ctx),cleanup);
@@ -921,7 +921,7 @@ use_binding(ctx,id) match nth(id,ctx_bindings(ctx)) => {bind_level,tp,storage,na
 
 generate_expr_code(post_arrow,types,ctx,outlist,code1,code2,{},{}) -> ctx,outlist,{*code1,*code2};
 generate_expr_code(post_arrow,types,ctx,outlist,sofar1,sofar2,typelist,{expr,*rest})
-    update generate_expr_code_aux(post_arrow,types,ctx,extract_types({},typelist),expr) => ctx,false,newcode,callout_ret
+    update generate_expr_code_aux(post_arrow,ctx,extract_types({},typelist),expr) => ctx,false,newcode,callout_ret
     update callout_insert(ctx,outlist,{},callout_ret,typelist) => ctx,outlist,code_insert,typelist_rest
     -> generate_expr_code(post_arrow,types,ctx,outlist,{*sofar1,*newcode},{*sofar2,*code_insert},typelist_rest,rest);
 
@@ -946,82 +946,82 @@ callout_enter_aux(reg_count,outlist,sofar,{{BindReg,dst,sz},*rest})
 callout_enter_aux(reg_count,outlist,sofar,{x,*rest})
     -> callout_enter_aux(reg_count,outlist,{*sofar,x},rest);
 
-generate_code_addref(true,_,ctx,_,_) -> ctx,{};
-generate_code_addref(post_arrow,types,ctx,tp,storage) -> gen_types_addref(types,ctx,tp,storage,1);
+generate_code_addref(true,ctx,_,_) -> ctx,{};
+generate_code_addref(post_arrow,ctx,tp,storage) -> gen_types_addref(ctx_get_types(ctx),ctx,tp,storage,1);
 
-generate_expr_code_aux(post_arrow,types,ctx,stypes,{Const,{tp,val}}) match lookup_type_size_pri(tp,types) => {_,sz} ->
+generate_expr_code_aux(post_arrow,ctx,stypes,{Const,{tp,val}}) match lookup_type_size_pri(tp,ctx_get_types(ctx)) => {_,sz} ->
     ctx,false,{},{{{{BindImm,val,sz}},tp,Consume}};
-generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprId,{id,count,consumed}})
+generate_expr_code_aux(post_arrow,ctx,stypes,{ExprId,{id,count,consumed}})
     update use_binding(ctx,id) => ctx,tp,storage
-    update generate_code_addref(post_arrow,types,ctx,tp,storage) => ctx,code
+    update generate_code_addref(post_arrow,ctx,tp,storage) => ctx,code
     -> ctx,false,code,{{storage,tp,consumed}};
-generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprCallInternal,op,args})
+generate_expr_code_aux(post_arrow,ctx,stypes,{ExprCallInternal,op,args})
     match decompose_stypes(stypes) => typex,_
     match op_infer(op,typex,args) => infer_types
     update generate_expr_code_aux_map(post_arrow,ctx,{},infer_types,args) => ctx,args_code
     update generate_expr_code_infix(ctx,op,args_code) => ctx,code,x ->
     ctx,false,code,x;
-generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprCall,fn_id,args})
+generate_expr_code_aux(post_arrow,ctx,stypes,{ExprCall,fn_id,args})
     match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
-    update generate_expr_code(post_arrow,types,ctx,listnv(regleft,-2),{},{},params_left,args) => ctx,inlist,args_code
+    update generate_expr_code(post_arrow,ctx_get_types(ctx),ctx,listnv(regleft,-2),{},{},params_left,args) => ctx,inlist,args_code
     match ctx_get_reg_count(ctx)+1 => spinc
     update callout_enter(spinc,listnv(regright,-2),{},type_right) => _,newtyperight
     update ctx_put_reg_count(ctx,spinc+regright) => ctx
     match slice_iolist(ctx_get_reg_count(ctx),3,{},{},inlist) => {first_slice,*slices}
     -> ctx,false,{*args_code,slice_build_call(ctx_fnr(ctx),length(slices),fn_id,spinc,regleft,regright,first_slice),*slices},newtyperight;
-generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}})
+generate_expr_code_aux(post_arrow,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}})
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
     ctx,false,{{ctx_fnr(ctx),OpError,0,0,BindImm,err,0,ctx_linerule(ctx),0,symoffset,0}},{{{{BindImm,err,DefaultSize}},TypeI64,Consume}};
-generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprList,{}})  @match decompose_stypes(stypes) => stype,_ // empty list.
+generate_expr_code_aux(post_arrow,ctx,stypes,{ExprList,{}})  @match decompose_stypes(stypes) => stype,_ // empty list.
     update ctx_newreg(ctx,32) => ctx,newarray
     update ctx_newreg(ctx,32) => ctx,newstart
     -> ctx,false,{{ctx_fnr(ctx),OpEmptyList,0,0,BindReg,newarray,BindReg,newstart}},{{{{BindReg,newarray,32},{BindReg,newstart,32}},stype,Consume}};
-generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprList,elements}) @match decompose_stypes(stypes) => stype,_
-    @match nth(stype,types) => {_,_,{DerivedTypeArray,t},storage}
+generate_expr_code_aux(post_arrow,ctx,stypes,{ExprList,elements}) @match decompose_stypes(stypes) => stype,_
+    @match nth(stype,ctx_get_types(ctx)) => {_,_,{DerivedTypeArray,t},storage}
     // Array - go get the elements then come back to allocate
     update ctx_newreg(ctx,32) => ctx,newarray
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,newstart
-    match nth(t,types) => {_,_,_,subsz}
+    match nth(t,ctx_get_types(ctx)) => {_,_,_,subsz}
     match sum_sub_alloc(0,subsz) => sz
     update generate_expr_code_aux_map(post_arrow,ctx,{},{0,t},elements) => ctx,args_code
     update split_splat({},args_code) => pre_splat,splat,post_splat
-    -> generate_expr_code_list(types,ctx,newarray,parray,newstart,sz,stype,pre_splat,splat,post_splat);
-// generate_expr_code_aux(post_arrow,types,ctx,{0,0},{ExprList,{e1,*elements}}) // Deal with type derivation for anonymous list. might need to create type
-//     match generate_expr_code_aux(post_arrow,types,ctx,{0,0},e1) => _,_,_,{{_,t,_},*_} // just want the type
-//     @match nth(stype,types) => {_,_,{DerivedTypeArray,t},_}
+    -> generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,pre_splat,splat,post_splat);
+// generate_expr_code_aux(post_arrow,ctx,{0,0},{ExprList,{e1,*elements}}) // Deal with type derivation for anonymous list. might need to create type
+//     match generate_expr_code_aux(post_arrow,ctx,{0,0},e1) => _,_,_,{{_,t,_},*_} // just want the type
+//     @match nth(stype,ctx_get_types(ctx)) => {_,_,{DerivedTypeArray,t},_}
 //     // Array - go get the elements then come back to allocate
 //     update ctx_newreg(ctx,32) => ctx,newarray
 //     update ctx_newreg(ctx,64) => ctx,parray
 //     update ctx_newreg(ctx,32) => ctx,newstart
-//     match nth(t,types) => {_,_,_,subsz}
+//     match nth(t,ctx_get_types(ctx)) => {_,_,_,subsz}
 //     match sum_sub_alloc(0,subsz) => sz
-//     update generate_expr_code_aux_map(post_arrow,types,ctx,{},{0,t},elements) => ctx,args_code
+//     update generate_expr_code_aux_map(post_arrow,ctx_get_types(ctx),ctx,{},{0,t},elements) => ctx,args_code
 //     update split_splat({},args_code) => pre_splat,splat,post_splat
-//     -> generate_expr_code_list(types,ctx,newarray,parray,newstart,sz,stype,pre_splat,splat,post_splat);
-generate_expr_code_aux(post_arrow,types,ctx,{0,t},{ExprSplat,arg})
-    @update generate_expr_code_aux(post_arrow,types,ctx,{0,t},arg) => ctx,false,code,splatdata ->
+//     -> generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,pre_splat,splat,post_splat);
+generate_expr_code_aux(post_arrow,ctx,{0,t},{ExprSplat,arg})
+    @update generate_expr_code_aux(post_arrow,ctx,{0,t},arg) => ctx,false,code,splatdata ->
     ctx,true,code,splatdata;
-generate_expr_code_aux(post_arrow,types,ctx,{0,t},{ExprSplat,arg})
-    update generate_expr_code_aux(post_arrow,types,ctx,{0,t},arg) => ctx,true,code,{{{{BindReg,array,32},{BindReg,start,32}},tp,1}}
-    match nth(tp,types) => {_,_,{2,tp2},_}
-    match nth(tp2,types) => tp3
+generate_expr_code_aux(post_arrow,ctx,{0,t},{ExprSplat,arg})
+    update generate_expr_code_aux(post_arrow,ctx,{0,t},arg) => ctx,true,code,{{{{BindReg,array,32},{BindReg,start,32}},tp,1}}
+    match nth(tp,ctx_get_types(ctx)) => {_,_,{2,tp2},_}
+    match nth(tp2,ctx_get_types(ctx)) => tp3
     -> println_any(t,tp,tp2,tp3),
     println_any(true,code),#never;
 
-generate_expr_code_list(types,ctx,newarray,parray,newstart,sz,stype,args_code,{},{}) // no splats
+generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,args_code,{},{}) // no splats
     update array_fixed_elt_assign(sz,ctx,parray,0,{},args_code) => c,code
     -> ctx,false,{{ctx_fnr(ctx),OpAlloc,0,0,BindReg,newarray,BindImm,sz>>3,BindImm,c},{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,BindReg,newarray},*code,{ctx_fnr(ctx),OpStore,3,0,0,parray,BindImm,c,0,0,8}},
     {{{{BindReg,newarray,32},{BindImm,0,32}},stype,Consume}};
-generate_expr_code_list(types,ctx,newarray,parray,newstart,sz,stype,{},{{true,precode,{{{array_flag,array,32},{start_flag,start,32}},stype,_}}},post_splat) // first splat at start - check for append
+generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,{},{{true,precode,{{{array_flag,array,32},{start_flag,start,32}},stype,_}}},post_splat) // first splat at start - check for append
     update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,post_splat) => ctx,sum_const,sum_code,sum_src_flag,sum_src
     update array_var_elt_assign_post(sz,ctx,BindReg,newarray,BindReg,newstart,{},post_splat) => code
     -> ctx,false,
         {*precode,*sum_code,{ctx_fnr(ctx),if(sum_src_flag==BindImm,OpReallocFixed,OpReallocVar),0,0,BindReg,newarray,array_flag,array,BindImm,sz>>3,0},
         {ctx_fnr(ctx),OpCont,0,0,BindReg,newstart,start_flag,start,sum_src_flag,sum_src,sum_const},*code},
     {{{{BindReg,newarray,32},{BindReg,newstart,32}},stype,Consume}};
-generate_expr_code_list(types,ctx,newarray,parray,newstart,sz,stype,pre_splat,{{true,precode,{{{array_flag,array,32},{start_flag,start,32}},stype,_}}},post_splat) // first splat in middle - check for prepend and append
+generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,pre_splat,{{true,precode,{{{array_flag,array,32},{start_flag,start,32}},stype,_}}},post_splat) // first splat in middle - check for prepend and append
     update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,pre_splat) => ctx,sum_const_pre,{},BindImm,0
     update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,post_splat) => ctx,sum_const_post,sum_code,sum_src_flag,sum_src
     update array_var_elt_assign_pre(sz,ctx,BindReg,newarray,BindReg,newstart,0,{},pre_splat) => code_pre
@@ -1035,7 +1035,7 @@ generate_expr_code_aux_map(post_arrow,ctx,sofar,{0,_},{}) -> ctx,sofar;
 generate_expr_code_aux_map(post_arrow,ctx,sofar,{1},{}) -> ctx,sofar;
 generate_expr_code_aux_map(post_arrow,ctx,sofar,stypelist,{expr,*rest})
     match decompose_stypes(stypelist) => typex,trest
-    update generate_expr_code_aux(post_arrow,ctx_get_types(ctx),ctx,{0,typex},expr) => ctx,splat,code,results ->
+    update generate_expr_code_aux(post_arrow,ctx,{0,typex},expr) => ctx,splat,code,results ->
     generate_expr_code_aux_map(post_arrow,ctx,{*sofar,{splat,code,results}},trest,rest);
 
 split_splat(sofar,{}) -> sofar,{},{};
