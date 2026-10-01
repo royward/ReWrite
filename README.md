@@ -570,23 +570,22 @@ This stage adds static typing but not other language features, and writing a ReW
 
 * Strong static typing (types checked at compile time)
 * write ReWrite -> VM, written in ReWrite itself (self-hosting)
-* write ReWrite -> LLVM IR (for x86-64) in ReWrite
-* AArch64 code generation
 * write the VM in C (mostly done)
-* Interface from C
+* Interface from C (done enough for phase 1)
 
-This is in progress. ReWrite can parse itself, and simple functions compile and have the interface generated in both the VM and the LLVM-IR code.
+This is in progress. ReWrite can parse itself, and simple functions compile and have the interface generated in both the VM and the LLVM-IR code, although complete LLVM-IR will wait till phase 2.
 
 Once ReWrite can build and run itself, the interpreter remains as the bootstrap root, but no longer needs to track new language features. Later phases compile via the previous stage.
 
 #### Phase 2 (0.2 release): more targets and higher level functions
 
+* write ReWrite -> LLVM IR (for x86-64) in ReWrite
+* AArch64 code generation
 * Rust binding
 * higher level functions: apply/map/fold/filter
 
 #### Phase 3+: more types
 
 * more integer types than just i64
-* structs
 * 64-bit floats
 

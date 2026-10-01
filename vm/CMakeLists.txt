@@ -20,7 +20,7 @@ add_executable(rewrite_vm
     src/vm.c
 )
 
-target_include_directories(rewrite_vm PRIVATE include)
+target_include_directories(rewrite_vm PRIVATE include generated)
 
 target_link_libraries(rewrite_vm PRIVATE CLI11::CLI11)
 target_compile_options(rewrite_vm PRIVATE

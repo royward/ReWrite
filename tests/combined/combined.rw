@@ -55,11 +55,8 @@ fib(1) -> 1;
 fib(n) -> fib(n-2)+fib(n-1);
 
 //misc_splat.rw
-//nprime.rw
 //nqueens_bitmask.rw
-//nqueens.rw
 //reverse.rw
-//roman_numerals.rw
 
 :- export swap(value i64,i64) -> i64,value i64;
 swap(x,y) -> y,x;

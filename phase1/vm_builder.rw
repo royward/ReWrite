@@ -1,0 +1,290 @@
+// #ab:2 address modes: reg or imm
+// #z:2 signed: signed or unsigned
+// #s:4 sizes: 4 - 8,16,32,64 bits for integer only
+// #S:8 sizes: allow room for non-integer sizes
+// #t:5 saturating, checked, now needs sign
+//
+// Operation counts:
+// +,-,*,<<: S*a*b*t = 160 each (initially 32)
+// /,%,<,<=,,branch<,branch<=,>>: S*a*b*z = 64 each
+// trunc (register only): s = 4 /4
+// ext (register only): s*z = 8 /8
+// load,neg: S = 8 /16
+// store: S*a = 16 /16
+// &&,||: a*b = 4 each /8
+// &,|,^,eq,ne,brancheq,branchne: (size doesn't matter): a*b = 4 each /28
+// !,mv: a = 2 /2
+// ~: s*a = 8 /8
+//
+// All other forms 1 each
+
+op_name(OpPlus) -> "Plus";
+op_name(OpMinus) -> "Minus";
+op_name(OpTimes) -> "Times";
+op_name(OpShiftLeft) -> "ShiftLeft";
+op_name(OpLt) -> "Lt";
+op_name(OpLte) -> "Lte";
+op_name(OpCompLtBr) -> "CompLtBr";
+op_name(OpCompLteBr) -> "CompLteBr";
+op_name(OpShiftRight) -> "ShiftRight";
+op_name(OpDiv) -> "Div";
+op_name(OpMod) -> "Mod";
+op_name(OpReserved5_1) -> "Reserved5_1";
+op_name(OpStore) -> "Store";
+op_name(OpLoad) -> "Load";
+op_name(OpTrunc) -> "Trunc";
+op_name(OpUnaryMinus) -> "UnaryMinus";
+op_name(OpBitNot) -> "BitNot";
+op_name(OpMove) -> "Move";
+op_name(OpNot) -> "Not";
+op_name(OpEqual) -> "Equal";
+op_name(OpNotEqual) -> "NotEqual";
+op_name(OpCompEqBr) -> "CompEqBr";
+op_name(OpCompNeqBr) -> "CompNeqBr";
+op_name(OpAnd) -> "And";
+op_name(OpOr) -> "Or";
+op_name(OpXor) -> "Xor";
+op_name(OpSext) -> "Sext";
+op_name(OpZext) -> "Zext";
+op_name(OpLabel) -> "Label";
+op_name(OpCall) -> "Call";
+op_name(OpRet) -> "Ret";
+op_name(OpGoto) -> "Goto";
+op_name(OpLea) -> "Lea";
+op_name(OpLeaScale) -> "LeaScale";
+op_name(OpError) -> "Error";
+op_name(OpCallIO) -> "CallIO";
+op_name(OpAlloc) -> "Alloc";
+op_name(OpReallocFixed) -> "ReallocFixed";
+op_name(OpReallocVar) -> "ReallocVar";
+op_name(OpEmptyList) -> "EmptyList";
+op_name(OpDerefFree) -> "DerefFree";
+op_name(OpDerefFreeList) -> "DerefFreeList";
+op_name(OpIncMem) -> "IncMem";
+op_name(OpCont) -> "Cont";
+op_name(OpPrependImm) -> "PrependImm";
+op_name(OpPrependReg) -> "PrependReg";
+op_name(OpAppendImm) -> "AppendImm";
+op_name(OpAppendReg) -> "AppendReg";
+op_name(OpAppendSplat) -> "AppendSplat";
+op_name(OpAppendSplatConsume) -> "AppendSplatConsume";
+op_name(OpExtractList) -> "ExtractList";
+
+some_gen_ops() -> {OpPlus,OpLt,OpLte};
+all_gen_ops() ->
+    {OpPlus,OpMinus,OpTimes,OpShiftLeft,
+    OpLt,OpLte,OpCompLtBr,OpCompLteBr,OpShiftRight,OpDiv,OpMod,
+    OpStore,OpLoad,OpTrunc,OpMove,OpUnaryMinus,OpBitNot,OpNot,
+    OpEqual,OpNotEqual,OpCompEqBr,OpCompNeqBr,OpAnd,OpOr,OpXor,OpSext};
+
+all_single_ops() -> {OpZext,OpLabel,OpCall,OpRet,OpGoto,OpLea,OpLeaScale,OpError,OpCallIO,
+    OpAlloc,OpReallocFixed,OpReallocVar,OpEmptyList,OpDerefFree,OpDerefFreeList,OpIncMem,OpCont,OpPrependImm,OpPrependReg,OpAppendImm,OpAppendReg,OpAppendSplat,OpAppendSplatConsume,OpExtractList};
+
+has_label(OpCompLtBr) -> true;
+has_label(OpCompLteBr) -> true;
+has_label(OpCompEqBr) -> true;
+has_label(OpCompNeqBr) -> true;
+has_label(_) -> false;
+
+// generate 4 text artifacts that each go in a separate file
+// * a file of #defs
+// * an ordered list of all opcodes
+// * the disbler cases
+// * the execution cases
+
+generate_inc_files()
+    match generate_inc_files_aux({},listnv(2048,""),{},{},{},all_gen_ops()) => defs,oplist,dis,exec,branch
+    update add_single_defs(defs,oplist,all_single_ops()) => defs,oplist
+    match process_oplist(0,{},oplist) => oplist2
+    -> defs,oplist2,dis,exec,branch;
+
+process_oplist(n,full,{}) -> {*full,**listnv(n,"&&L_OP_BAD,"),'\n'};
+process_oplist(n,full,{"",*rest}) -> process_oplist(n+1,full,rest);
+process_oplist(n,full,{name,*rest}) -> process_oplist(0,{*full,**listnv(n,"&&L_OP_BAD,"),'&&L_',*name,','},rest);
+
+add_single_defs(defs,oplist,{}) -> defs,oplist;
+add_single_defs(defs,oplist,{op,*rest}) -> add_single_defs(generate_define_list(defs,oplist,{'OP_',*upper_snake_case({},true,op_name(op))},op),rest);
+
+generate_inc_files_aux(defs,oplist,dis,exec,branch,{}) -> defs,oplist,dis,exec,branch;
+generate_inc_files_aux(defs,oplist,dis,exec,branch,{op,*rest})
+    update generate_inc_files_op(defs,oplist,dis,exec,branch,op,op,opclass(op),opclass_encode(opclass(op))) => defs,oplist,dis,exec,branch
+    -> generate_inc_files_aux(defs,oplist,dis,exec,branch,rest);
+
+generate_inc_files_op(defs,oplist,dis,exec,branch,opb,op,class,a,b,z,s,sd)
+    -> generate_inc_z(defs,oplist,dis,exec,branch,{'OP_',*upper_snake_case({},true,op_name(op))},opb,op,class,a,b,z,s,sd);
+
+generate_inc_z(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,16,s,sd) -> generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,16,s,sd,'X');
+generate_inc_z(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,z,s,sd)
+    update generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,0,s,sd,'U') => defs,oplist,dis,exec,branch
+    update generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op+(1<<z),class,a,b,1,s,sd,'I') => defs,oplist,dis,exec,branch
+    -> defs,oplist,dis,exec,branch;
+
+generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,z,16,sd,'X') -> generate_inc_sd(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,16,sd);
+generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,z,16,sd,zc) -> generate_inc_sd(defs,oplist,dis,exec,branch,{*name,zc},opb,op,a,b,z,16,sd);
+generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,2,a,b,0,s,sd,zc)
+    -> generate_inc_sd(defs,oplist,dis,exec,branch,{*name,'_',zc,'64'},opb,op+(3<<s),a,b,0,3,sd);
+generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,z,s,sd,zc)
+    update generate_inc_sd(defs,oplist,dis,exec,branch,{*name,'_',zc,'8'},opb,op,a,b,z,0,sd) => defs,oplist,dis,exec,branch
+    update generate_inc_sd(defs,oplist,dis,exec,branch,{*name,'_',zc,'16'},opb,op+(1<<s),a,b,z,1,sd) => defs,oplist,dis,exec,branch
+    update generate_inc_sd(defs,oplist,dis,exec,branch,{*name,'_',zc,'32'},opb,op+(2<<s),a,b,z,2,sd) => defs,oplist,dis,exec,branch
+    update generate_inc_sd(defs,oplist,dis,exec,branch,{*name,'_',zc,'64'},opb,op+(3<<s),a,b,z,3,sd) => defs,oplist,dis,exec,branch
+    -> defs,oplist,dis,exec,branch;
+
+generate_inc_sd(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,16) -> generate_inc_a(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,16);
+generate_inc_sd(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,sd)
+    update generate_inc_a(defs,oplist,dis,exec,branch,{*name,'_D8'},opb,op,a,b,z,s,0) => defs,oplist,dis,exec,branch
+    update generate_inc_a(defs,oplist,dis,exec,branch,{*name,'_D16'},opb,op+(1<<sd),a,b,z,s,1) => defs,oplist,dis,exec,branch
+    update generate_inc_a(defs,oplist,dis,exec,branch,{*name,'_D32'},opb,op+(2<<sd),a,b,z,s,2) => defs,oplist,dis,exec,branch
+    update generate_inc_a(defs,oplist,dis,exec,branch,{*name,'_D64'},opb,op+(3<<sd),a,b,z,s,3) => defs,oplist,dis,exec,branch
+    -> defs,oplist,dis,exec,branch;
+
+generate_inc_a(defs,oplist,dis,exec,branch,name,opb,op,16,b,z,s,sd) -> generate_inc_b(defs,oplist,dis,exec,branch,name,opb,op,16,b,z,s,sd);
+generate_inc_a(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,sd)
+    update generate_inc_b(defs,oplist,dis,exec,branch,{*name,'_AREG'},opb,op,0,b,z,s,sd) => defs,oplist,dis,exec,branch
+    update generate_inc_b(defs,oplist,dis,exec,branch,{*name,'_AIMM'},opb,op+(1<<a),1,b,z,s,sd) => defs,oplist,dis,exec,branch
+    -> defs,oplist,dis,exec,branch;
+
+generate_inc_b(defs,oplist,dis,exec,branch,name,opb,op,a,16,z,s,sd) -> generate_inc_final(defs,oplist,dis,exec,branch,name,opb,op,a,16,z,s,sd);
+generate_inc_b(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,sd)
+    update generate_inc_final(defs,oplist,dis,exec,branch,{*name,'_BREG'},opb,op,a,0,z,s,sd) => defs,oplist,dis,exec,branch
+    update generate_inc_final(defs,oplist,dis,exec,branch,{*name,'_BIMM'},opb,op+(1<<b),a,1,z,s,sd) => defs,oplist,dis,exec,branch
+    -> defs,oplist,dis,exec,branch;
+
+generate_inc_final(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,sd) when sd==16 || sd>s // extend only generates when actually an extend
+    update generate_define_list(defs,oplist,name,op) => defs,oplist
+    match opclass(opb) => class
+    match has_label(opb) => has_lbl,
+    match generate_dis(class,has_lbl,opb,a,b,z,s,sd) => dis1
+    match generate_exec(class,has_lbl,opb,a,b,z,s,sd) => exec1
+    -> defs,oplist,{*dis,'case ',*name,':{fprintf(out,',*dis1,');} break;\n'},{*exec,'CASE(',*name,') {\n\t',*exec1,';\n} NEXT();\n'},{*branch,*add_label_case(has_lbl,name)};
+generate_inc_final(defs,oplist,dis,exec,branch,_,_,_,_,_,_,_,_) -> defs,oplist,dis,exec,branch;
+
+add_label_case(false,_) -> "";
+add_label_case(true,name) -> {'case ',*name,':\n'};
+
+generate_dis(1,_,opb,a,b,_,s,_) -> {'"let.x',*size_from_s(s),' r%u = ',*d_get_binding(a,1),*op_symbol(opb),*d_get_binding(b,1),'",opv->fdst.a,',*d_get_bind_val(a,1,'1'),',',*d_get_bind_val(b,1,'2')};
+generate_dis(2,has_lbl,opb,a,b,z,s,_)
+    -> {*d_class2_start(has_lbl,z,s),*d_get_binding(a,z),*op_symbol(opb),*d_get_binding(b,z),'",',*d_class2_mid(has_lbl),*d_get_bind_val(a,z,'1'),',',*d_get_bind_val(b,z,'2'),*d_class2_end(has_lbl)};
+generate_dis(3,_,OpStore,a,_,_,s,_) -> {'"store.x',*size_from_s(s),' (r%u+%d) = ',*d_get_binding(a,1),'",opv->fdst.a,(int32_t)opv->fdst.b,',*d_get_bind_val(a,1,'1')};
+generate_dis(3,_,opb,a,_,_,s,_) -> {'"let.x',*size_from_s(s),' r%u = ',*op_symbol(opb),*d_get_binding(a,1),'",opv->fdst.a,',*d_get_bind_val(a,1,'1')};
+generate_dis(4,_,OpTrunc,_,_,_,s,_) -> {'"trunc.x',*size_from_s(s),' r%u = r%u",opv->fdst.a,opv->fsrc1.a'};
+generate_dis(4,_,OpLoad,_,_,_,s,_) -> {'"load.x',*size_from_s(s),' r%u = (r%u+%d)",opv->fdst.a,opv->fsrc1.a,(int32_t)opv->fsrc1.b'};
+generate_dis(5,has_lbl,opb,a,b,_,_,_)
+    -> {*d_class5_start(has_lbl),*d_get_binding(a,1),*op_symbol(opb),*d_get_binding(b,1),'",',*d_class2_mid(has_lbl),*d_get_bind_val(a,1,'1'),',',*d_get_bind_val(b,1,'2'),*d_class2_end(has_lbl)};
+generate_dis(6,_,OpSext,_,_,_,s,sd) -> {'"sext.i',*size_from_s(s),'.i',*size_from_s(sd),' r%u = r%u",opv->fdst.a,opv->fsrc1.a'};
+generate_dis(7,_,opb,a,_,_,_,_) -> {'"let r%u = ',*op_symbol(opb),*d_get_binding(a,1),'",opv->fdst.a,',*d_get_bind_val(a,1,'1')};
+
+generate_exec(1,_,opb,a,b,_,s,_) -> {'R[opv->fdst.a]=',*e_size_from_s(s),'(',*e_get_bind_val(a,'1'),*e_op_symbol(opb),*e_get_bind_val(b,'2'),')'};
+generate_exec(2,has_lbl,opb,a,b,z,s,_)
+    -> {*e_class2_start(has_lbl),'(uint',*size_from_s(s),'_t)((',*e_signed_size_from_s(z,s),*e_get_bind_val(a,'1'),')',*e_op_symbol(opb),'(',*e_signed_size_from_s(z,s),*e_get_bind_val(b,'2'),'))',*e_class2_end(has_lbl)};
+generate_exec(3,_,OpStore,a,_,_,s,_) -> {'uint',*size_from_s(s),'_t v=',*e_get_bind_val(a,'1'),';\n\tmemcpy((void*)(R[opv->fdst.a]+(int32_t)opv->fdst.b),&v,sizeof(v))'};
+generate_exec(3,_,opb,a,_,_,s,_) -> {'R[opv->fdst.a]=',*e_size_from_s(s),'(',*e_op_symbol(opb),*e_get_bind_val(a,'1'),')'};
+generate_exec(4,_,OpTrunc,_,_,_,s,_) -> {'R[opv->fdst.a]=(uint',*size_from_s(s),'_t)',*e_get_bind_val(0,'1')};
+generate_exec(4,_,OpLoad,_,_,_,s,_) -> {'uint',*size_from_s(s),'_t v;\n\tmemcpy(&v,(void*)(R[opv->fsrc1.a]+(int32_t)opv->fsrc1.b),sizeof(v));\n\tR[opv->fdst.a]=v'};
+generate_exec(5,has_lbl,opb,a,b,_,_,_)
+    -> {*e_class2_start(has_lbl),*e_get_bind_val(a,'1'),*e_op_symbol(opb),*e_get_bind_val(b,'2'),*e_class2_end(has_lbl)};
+generate_exec(6,_,OpSext,_,_,_,s,sd) -> {'R[opv->fdst.a]=',*e_signed_size_from_s(0,sd),*e_signed_size_from_s(1,s),*e_get_bind_val(0,'1')};
+generate_exec(7,_,opb,a,_,_,_,_) -> {'R[opv->fdst.a]=',*e_op_symbol(opb),*e_get_bind_val(a,'1')};
+generate_exec(class,has_lbl,opb,a,b,z,s,sd) -> "unknown";
+
+d_class2_start(false,z,s) -> {'"let.',*d_signed_size_from_s(z,s),' r%u = '};
+d_class2_start(true,z,s) -> {'"if.',*d_signed_size_from_s(z,s),' '};
+
+d_class5_start(false) -> {'"let r%u = '};
+d_class5_start(true) -> {'"if '};
+
+d_class2_mid(false) -> "opv->fdst.a,";
+d_class2_mid(true) -> "";
+
+d_class2_end(false) -> "";
+d_class2_end(true) -> "); program_display_label_both(program,out,opv";
+
+d_get_binding(0,_) -> "r%u";
+d_get_binding(1,0) -> "%\" PRIu64 \"";
+d_get_binding(1,1) -> "%\" PRId64 \"";
+
+d_get_bind_val(0,_,c) -> {'opv->fsrc',c,'.a'};
+d_get_bind_val(1,0,c) -> {'((uint64_t)opv->src',c,')'};
+d_get_bind_val(1,1,c) -> {'((int64_t)opv->src',c,')'};
+
+size_from_s(0) -> "8";
+size_from_s(1) -> "16";
+size_from_s(2) -> "32";
+size_from_s(3) -> "64";
+
+d_signed_size_from_s(0,s) -> {'u',*size_from_s(s)};
+d_signed_size_from_s(1,s) -> {'i',*size_from_s(s)};
+
+e_signed_size_from_s(0,s) -> {'(uint',*size_from_s(s),'_t)'};
+e_signed_size_from_s(1,s) -> {'(int',*size_from_s(s),'_t)'};
+
+e_class2_start(false) -> "R[opv->fdst.a]=";
+e_class2_start(true) -> "if(";
+
+e_class2_end(false) -> "";
+e_class2_end(true) -> "){opvb=code+opv->fdst.a;}";
+
+e_size_from_s(0) -> "(uint8_t)";
+e_size_from_s(1) -> "(uint16_t)";
+e_size_from_s(2) -> "(uint32_t)";
+e_size_from_s(3) -> "(uint64_t)";
+
+e_get_bind_val(0,c) -> {'R[opv->fsrc',c,'.a]'};
+e_get_bind_val(1,c) -> {'opv->src',c};
+
+e_op_symbol(OpMod) -> "%";
+e_op_symbol(OpUnaryMinus) -> "0-";
+e_op_symbol(x) -> op_symbol(x);
+
+op_symbol(OpPlus) -> "+";
+op_symbol(OpMinus) -> "-";
+op_symbol(OpTimes) -> "*";
+op_symbol(OpShiftLeft) -> "<<";
+op_symbol(OpLt) -> "<";
+op_symbol(OpLte) -> "<=";
+op_symbol(OpCompLtBr) -> "<";
+op_symbol(OpCompLteBr) -> "<=";
+op_symbol(OpShiftRight) -> ">>";
+op_symbol(OpDiv) -> "/";
+op_symbol(OpMod) -> "%%";
+op_symbol(OpUnaryMinus) -> "-";
+op_symbol(OpBitNot) -> "~";
+op_symbol(OpNot) -> "!";
+op_symbol(OpEqual) -> "==";
+op_symbol(OpNotEqual) -> "!=";
+op_symbol(OpCompEqBr) -> "==";
+op_symbol(OpCompNeqBr) -> "!=";
+op_symbol(OpAnd) -> "&";
+op_symbol(OpOr) -> "|";
+op_symbol(OpXor) -> "^";
+op_symbol(OpMove) -> "";
+
+generate_define_list(defs,oplist,name,op)
+    match nth(op,oplist) => {}
+    update nth_insert(op,name,oplist) => oplist
+    -> {*defs,'#define ',*name,' 0x',*int_to_hex(3,{},op),'\n'},oplist;
+
+int_to_hex(0,sofar,_) -> sofar;
+int_to_hex(n,sofar,v) when v&15<10 -> int_to_hex(n-1,{'0'+(v&15),*sofar},v>>4);
+int_to_hex(n,sofar,v)-> int_to_hex(n-1,{'A'+(v&15)-10,*sofar},v>>4);
+
+nth(0,{a,*_}) -> a;
+nth(n,{_,*rest}) -> nth(n-1,rest);
+
+nth_insert(n,v,target) -> nth_insert_aux(n,v,{},target);
+
+nth_insert_aux(0,v,sofar,{_,*rest}) -> {*sofar,v,*rest};
+nth_insert_aux(n,v,sofar,{a,*rest}) -> nth_insert_aux(n-1,v,{*sofar,a},rest);
+
+listnv(n,v) -> listn_aux(0,n,{},v);
+
+listn_aux(n,n,sofar,v) -> sofar;
+listn_aux(n,m,sofar,v) -> listn_aux(n+1,m,{*sofar,v},v);
+
+to_uppercase(c) when c>='a' when c<='z' -> c-32;
+to_uppercase(c) -> c;
+
+upper_snake_case(sofar,_,{}) -> sofar;
+upper_snake_case(sofar,false,{c,*rest}) when c>='A' when c<='Z' -> upper_snake_case({*sofar,'_',c},false,rest);
+upper_snake_case(sofar,_,{c,*rest}) -> upper_snake_case({*sofar,to_uppercase(c)},false,rest);
+

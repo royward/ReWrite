@@ -21,17 +21,17 @@
 #include <sstream>
 #include "token.hpp"
 
-std::string lex_string(std::string_view program, std::size_t& p, char term) {
+std::string lex_string(std::string_view code, std::size_t& p, char term) {
     std::string result;
-    std::size_t len=program.length();
+    std::size_t len=code.length();
     while(p<len) {
-        char c=program[p];
+        char c=code[p];
         p++;
         if(c==term) {
             return result;
         }
         if(c=='\\' && p<len) {
-            char esc=program[p];
+            char esc=code[p];
             p++;
             switch(esc) {
                 case 't': c='\t'; break;
@@ -48,9 +48,9 @@ std::string lex_string(std::string_view program, std::size_t& p, char term) {
     throw std::runtime_error(msg.str());
 }
 
-std::vector<Token> lex(std::string_view program) {
+std::vector<Token> lex(uint32_t file_id, std::string_view code) {
     std::vector<Token> result;
-    std::size_t len=program.length();
+    std::size_t len=code.length();
     std::size_t p=0;
     std::size_t offset_start_of_row=0;
     uint32_t row=0;
@@ -59,15 +59,15 @@ std::vector<Token> lex(std::string_view program) {
         bool use_transformed_string=false;
         std::string transformed_string;
         std::size_t start_p=p;
-        char c=program[p++];
+        char c=code[p++];
         if(c=='_' || c=='@' || std::isalpha(static_cast<unsigned char>(c))) {
-            while(p<len && (program[p]=='_' || program[p]=='@' || std::isalpha(static_cast<unsigned char>(program[p])) || std::isdigit(static_cast<unsigned char>(program[p])))) {
+            while(p<len && (code[p]=='_' || code[p]=='@' || std::isalpha(static_cast<unsigned char>(code[p])) || std::isdigit(static_cast<unsigned char>(code[p])))) {
                 p++;
             }
             if(c=='_' && p==start_p+1) {
                 token_kind=Wildcard;
             } else {
-                std::string_view sub=program.substr(start_p, p-start_p);
+                std::string_view sub=code.substr(start_p, p-start_p);
                 if(sub=="true") {
                     token_kind=True;
                 } else if(sub=="false") {
@@ -85,7 +85,7 @@ std::vector<Token> lex(std::string_view program) {
                 } else if(sub=="when") {
                     token_kind=When;
                 } else if(sub=="type") {
-                    while(p<len && program[p]!=';') {
+                    while(p<len && code[p]!=';') {
                         p++;
                     }
                     if(p<len)p++;
@@ -95,7 +95,7 @@ std::vector<Token> lex(std::string_view program) {
                 }
             }
         } else if(std::isdigit(static_cast<unsigned char>(c))) {
-           while(p<len && std::isdigit(static_cast<unsigned char>(program[p]))) {
+           while(p<len && std::isdigit(static_cast<unsigned char>(code[p]))) {
                 p++;
             }
             token_kind=UnsignedInteger;
@@ -118,9 +118,9 @@ std::vector<Token> lex(std::string_view program) {
                 case '+':token_kind=Plus; break;
                 case '~':token_kind=Tilda; break;
                 case '/': {
-                    if(p<len && program[p]=='/') {
+                    if(p<len && code[p]=='/') {
                         p++;
-                        while(p<len && program[p]!='\n') {
+                        while(p<len && code[p]!='\n') {
                             p++;
                         }
                         continue; // no token produced for comments
@@ -131,7 +131,7 @@ std::vector<Token> lex(std::string_view program) {
                 case '%':token_kind=Modulus; break;
                 case '^':token_kind=Xor; break;
                 case '-': {
-                    if(p<len && program[p]=='>') {
+                    if(p<len && code[p]=='>') {
                         p++;
                         token_kind=Arrow;
                     } else {
@@ -139,10 +139,10 @@ std::vector<Token> lex(std::string_view program) {
                     }
                 } break;
                 case '<': {
-                    if(p<len && program[p]=='=') {
+                    if(p<len && code[p]=='=') {
                         p++;
                         token_kind=LessEqual;
-                    } else if(p<len && program[p]=='<') {
+                    } else if(p<len && code[p]=='<') {
                         p++;
                         token_kind=ShiftLeft;
                     } else {
@@ -150,10 +150,10 @@ std::vector<Token> lex(std::string_view program) {
                     }
                 } break;
                 case '>': {
-                    if(p<len && program[p]=='=') {
+                    if(p<len && code[p]=='=') {
                         p++;
                         token_kind=GreaterEqual;
-                    } else if(p<len && program[p]=='>') {
+                    } else if(p<len && code[p]=='>') {
                         p++;
                         token_kind=ShiftRight;
                     } else {
@@ -161,7 +161,7 @@ std::vector<Token> lex(std::string_view program) {
                     }
                 } break;
                 case '!': {
-                    if(p<len && program[p]=='=') {
+                    if(p<len && code[p]=='=') {
                         p++;
                         token_kind=NotEqual;
                     } else {
@@ -169,10 +169,10 @@ std::vector<Token> lex(std::string_view program) {
                     }
                 } break;
                 case '=': {
-                    if(p<len && program[p]=='=') {
+                    if(p<len && code[p]=='=') {
                         p++;
                         token_kind=EqualEqual;
-                    } else if(p<len && program[p]=='>') {
+                    } else if(p<len && code[p]=='>') {
                         p++;
                         token_kind=DoubleArrow;
                     } else {
@@ -180,8 +180,8 @@ std::vector<Token> lex(std::string_view program) {
                     }
                 } break;
                 case ':': {
-                    if(p<len && program[p]=='-') {
-                        while(p<len && program[p]!=';') {
+                    if(p<len && code[p]=='-') {
+                        while(p<len && code[p]!=';') {
                             p++;
                         }
                         if(p<len)p++;
@@ -194,7 +194,7 @@ std::vector<Token> lex(std::string_view program) {
                     token_kind=Dot;
                 } break;
                 case '&': {
-                    if(p<len && program[p]=='&') {
+                    if(p<len && code[p]=='&') {
                         p++;
                         token_kind=AndAnd;
                     } else {
@@ -202,7 +202,7 @@ std::vector<Token> lex(std::string_view program) {
                     }
                 } break;
                 case '|': {
-                    if(p<len && program[p]=='|') {
+                    if(p<len && code[p]=='|') {
                         p++;
                         token_kind=OrOr;
                     } else {
@@ -210,10 +210,10 @@ std::vector<Token> lex(std::string_view program) {
                     }
                 } break;
                 case '#': {
-                    while(p<len && std::isalpha(program[p])) {
+                    while(p<len && std::isalpha(code[p])) {
                         p++;
                     }
-                    std::string_view sub=program.substr(start_p, p-start_p);
+                    std::string_view sub=code.substr(start_p, p-start_p);
                     if(sub=="#never") {
                         token_kind=HashNever;
                     } else if(sub=="#error") {
@@ -227,12 +227,12 @@ std::vector<Token> lex(std::string_view program) {
                 case '\'': {
                     token_kind=Chars;
                     use_transformed_string=true;
-                    transformed_string=lex_string(program,p,'\'');
+                    transformed_string=lex_string(code,p,'\'');
                 } break;
                 case '\"': {
                     token_kind=String;
                     use_transformed_string=true;
-                    transformed_string=lex_string(program,p,'\"');
+                    transformed_string=lex_string(code,p,'\"');
                 } break;
                 default: {
                     std::ostringstream msg;
@@ -242,14 +242,15 @@ std::vector<Token> lex(std::string_view program) {
             }
         }
         result.push_back(Token{token_kind,
-            use_transformed_string?transformed_string:static_cast<std::string>(program.substr(start_p, p - start_p)),
+            use_transformed_string?transformed_string:static_cast<std::string>(code.substr(start_p, p - start_p)),
+            file_id,
             row,
             static_cast<uint32_t>(start_p - offset_start_of_row),
             static_cast<uint32_t>(p - offset_start_of_row),
         });
     }
     // put a sentinel Eof at the end
-    result.push_back(Token{Eof,"",row,static_cast<uint32_t>(p - offset_start_of_row),static_cast<uint32_t>(p - offset_start_of_row)});
+    result.push_back(Token{Eof,"",file_id,row,static_cast<uint32_t>(p - offset_start_of_row),static_cast<uint32_t>(p - offset_start_of_row)});
     return result;
 }
 

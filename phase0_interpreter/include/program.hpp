@@ -24,6 +24,7 @@
 #include <memory>
 #include <string>
 #include <optional>
+#include <utility>
 #include <unordered_map>
 #include "data_element.hpp"
 #include "token_kind.hpp"
@@ -93,10 +94,11 @@ struct VecDataElement {
 
 class Program {
 public:
-    Program(std::string_view source, bool fast);
+    Program(std::vector<std::pair<std::string,std::string> > source, bool fast);
     //std::vector<DataElement> run(const std::string& fn, const std::vector<DataElement>& args) const;
     bool fast;
     std::vector<DataElement> run_string(std::string& call);
+    std::vector<DataElement> run_string_args(const std::string& call, std::unordered_map<std::string, std::size_t> param_id_map, std::vector<DataElement> args);
 private:
     void do_call_single(const Expression& expression, std::vector<DataElement>& bindings, VecDataElement& sofar) const;
     void do_call_multi(const std::vector<Expression>& expressions, std::vector<DataElement>& bindings, VecDataElement& sofar) const;
@@ -109,6 +111,7 @@ private:
     Expression parse_expression(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, uint8_t pri);
     std::vector<Expression> parse_expression_list(Parser& parser, std::unordered_map<std::string, std::size_t> &param_id_map, SixTokenKind end, TokenKind sep);
     // data
+    std::vector<std::string> filenames;
     std::vector<std::vector<Rule>> program;
     std::vector<std::string> function_names; // debugging only
     std::unordered_map<std::string, std::size_t> function_map; // only for lookups for call

@@ -108,6 +108,9 @@ struct DataElement {
     uint32_t last_match=0;
 
     std::string to_string() const;
+    std::string get_string() const;
+    std::vector<uint64_t> get_vec_u64() const;
+    static void push_string(std::vector<DataElement>& sofar, std::string_view s);
     DataElement() = default;
     DataElement(DataVariant val) : value(std::move(val)), last_match(0) {}
     DataElement(const DataElement& other) : value(other.value), last_match(other.last_match) {}
