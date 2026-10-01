@@ -80,8 +80,4 @@ enum TokenKind {
     PrintLn,
     PrintLnAny,
     PrintLnDebug,
-    LoadTextFile,
-    LoadTextFileLines,
-    SaveTextFile,
-    SaveBinaryFile,
 };

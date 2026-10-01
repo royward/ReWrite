@@ -98,7 +98,7 @@ generate_inc_files()
     match process_oplist(0,{},oplist) => oplist2
     -> defs,oplist2,dis,exec,branch;
 
-process_oplist(n,full,{}) -> {*full,**listnv(n,"&&L_OP_BAD,")};
+process_oplist(n,full,{}) -> {*full,**listnv(n,"&&L_OP_BAD,"),'\n'};
 process_oplist(n,full,{"",*rest}) -> process_oplist(n+1,full,rest);
 process_oplist(n,full,{name,*rest}) -> process_oplist(0,{*full,**listnv(n,"&&L_OP_BAD,"),'&&L_',*name,','},rest);
 
