@@ -881,7 +881,7 @@ generate_bind_variable(types,count,true,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,
 generate_bind_variable_aux(ctx,bind,code,{}) -> ctx,bind,code;
 generate_bind_variable_aux(ctx,bind,code,{{BindReg,src,sz},*rest}) -> generate_bind_variable_aux(ctx,{*bind,{BindReg,src,sz}},code,rest);
 generate_bind_variable_aux(ctx,bind,code,{{src_flag,src,sz},*rest})
-    update ctx_newreg(ctx,1<<get_size_scale(sz)) => ctx,newreg
+    update ctx_newreg(ctx,sz) => ctx,newreg
     -> generate_bind_variable_aux(ctx,{*bind,{BindReg,newreg,sz}},{*code,{ctx_fnr(ctx),OpMove,get_size_scale(sz),BindReg,newreg,src_flag,src}},rest);
 
 if(false,_,y) -> y;
@@ -982,9 +982,27 @@ generate_expr_code_aux(post_arrow,types,ctx,stypes,{ExprList,elements}) @match d
     update generate_expr_code_aux_map(post_arrow,types,ctx,{},{0,t},elements) => ctx,args_code
     update split_splat({},args_code) => pre_splat,splat,post_splat
     -> generate_expr_code_list(types,ctx,newarray,parray,newstart,sz,stype,pre_splat,splat,post_splat);
+// generate_expr_code_aux(post_arrow,types,ctx,{0,0},{ExprList,{e1,*elements}}) // Deal with type derivation for anonymous list. might need to create type
+//     match generate_expr_code_aux(post_arrow,types,ctx,{0,0},e1) => _,_,_,{{_,t,_},*_} // just want the type
+//     @match nth(stype,types) => {_,_,{DerivedTypeArray,t},_}
+//     // Array - go get the elements then come back to allocate
+//     update ctx_newreg(ctx,32) => ctx,newarray
+//     update ctx_newreg(ctx,64) => ctx,parray
+//     update ctx_newreg(ctx,32) => ctx,newstart
+//     match nth(t,types) => {_,_,_,subsz}
+//     match sum_sub_alloc(0,subsz) => sz
+//     update generate_expr_code_aux_map(post_arrow,types,ctx,{},{0,t},elements) => ctx,args_code
+//     update split_splat({},args_code) => pre_splat,splat,post_splat
+//     -> generate_expr_code_list(types,ctx,newarray,parray,newstart,sz,stype,pre_splat,splat,post_splat);
 generate_expr_code_aux(post_arrow,types,ctx,{0,t},{ExprSplat,arg})
-    update generate_expr_code_aux(post_arrow,types,ctx,{0,t},arg) => ctx,false,code,splatdata -> // TODO replace true by subsplat, deal with **
+    @update generate_expr_code_aux(post_arrow,types,ctx,{0,t},arg) => ctx,false,code,splatdata ->
     ctx,true,code,splatdata;
+generate_expr_code_aux(post_arrow,types,ctx,{0,t},{ExprSplat,arg})
+    update generate_expr_code_aux(post_arrow,types,ctx,{0,t},arg) => ctx,true,code,{{{{BindReg,array,32},{BindReg,start,32}},tp,1}}
+    match nth(tp,types) => {_,_,{2,tp2},_}
+    match nth(tp2,types) => tp3
+    -> println_any(t,tp,tp2,tp3),
+    println_any(true,code),#never;
 
 generate_expr_code_list(types,ctx,newarray,parray,newstart,sz,stype,args_code,{},{}) // no splats
     update array_fixed_elt_assign(sz,ctx,parray,0,{},args_code) => c,code
