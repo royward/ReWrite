@@ -134,6 +134,11 @@ int main(int argc, char** argv) {
     if(!ret_code && sz==1000 && array[999]==7919) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
     free(array);
 
+    printf("test_match_list:");
+    exe->allocated=0;
+    ret_code=rw_test_match_list(exe,&result0);
+    if(!ret_code && result0==2) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
     printf("Heap size=%d\n",exe->end_of_heap*8);
 
     program_unload(&p);

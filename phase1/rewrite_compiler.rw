@@ -819,7 +819,7 @@ generate_param_code(post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamL
         {ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},
         {ctx_fnr(ctx),OpLoad,3,0,BindReg,pend,0,parray+(8<<32)},
         {ctx_fnr(ctx),OpMinus,xt(TypeU32),BindReg,len,BindReg,pend,src_flag2,src2},*code,
-        {ctx_fnr(ctx),OpLeaScale,0,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,sz_tot>>3},
+        {ctx_fnr(ctx),if(src_flag2==BindReg,OpLeaScaleReg,OpLeaScaleImm),0,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,sz_tot>>3},
         *code1},{*sofar1,*codefree,*code2},type_left,rest);
 generate_param_code(post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{access,t,_},*_},{{ParamSplatWild,{}}}) // note: no rest here
     match gen_types_deref_free(true,ctx,tp,{{src_flag1,src1,32},{src_flag2,src2,32}}) => codefree
@@ -992,19 +992,21 @@ generate_expr_code_aux(post_arrow,ctx,stypes,{ExprList,elements}) @match decompo
     update generate_expr_code_aux_map(post_arrow,ctx,{},{0,t},elements) => ctx,args_code
     update split_splat({},args_code) => pre_splat,splat,post_splat
     -> generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,pre_splat,splat,post_splat);
-// generate_expr_code_aux(post_arrow,ctx,{0,0},{ExprList,{e1,*elements}}) // Deal with type derivation for anonymous list. might need to create type
-//     match ctx_get_types(ctx) => types
-//     match generate_expr_code_aux(post_arrow,ctx,{0,0},e1) => _,_,_,{{_,t,_},*_} // just want the type of first elt (error if there isn't one)
-//     @match nth(stype,ctx_get_types(ctx)) => {_,_,{DerivedTypeArray,t},_}
-//     // Array - go get the elements then come back to allocate
-//     update ctx_newreg(ctx,32) => ctx,newarray
-//     update ctx_newreg(ctx,64) => ctx,parray
-//     update ctx_newreg(ctx,32) => ctx,newstart
-//     match nth(t,ctx_get_types(ctx)) => {_,_,_,subsz}
-//     match sum_sub_alloc(0,subsz) => sz
-//     update generate_expr_code_aux_map(post_arrow,ctx_get_types(ctx),ctx,{},{0,t},elements) => ctx,args_code
-//     update split_splat({},args_code) => pre_splat,splat,post_splat
-//     -> generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,pre_splat,splat,post_splat);
+generate_expr_code_aux(post_arrow,ctx,{0,0},{ExprList,{e1,*elements}}) // Deal with type derivation for anonymous list. might need to create type
+    match ctx_get_types_and_lookup(ctx) => types,type_lookup
+    update generate_expr_code_aux(post_arrow,ctx,{0,0},e1) => ctx,_,_,{{_,t,_},*_} // just want the type of first elt (error if there isn't one)
+    update create_type_list(t,types,type_lookup) => stype,types,type_lookup
+    update ctx_set_types_and_lookup(ctx,types,type_lookup) => ctx
+    match nth(stype,types) => {_,_,_,storage}
+    // Array - go get the elements then come back to allocate
+    update ctx_newreg(ctx,32) => ctx,newarray
+    update ctx_newreg(ctx,64) => ctx,parray
+    update ctx_newreg(ctx,32) => ctx,newstart
+    match nth(t,types) => {_,_,_,subsz}
+    match sum_sub_alloc(0,subsz) => sz
+    update generate_expr_code_aux_map(post_arrow,ctx,{},{0,t},{e1,*elements}) => ctx,args_code
+    update split_splat({},args_code) => pre_splat,splat,post_splat
+    -> generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,pre_splat,splat,post_splat);
 generate_expr_code_aux(post_arrow,ctx,{0,t},{ExprSplat,arg})
     @update generate_expr_code_aux(post_arrow,ctx,{0,t},arg) => ctx,false,code,splatdata ->
     ctx,true,code,splatdata;

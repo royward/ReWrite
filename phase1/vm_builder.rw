@@ -51,7 +51,8 @@ op_name(OpCall) -> "Call";
 op_name(OpRet) -> "Ret";
 op_name(OpGoto) -> "Goto";
 op_name(OpLea) -> "Lea";
-op_name(OpLeaScale) -> "LeaScale";
+op_name(OpLeaScaleReg) -> "LeaScaleReg";
+op_name(OpLeaScaleImm) -> "LeaScaleImm";
 op_name(OpError) -> "Error";
 op_name(OpCallIO) -> "CallIO";
 op_name(OpAlloc) -> "Alloc";
@@ -77,7 +78,7 @@ all_gen_ops() ->
     OpStore,OpLoad,OpTrunc,OpMove,OpUnaryMinus,OpBitNot,OpNot,
     OpEqual,OpNotEqual,OpCompEqBr,OpCompNeqBr,OpAnd,OpOr,OpXor,OpSext};
 
-all_single_ops() -> {OpZext,OpLabel,OpCall,OpRet,OpGoto,OpLea,OpLeaScale,OpError,OpCallIO,
+all_single_ops() -> {OpZext,OpLabel,OpCall,OpRet,OpGoto,OpLea,OpLeaScaleReg,OpLeaScaleImm,OpError,OpCallIO,
     OpAlloc,OpReallocFixed,OpReallocVar,OpEmptyList,OpDerefFree,OpDerefFreeList,OpIncMem,OpCont,OpPrependImm,OpPrependReg,OpAppendImm,OpAppendReg,OpAppendSplat,OpAppendSplatConsume,OpExtractList};
 
 has_label(OpCompLtBr) -> true;

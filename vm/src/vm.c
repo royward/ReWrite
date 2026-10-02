@@ -235,8 +235,11 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
         case OP_LEA: {
             fprintf(out,"let.p r%u = lea r%u",opv->fdst.a,opv->fsrc1.a);
         } break;
-        case OP_LEA_SCALE: {
+        case OP_LEA_SCALE_REG: {
             fprintf(out,"let.p r%u = lea_scale r%u+r%u*%d",opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a,opv->fdst.b);
+        } break;
+        case OP_LEA_SCALE_IMM: {
+            fprintf(out,"let.p r%u = lea_scale r%u+%ld*%d",opv->fdst.a,opv->fsrc1.a,opv->src2,opv->fdst.b);
         } break;
         case OP_ALLOC: {
             fprintf(out,"let r%u = alloc %ld*%ld",opv->fdst.a,opv->src1,opv->src2);
@@ -443,9 +446,14 @@ dispatch:
                 uint64_t val = R[opv->fsrc1.a];
                 R[opv->fdst.a] = ((uint64_t)exe->heap8)+val*8;
             } NEXT();
-            CASE(OP_LEA_SCALE) {
+            CASE(OP_LEA_SCALE_REG) {
                 uint64_t val = R[opv->fsrc1.a];
                 uint64_t offset = R[opv->fsrc2.a];
+                R[opv->fdst.a] = val+offset*opv->fdst.b;
+            } NEXT();
+            CASE(OP_LEA_SCALE_IMM) {
+                uint64_t val = R[opv->fsrc1.a];
+                int64_t offset = opv->fsrc2.a;
                 R[opv->fdst.a] = val+offset*opv->fdst.b;
             } NEXT();
             CASE(OP_ALLOC) {

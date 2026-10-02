@@ -151,8 +151,8 @@ attack(c,offset,{}) -> false;
 attack(c,offset,{x,*rest}) when c+offset==x || c-offset==x -> true;
 attack(c,offset,{_,*rest}) -> attack(c,offset+1,rest);
 
-// :- export test_match_list() -> i64;
-// test_match_list() match {1,2,3} => {x,*_} -> x;
+:- export test_match_list() -> i64;
+test_match_list() match {1,2,3} => {_,x,*_} -> x;
 
 //:- list_of_lists() -> [string];
 //list_of_lists() -> {"abc","def","ghi"};

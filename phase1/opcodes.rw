@@ -45,7 +45,8 @@ const OpCall=225;
 const OpRet=226;
 const OpGoto=227;
 const OpLea=229;
-const OpLeaScale=230;
+const OpLeaScaleReg=230;
+const OpLeaScaleImm=231;
 
 const OpError=254;
 const OpCallIO=255;
