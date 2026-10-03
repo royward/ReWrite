@@ -160,6 +160,9 @@ test_match_list_list() match {{{false}}} => {{x}} -> x;
 :- export test_match_list_list2() -> bool;
 test_match_list_list2() match {{{false}}} => {{{x}}} -> x;
 
+:- export test_match_list_list3() -> ;
+test_match_list_list3() match {{{false}}} => _ ->;
+
 // :- export test_match_list_string() -> string;
 // test_match_list_string() match {"ab","cd","ef"} => {a,*_} -> a;
 

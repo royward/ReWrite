@@ -140,6 +140,11 @@ int main(int argc, char** argv) {
     ret_code=rw_test_match_list_list2(exe,&resultb);
     if(!ret_code && !resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
 
+    printf("test_match_list_list3:");
+    exe->allocated=0;
+    ret_code=rw_test_match_list_list3(exe);
+    if(!ret_code) { printf("success\n"); } else { printf("fail:%d\n",ret_code); };
+
     printf("len_nqueens:");
     exe->allocated=0;
     ret_code=rw_len_nqueens(exe,8,&result0);

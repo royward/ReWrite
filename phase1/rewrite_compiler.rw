@@ -789,8 +789,9 @@ generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     @update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,{},{{{src_flag,src,sz},_},tp,_},type_left
     @match nth(tp,ctx_get_types(ctx)) => {_,_,{2,_},_}
     update ctx_newreg(ctx,32) => ctx,newreg
+    match gen_types_deref_free(owned,ctx,tp,{{BindReg,newreg,32},{BindReg,newreg,32}}) => free_code
     -> generate_param_code(owned,post_arrow,bindlevel,{},ctx,{*sofar0,*mv_code},
-        {*sofar1,{ctx_fnr(ctx),OpMove,get_size_scale(sz),BindReg,newreg,src_flag,src},{ctx_fnr(ctx),OpDerefFree,0,0,BindReg,newreg}},type_left,rest);
+        {*sofar1,{ctx_fnr(ctx),OpMove,get_size_scale(sz),BindReg,newreg,src_flag,src},*free_code},type_left,rest);
 generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,_,type_left
     -> generate_param_code(owned,post_arrow,bindlevel,newstride,ctx,{*sofar0,*mv_code},sofar1,type_left,rest);
