@@ -764,8 +764,8 @@ generate_param_code(owned,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx ->
     generate_param_code(owned,false,bindlevel,newstride,ctx,{*sofar0,*mv_code,*code},sofar1,type_left,rest);
 generate_param_code(owned,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
-    update gen_param_code_next_type(true,ctx,stride,typex) => ctx,newstride,{{{src_flag,src,sz}},tp,_},type_left
-    update generate_conditional_rhs(ctx,sofar0,tp,{{src_flag,src,sz},{BindImm,val,sz}}) => ctx,code ->
+    update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{{{src_flag,src,sz}},tp,_},type_left
+    update generate_conditional_rhs(ctx,{*sofar0,*mv_code},tp,{{src_flag,src,sz},{BindImm,val,sz}}) => ctx,code ->
     generate_param_code(owned,true,bindlevel,newstride,ctx,code,sofar1,type_left,rest);
 generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
     @update gen_param_code_next_type(false,ctx,stride,typex) => ctx,mv_code,newstride,{{{BindMem,src1,sz},{BindMem,src2,sz}},tp,_},type_left
