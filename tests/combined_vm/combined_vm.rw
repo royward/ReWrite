@@ -154,9 +154,12 @@ attack(c,offset,{_,*rest}) -> attack(c,offset+1,rest);
 :- export test_match_list() -> i64;
 test_match_list() match {1,2,3} => {_,x,*_} -> x;
 
-//:- list_of_lists() -> [string];
-//list_of_lists() -> {"abc","def","ghi"};
+:- export test_match_list_list() -> value [bool];
+test_match_list_list() match {{{false}}} => {{x}} -> x;
 
-//:- export test_splat_splat() -> string;
-//test_splat_splat() -> {**list_of_lists()};
+:- export test_match_list_list2() -> bool;
+test_match_list_list2() match {{{false}}} => {{{x}}} -> x;
+
+// :- export test_match_list_string() -> string;
+// test_match_list_string() match {"ab","cd","ef"} => {a,*_} -> a;
 

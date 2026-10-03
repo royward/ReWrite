@@ -236,10 +236,10 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
             fprintf(out,"let.p r%u = lea r%u",opv->fdst.a,opv->fsrc1.a);
         } break;
         case OP_LEA_SCALE_REG: {
-            fprintf(out,"let.p r%u = lea_scale r%u+r%u*%d",opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a,opv->fdst.b);
+            fprintf(out,"let.p r%u = lea_scale_reg r%u+r%u*%d",opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a,opv->fdst.b);
         } break;
         case OP_LEA_SCALE_IMM: {
-            fprintf(out,"let.p r%u = lea_scale r%u+%ld*%d",opv->fdst.a,opv->fsrc1.a,opv->src2,opv->fdst.b);
+            fprintf(out,"let.p r%u = lea_scale_imm r%u+%ld*%d",opv->fdst.a,opv->fsrc1.a,opv->src2,opv->fdst.b);
         } break;
         case OP_ALLOC: {
             fprintf(out,"let r%u = alloc %ld*%ld",opv->fdst.a,opv->src1,opv->src2);
@@ -251,10 +251,10 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
             fprintf(out,"extractlist uniq(r%u) (r%u,r%u) = (r%u+%d)",opv->fdst.b,opv->fdst.a,opv->fdst.a+1,opv->fsrc1.a,opv->fsrc1.b);
         } break;
         case OP_DEREF_FREE: {
-            fprintf(out,"deref_free r%u",opv->fsrc1.a);
+            fprintf(out,"deref_free r%u",opv->fdst.a);
         } break;
         case OP_DEREF_FREE_LIST: {
-            fprintf(out,"deref_free_list (r%u,r%u)",opv->fsrc1.a,opv->fsrc1.b);
+            fprintf(out,"deref_free_list (r%u)^%u",opv->fdst.a,opv->fdst.b);
         } break;
         case OP_REALLOC_VAR: {
             Operation* opv2=&program->code[i+1];
@@ -332,13 +332,25 @@ void deref_free(RWInstance* exe, uint32_t v) {
     }
 }
 
+void deref_free_n(RWInstance* exe, uint32_t v, uint32_t n) {
+    if(n!=0) {
+        uint32_t* parray=rwu_get_header(exe,v);
+        uint32_t* data=rwu_get_data(parray);
+        uint32_t end=parray[2];
+        for(uint32_t i=0;i<end;i++) {
+            deref_free_n(exe,data[i+i],n-1);
+        }
+    }
+    deref_free(exe,v);
+}
+
 static inline uint32_t max_uint32(uint32_t a, uint32_t b) {
     return (a > b) ? a : b;
 }
 
-#if defined(__GNUC__) && !defined(RW_NO_THREADING)
-#define RW_THREADED 1
-#endif
+// #if defined(__GNUC__) && !defined(RW_NO_THREADING)
+// #define RW_THREADED 1
+// #endif
 
 #ifdef RW_THREADED
   #define CASE(op)     L_##op:
@@ -378,6 +390,7 @@ int program_execute(RWInstance* exe, uint32_t in_lbl) {
 #ifndef RW_THREADED
 dispatch:
 #endif
+    //printf("%ld\n",opvb-code);
     DISPATCH()
     {
 #include "execute.inc"
@@ -623,19 +636,12 @@ dispatch:
                 deref_free(exe,array);
             } NEXT();
             CASE(OP_DEREF_FREE) {
-                uint32_t array=R[opv->fsrc1.a];
+                uint32_t array=R[opv->fdst.a];
                 deref_free(exe,array);
             } NEXT();
             CASE(OP_DEREF_FREE_LIST) {
-                uint32_t array=R[opv->fsrc1.a];
-                //uint32_t start=R[opv->fsrc2.b];
-                uint32_t* parray=rwu_get_header(exe,array);
-                uint32_t* data=rwu_get_data(parray);
-                uint32_t end=parray[2];
-                for(uint32_t i=0;i<end;i++) {
-                    deref_free(exe,data[i+i]);
-                }
-                deref_free(exe,array);
+                uint32_t array=R[opv->fdst.a];
+                deref_free_n(exe,array,opv->fdst.b);
             } NEXT();
            CASE(OP_INC_MEM) {
                 uint8_t* addr=(uint8_t*)(R[opv->fdst.a]+opv->fdst.b);

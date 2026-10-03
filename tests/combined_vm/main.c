@@ -19,6 +19,7 @@ int main(int argc, char** argv) {
     int ret_code;
     size_t sz;
     int64_t* array;
+    bool* arrayb;
 
     printf("f:");
     exe->allocated=0;
@@ -111,11 +112,33 @@ int main(int argc, char** argv) {
     ret_code=rw_testprime(exe,11,&resultb);
     if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
 
+    printf("nprime:");
+    exe->allocated=0;
+    ret_code=rw_nprime(exe,1000,&array,&sz);
+    if(!ret_code && sz==1000 && array[999]==7919) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
+    free(array);
+
     // printf("nprime:");
     // exe->allocated=0;
     // ret_code=rw_nprime(exe,200000,&array,&sz);
     // if(!ret_code && sz==200000 && array[199999]==2750159) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
     // free(array);
+
+    printf("test_match_list:");
+    exe->allocated=0;
+    ret_code=rw_test_match_list(exe,&result0);
+    if(!ret_code && result0==2) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("test_match_list_list:");
+    exe->allocated=0;
+    ret_code=rw_test_match_list_list(exe,&arrayb,&sz);
+    if(!ret_code && sz==1 && !arrayb[0]) { printf("success\n"); } else { printf("fail:%d %ld %d\n",ret_code,sz,arrayb[0]); };
+    free(arrayb);
+
+    printf("test_match_list_list2:");
+    exe->allocated=0;
+    ret_code=rw_test_match_list_list2(exe,&resultb);
+    if(!ret_code && !resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
 
     printf("len_nqueens:");
     exe->allocated=0;
@@ -128,16 +151,6 @@ int main(int argc, char** argv) {
     if(!ret_code && sz==8 && array[0]==4 && array[7]==1) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
     free(array);
 
-    printf("nprime:");
-    exe->allocated=0;
-    ret_code=rw_nprime(exe,1000,&array,&sz);
-    if(!ret_code && sz==1000 && array[999]==7919) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
-    free(array);
-
-    printf("test_match_list:");
-    exe->allocated=0;
-    ret_code=rw_test_match_list(exe,&result0);
-    if(!ret_code && result0==2) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
     printf("Heap size=%d\n",exe->end_of_heap*8);
 
