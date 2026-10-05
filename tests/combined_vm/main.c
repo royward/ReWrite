@@ -161,6 +161,27 @@ int main(int argc, char** argv) {
     ret_code=rw_len2(exe,"-126",&result0);
     if(!ret_code && result0==4) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
+    printf("nth2:");
+    exe->allocated=0;
+    ret_code=rw_nth2(exe,2,"-126",&resultc);
+    if(!ret_code && resultc=='2') { printf("success\n"); } else { printf("fail:%d %c\n",ret_code,resultc); };
+
+    printf("nth2:");
+    exe->allocated=0;
+    ret_code=rw_nth2(exe,5,"-126",&resultc);
+    if(ret_code==5) { printf("success\n"); } else { printf("fail:%d\n",ret_code); };
+
+    printf("nth2:");
+    exe->allocated=0;
+    ret_code=rw_nth2(exe,-1,"-126",&resultc);
+    if(ret_code==5) { printf("success\n"); } else { printf("fail:%d\n",ret_code); };
+
+    printf("nth3:");
+    exe->allocated=0;
+    ret_code=rw_nth3(exe,1,&resultc1);
+    if(!ret_code && strcmp(resultc1,"cd")==0) { printf("success\n"); } else { printf("fail:%d %s\n",ret_code,resultc1); };
+    free(resultc1);
+
     printf("Heap size=%d\n",exe->end_of_heap*8);
 
     program_unload(&p);

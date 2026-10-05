@@ -65,8 +65,9 @@ const DefaultSize=64;
 const ErrNoMemory=2;
 const ErrNoMatch=3;
 const ErrNoMatchRhs=4;
-const ErrNever=5;
-const ErrUser=6;
+const ErrOutOfRangeIndex=5;
+const ErrNever=9;
+const ErrUser=10;
 
 const OpBuildIOList=1000000;
 
@@ -767,7 +768,7 @@ generate_param_code(owned,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const
     generate_param_code(owned,false,bindlevel,newstride,ctx,{*sofar0,*mv_code,*code},sofar1,type_left,rest);
 generate_param_code(owned,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{{{src_flag,src,sz}},tp,_},type_left
-    update generate_conditional_rhs(ctx,{*sofar0,*mv_code},tp,{{src_flag,src,sz},{BindImm,val,sz}}) => ctx,code ->
+    update generate_conditional_rhs(ctx,{*sofar0,*mv_code},tp,OpCompEqBr,ErrNoMatchRhs,{{src_flag,src,sz},{BindImm,val,sz}}) => ctx,code ->
     generate_param_code(owned,true,bindlevel,newstride,ctx,code,sofar1,type_left,rest);
 generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
     @update gen_param_code_next_type(false,ctx,stride,typex) => ctx,mv_code,newstride,{{{BindMem,src1,sz},{BindMem,src2,sz}},tp,_},type_left
@@ -873,13 +874,13 @@ generate_list_min_size_aux({ParamSplatWild,_}) -> 0,1;
 sum_sub_alloc(n,{}) -> n;
 sum_sub_alloc(n,{_,sz,*rest}) -> sum_sub_alloc(n+sz,rest);
 
-generate_conditional_rhs(ctx,code,tp,{{src_flag,src,sz},{src_flag2,src2,sz}})
+generate_conditional_rhs(ctx,code,tp,cmp_op,err,{{src_flag,src,sz},{src_flag2,src2,sz}})
     update ctx_update_lbl_id(ctx) => ctx
     match ctx_get_lbl_stuff(ctx) => target,active,lbl_decline,lbl_id
-    update generate_conditional(ctx,target,active,lbl_id,lbl_id,OpCompEqBr,tp,sz,src_flag,src,src_flag2,src2) => _,ctx,newcode
+    update generate_conditional(ctx,target,active,lbl_id,lbl_id,cmp_op,tp,sz,src_flag,src,src_flag2,src2) => _,ctx,newcode
     match ctx_fnr(ctx) => fn_id,_
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
-    ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,BindImm,ErrNoMatchRhs,0,ctx_linerule(ctx),0,symoffset,0},{ctx_fnr(ctx),OpLabel,0,0,0,lbl_id}};
+    ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,BindImm,err,0,ctx_linerule(ctx),0,symoffset,0},{ctx_fnr(ctx),OpLabel,0,0,0,lbl_id}};
 
 // TODO have comparison deal with non-scalars, and reduce refcount where appropriate
 generate_bind_variable(count,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
@@ -895,7 +896,7 @@ generate_bind_variable(count,false,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
     -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
 generate_bind_variable(count,true,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
-    update generate_conditional_rhs(ctx,{},tp,{{src_flag,src,sz},{src_flag2,src2,sz}}) => ctx,code
+    update generate_conditional_rhs(ctx,{},tp,OpCompEqBr,ErrNoMatchRhs,{{src_flag,src,sz},{src_flag2,src2,sz}}) => ctx,code
     -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
 
 generate_bind_variable_aux(ctx,bind,code,{}) -> ctx,bind,code;
@@ -1070,12 +1071,13 @@ generate_expr_code_aux_map(post_arrow,ctx,sofar,stypelist,{expr,*rest})
     update generate_expr_code_aux(post_arrow,ctx,{0,typex},expr) => ctx,splat,code,results ->
     generate_expr_code_aux_map(post_arrow,ctx,{*sofar,{splat,code,results}},trest,rest);
 
-infer_is_list(0,_,{{ExprList,_}}) -> true; // HACK don't know what the type is, but sure it's a list
+infer_is_list(0,_,{ExprList,_}) -> true; // HACK don't know what the type is, but sure it's a list
 infer_is_list(tp,types,args) match nth(tp,types) => {_,_,{2,_},_} -> true;
 
-generate_expr_code_library(1,post_arrow,ctx,stypes,args)
+generate_expr_code_library(1,post_arrow,ctx,stypes,args) // length
     update generate_expr_code_untyped(post_arrow,ctx,{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},tp,consume}},code
-    when infer_is_list(tp,ctx_get_types(ctx),args)
+    when infer_is_list(tp,ctx_get_types(ctx),nth(0,args))
+    match decompose_stypes(stypes) => TypeI64,_
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,end
     update ctx_newreg(ctx,32) => ctx,len
@@ -1084,6 +1086,30 @@ generate_expr_code_library(1,post_arrow,ctx,stypes,args)
         {ctx_fnr(ctx),OpMinus,xt(TypeU32),BindReg,len,BindReg,end,sf2,src2},
         *gen_types_deref_free(consume!=0,ctx,tp,{{sf1,src1,32},{sf2,src2,32}})},
     {{{{BindReg,len,64}},TypeI64,Consume}};
+generate_expr_code_library(2,post_arrow,ctx,stypes,args) // nth
+    update generate_expr_code_untyped(post_arrow,ctx,{},{},args) => ctx,{{{{indf,ind,64}},TypeI64,_},{{{sf1,src1,32},{sf2,src2,32}},tp,consume}},code
+    match decompose_stypes(stypes) => dsttp,_
+    match nth(tp,ctx_get_types(ctx)) => {_,_,{2,dsttp},_}
+    match nth(dsttp,ctx_get_types(ctx)) => {_,_,_,storage}
+    update ctx_newreg(ctx,64) => ctx,parray
+    update ctx_newreg(ctx,32) => ctx,end
+    update ctx_newreg(ctx,32) => ctx,index
+    update ctx_newreg(ctx,32) => ctx,len
+    update ctx_newreg(ctx,64) => ctx,pbegin
+    update generate_conditional_rhs(ctx,{},TypeU32,OpCompLtBr,ErrOutOfRangeIndex,{{indf,ind,32},{BindReg,len,32}}) => ctx,check_code
+    match generate_get_stride(pbegin,storage) => sz_one,sz_tot,memindex,
+    update move_mem_to_reg(true,ctx,{},{},memindex) => ctx,mv_code,memindex
+    update gen_types_addref(ctx,dsttp,memindex,1) => ctx,addref
+    -> ctx,false,{*code,{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,sf1,src1},
+        {ctx_fnr(ctx),OpLoad,3,0,BindReg,end,0,parray+(8<<32)},
+        {ctx_fnr(ctx),OpMinus,xt(TypeU32),BindReg,len,BindReg,end,sf2,src2},
+        *check_code,
+        {ctx_fnr(ctx),OpPlus,xt(TypeU32),BindReg,index,sf2,src2,indf,ind},
+        {ctx_fnr(ctx),OpLeaScaleReg,0,0,BindReg,pbegin,BindReg,parray,BindReg,index,bits_to_bytes(sz_tot)},
+        *mv_code,
+        *addref,
+        *gen_types_deref_free(consume!=0,ctx,tp,{{sf1,src1,32},{sf2,src2,32}})},
+    {{memindex,dsttp,Consume}};
 
 split_splat(sofar,{}) -> sofar,{},{};
 split_splat(sofar,{{_,{},{}},*rest}) -> split_splat(sofar,rest);

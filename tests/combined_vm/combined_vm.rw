@@ -174,3 +174,9 @@ splatsplat_aux() -> {"ab","cd","ef"};
 
 :- export len2(value string) -> i64;
 len2(x) -> length(x);
+
+:- export nth2(i64,value string) -> char;
+nth2(x,y) -> nth(x,y);
+
+:- export nth3(i64) -> value string;
+nth3(x) -> nth(x,splatsplat_aux());
