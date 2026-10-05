@@ -156,6 +156,10 @@ int main(int argc, char** argv) {
     if(!ret_code && sz==8 && array[0]==4 && array[7]==1) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
     free(array);
 
+    printf("len2:");
+    exe->allocated=0;
+    ret_code=rw_len2(exe,"-126",&result0);
+    if(!ret_code && result0==4) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
     printf("Heap size=%d\n",exe->end_of_heap*8);
 

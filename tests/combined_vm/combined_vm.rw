@@ -163,6 +163,14 @@ test_match_list_list2() match {{{false}}} => {{{x}}} -> x;
 :- export test_match_list_list3() -> ;
 test_match_list_list3() match {{{false}}} => _ ->;
 
-// :- export test_match_list_string() -> string;
-// test_match_list_string() match {"ab","cd","ef"} => {a,*_} -> a;
+// :- export joinstringtest() -> string;
+// joinstringtest() match {"ab","cd"} => {x,y} -> {*x,*y};
 
+// :- export splatsplat() -> value string;
+// splatsplat() match splatsplat_aux() => x -> {**x};
+
+:- splatsplat_aux() -> [string];
+splatsplat_aux() -> {"ab","cd","ef"};
+
+:- export len2(value string) -> i64;
+len2(x) -> length(x);

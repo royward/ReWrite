@@ -333,8 +333,8 @@ void deref_free(RWInstance* exe, uint32_t v) {
 }
 
 void deref_free_n(RWInstance* exe, uint32_t v, uint32_t n) {
-    if(n!=0) {
-        uint32_t* parray=rwu_get_header(exe,v);
+    uint32_t* parray=rwu_get_header(exe,v);
+    if(n!=0 && parray[1]==1) {
         uint32_t* data=rwu_get_data(parray);
         uint32_t end=parray[2];
         for(uint32_t i=0;i<end;i++) {
@@ -342,6 +342,80 @@ void deref_free_n(RWInstance* exe, uint32_t v, uint32_t n) {
         }
     }
     deref_free(exe,v);
+}
+
+uint32_t splat_count_n(RWInstance* exe, uint32_t n, uint32_t array, uint32_t start) {
+    uint32_t* parray=rwu_get_header(exe,array);
+    uint32_t end=parray[2];
+    if(n==0) {
+        return end-start;
+    } else {
+        // need to go deeper
+        uint32_t* data=rwu_get_data(parray);
+        uint32_t ret=0;
+        for(uint32_t i=start+start;i<end+end;i+=2) {
+            ret+=splat_count_n(exe,n-1,data[i],data[i+1]);
+        }
+        return ret;
+    }
+}
+
+void splat_scalar_n(RWInstance* exe, uint32_t n, uint32_t array, uint32_t start, void** dst, uint32_t stride, bool consume) {
+    uint32_t* parray=rwu_get_header(exe,array);
+    uint32_t end=parray[2];
+    bool new_consume=consume&&(parray[1]==1);
+    if(n==0) {
+        uint8_t* data=rwu_get_data(parray);
+        size_t len=((size_t)(end-start))*stride;
+        memcpy(*dst,data+start*stride,len);
+        *dst=((uint8_t*)*dst)+len;
+    } else {
+        // need to go deeper
+        uint32_t* data=rwu_get_data(parray);
+        if(new_consume) {
+            for(uint32_t i=0;i<start+start;i+=2) {
+                deref_free_n(exe,data[i],n-1);
+            }
+        }
+        for(uint32_t i=start+start;i<end+end;i+=2) {
+            splat_scalar_n(exe,n-1,data[i],data[i+1],dst,stride,new_consume);
+        }
+    }
+    if(consume) {
+        deref_free(exe, array);
+    }
+}
+
+void splat_list_scalar_n(RWInstance* exe, uint32_t n, uint32_t more_levels, uint32_t array, uint32_t start, uint32_t** dst, bool consume) {
+    uint32_t* parray=rwu_get_header(exe,array);
+    uint32_t end=parray[2];
+    bool new_consume=consume&&(parray[1]==1);
+    uint32_t* data=rwu_get_data(parray);
+    uint32_t start2=start+start;
+    if(n==0) {
+        size_t len=end-start;
+        memcpy(*dst,data+start2,len*8);
+        if(!new_consume) {
+            for(uint32_t i=start+start;i<end+end;i+=2) {
+                uint32_t* header=rwu_get_header(exe,data[i]);
+                header[1]++;
+            }
+        }
+        *dst+=len*2;
+    } else {
+        // need to go deeper
+        for(uint32_t i=start+start;i<end+end;i+=2) {
+            splat_list_scalar_n(exe,n-1,more_levels,data[i],data[i+1],dst,new_consume);
+        }
+    }
+    if(new_consume) {
+        for(uint32_t i=0;i<start2;i+=2) {
+            deref_free_n(exe,data[i],more_levels+n-1);
+        }
+    }
+    if(consume) {
+        deref_free(exe, array);
+    }
 }
 
 static inline uint32_t max_uint32(uint32_t a, uint32_t b) {
