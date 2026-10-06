@@ -180,3 +180,12 @@ nth2(x,y) -> nth(x,y);
 
 :- export nth3(i64) -> value string;
 nth3(x) -> nth(x,splatsplat_aux());
+
+:- export append_keep(value string) -> value string,value string;
+append_keep(s) -> {*s,'z'},s;
+
+:- append_keep_list([string],string) -> [string],[string];
+append_keep_list(s,t) -> {*s,t},s;
+
+:- export append_keep_list_test() -> i64,i64;
+append_keep_list_test() match append_keep_list(splatsplat_aux(),"gh") => x,y -> length(x),length(y);

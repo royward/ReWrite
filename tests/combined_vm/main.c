@@ -12,6 +12,7 @@ int main(int argc, char** argv) {
     rw_instance_init(exe,&p);
 
     int64_t result0;
+    int64_t result1;
     bool resultb;
     codepoint resultc;
     char* resultc1=NULL;
@@ -21,6 +22,7 @@ int main(int argc, char** argv) {
     int64_t* array;
     bool* arrayb;
 
+#if true
     printf("f:");
     exe->allocated=0;
     ret_code=rw_f(exe,&result0,&resultc1,&resultc2);
@@ -181,6 +183,19 @@ int main(int argc, char** argv) {
     ret_code=rw_nth3(exe,1,&resultc1);
     if(!ret_code && strcmp(resultc1,"cd")==0) { printf("success\n"); } else { printf("fail:%d %s\n",ret_code,resultc1); };
     free(resultc1);
+
+    printf("append_keep:");
+    exe->allocated=0;
+    ret_code=rw_append_keep(exe,"xyzzy",&resultc1,&resultc2);
+    if(!ret_code && strcmp(resultc1,"xyzzyz")==0 && strcmp(resultc2,"xyzzy")==0) { printf("success\n"); } else { printf("fail:%d %s %s\n",ret_code,resultc1,resultc2); };
+    free(resultc1);
+    free(resultc2);
+#endif
+
+    printf("append_keep_list_test:");
+    exe->allocated=0;
+    ret_code=rw_append_keep_list_test(exe,&result0,&result1);
+    if(!ret_code && result0==4 && result1==3) { printf("success\n"); } else { printf("fail:%d %ld %ld\n",ret_code,result0, result1); };
 
     printf("Heap size=%d\n",exe->end_of_heap*8);
 

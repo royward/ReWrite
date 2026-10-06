@@ -40,6 +40,7 @@ const OpSext=60; // + destination ss, class 6
 
 const OpZext=126; // Moved to handcode because it is a nop
 
+// Low-level singletons: 224–255 and 480–511
 const OpLabel=224;
 const OpCall=225;
 const OpRet=226;
@@ -51,6 +52,7 @@ const OpLeaScaleImm=231;
 const OpError=254;
 const OpCallIO=255;
 
+// High-level singletons: 736–767 and 992–1023
 const OpAlloc=736;
 const OpReallocFixed=737;
 const OpReallocVar=738;
@@ -66,7 +68,12 @@ const OpAppendImm=746;
 const OpAppendReg=747;
 const OpAppendSplat=748;
 const OpAppendSplatConsume=749;
-const OpExtractList=750;
+const OpAppendList=750;
+const OpAppendListConsume=751;
+const OpExtractList=752;
+
+const OpReallocListFixed=753;
+const OpReallocListVar=754;
 
 opclass(OpPlus) -> 1;
 opclass(OpMinus) -> 1;
