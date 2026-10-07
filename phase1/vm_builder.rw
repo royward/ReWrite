@@ -67,6 +67,8 @@ op_name(OpIncMem) -> "IncMem";
 op_name(OpCont) -> "Cont";
 op_name(OpPrependImm) -> "PrependImm";
 op_name(OpPrependReg) -> "PrependReg";
+op_name(OpPrependList) -> "PrependList";
+op_name(OpPrependListConsume) -> "PrependListConsume";
 op_name(OpAppendImm) -> "AppendImm";
 op_name(OpAppendReg) -> "AppendReg";
 op_name(OpAppendSplat) -> "AppendSplat";
@@ -84,7 +86,7 @@ all_gen_ops() ->
 
 all_single_ops() -> {OpZext,OpLabel,OpCall,OpRet,OpGoto,OpLea,OpLeaScaleReg,OpLeaScaleImm,OpError,OpCallIO,
     OpAlloc,OpReallocFixed,OpReallocVar,OpReallocListFixed,OpReallocListVar,OpEmptyList,OpDerefFree,OpDerefFreeList,OpIncMem,OpCont,
-    OpPrependImm,OpPrependReg,OpAppendImm,OpAppendReg,OpAppendSplat,OpAppendSplatConsume,OpAppendList,OpAppendListConsume,OpExtractList};
+    OpPrependImm,OpPrependReg,OpPrependList,OpPrependListConsume,OpAppendImm,OpAppendReg,OpAppendSplat,OpAppendSplatConsume,OpAppendList,OpAppendListConsume,OpExtractList};
 
 has_label(OpCompLtBr) -> true;
 has_label(OpCompLteBr) -> true;

@@ -195,7 +195,7 @@ int main(int argc, char** argv) {
     printf("append_keep_list_test:");
     exe->allocated=0;
     ret_code=rw_append_keep_list_test(exe,&result0,&result1);
-    if(!ret_code && result0==4 && result1==3) { printf("success\n"); } else { printf("fail:%d %ld %ld\n",ret_code,result0, result1); };
+    if(!ret_code && result0==5 && result1==3) { printf("success\n"); } else { printf("fail:%d %ld %ld\n",ret_code,result0, result1); };
 
     printf("Heap size=%d\n",exe->end_of_heap*8);
 

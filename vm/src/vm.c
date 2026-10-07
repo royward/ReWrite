@@ -278,22 +278,28 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
         case OP_PREPEND_REG: {
             fprintf(out,"prepend_reg.%d (r%u,r%u+%d) <- r%u",opv->fdst.b,opv->fdst.a,opv->fsrc2.a,opv->fsrc2.b,opv->fsrc1.a);
         } break;
+        case OP_PREPEND_LIST: {
+            fprintf(out,"prepend_list (r%u,r%u+%d) <- (r%u,r%u)",opv->fdst.a,opv->fsrc2.a,opv->fsrc2.b,opv->fsrc1.a,opv->fsrc1.b);
+        } break;
+        case OP_PREPEND_LIST_CONSUME: {
+            fprintf(out,"prepend_list_consume (r%u,r%u+%d) <- (r%u,r%u)",opv->fdst.a,opv->fsrc2.a,opv->fsrc2.b,opv->fsrc1.a,opv->fsrc1.b);
+        } break;
         case OP_APPEND_IMM: {
             fprintf(out,"append_imm.%d (r%u) <- %ld",opv->fdst.b,opv->fdst.a,opv->src1);
         } break;
         case OP_APPEND_REG: {
             fprintf(out,"append_reg.%d (r%u) <- r%u",opv->fdst.b,opv->fdst.a,opv->fsrc1.a);
         } break;
+        case OP_APPEND_LIST: {
+            fprintf(out,"append_list (r%u) <- (r%u,r%u)",opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a);
+        } break;
+        case OP_APPEND_LIST_CONSUME: {
+             fprintf(out,"append_list_consume (r%u) <- (r%u,r%u)",opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a);
+        } break;
         case OP_APPEND_SPLAT: {
             fprintf(out,"append_splat.%d (r%u) <- (r%u,r%u)",opv->fdst.b,opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a);
         } break;
         case OP_APPEND_SPLAT_CONSUME: {
-             fprintf(out,"append_splat_consume.%d (r%u) <- (r%u,r%u)",opv->fdst.b,opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a);
-        } break;
-        case OP_APPEND_LIST: {
-            fprintf(out,"append_splat.%d (r%u) <- (r%u,r%u)",opv->fdst.b,opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a);
-        } break;
-        case OP_APPEND_LIST_CONSUME: {
              fprintf(out,"append_splat_consume.%d (r%u) <- (r%u,r%u)",opv->fdst.b,opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a);
         } break;
         case OP_CONT: {
@@ -715,7 +721,7 @@ dispatch:
                     case 32:*((uint32_t*)addr)=(uint32_t)value; break;
                     case 64:*((uint64_t*)addr)=(uint64_t)value; break;
                     default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
-                } NEXT();
+                }
             } NEXT();
            CASE(OP_PREPEND_REG) {
                 uint32_t array=R[opv->fdst.a];
@@ -730,7 +736,31 @@ dispatch:
                     case 32:*((uint32_t*)addr)=(uint32_t)value; break;
                     case 64:*((uint64_t*)addr)=(uint64_t)value; break;
                     default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
-                } NEXT();
+                }
+            } NEXT();
+            CASE(OP_PREPEND_LIST) {
+                uint32_t dstarray=R[opv->fdst.a];
+                uint32_t dststart=R[opv->fsrc2.a];
+                uint32_t array=R[opv->fsrc1.a];
+                uint32_t start=R[opv->fsrc1.b];
+                uint32_t offset=opv->fsrc2.b;
+                uint32_t* pdstarray=rwu_get_header(exe,dstarray);
+                uint32_t* d=((uint32_t*)rwu_get_data(pdstarray))+dststart+dststart+offset+offset;
+                d[0]=array;
+                d[1]=start;
+                uint32_t* parray=rwu_get_header(exe,array);
+                parray[1]++;
+            } NEXT();
+            CASE(OP_PREPEND_LIST_CONSUME) {
+                uint32_t dstarray=R[opv->fdst.a];
+                uint32_t dststart=R[opv->fsrc2.a];
+                uint32_t array=R[opv->fsrc1.a];
+                uint32_t start=R[opv->fsrc1.b];
+                uint32_t offset=opv->fsrc2.b;
+                uint32_t* pdstarray=rwu_get_header(exe,dstarray);
+                uint32_t* d=((uint32_t*)rwu_get_data(pdstarray))+dststart+dststart+offset+offset;
+                d[0]=array;
+                d[1]=start;
             } NEXT();
             CASE(OP_APPEND_IMM) {
                 uint32_t array=R[opv->fdst.a];
@@ -745,7 +775,7 @@ dispatch:
                     case 32:*((uint32_t*)addr)=(uint32_t)value; break;
                     case 64:*((uint64_t*)addr)=(uint64_t)value; break;
                     default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
-                } NEXT();
+                }
             } NEXT();
             CASE(OP_APPEND_REG) {
                 uint32_t array=R[opv->fdst.a];
@@ -760,7 +790,7 @@ dispatch:
                     case 32:*((uint32_t*)addr)=(uint32_t)value; break;
                     case 64:*((uint64_t*)addr)=(uint64_t)value; break;
                     default: fprintf(stderr,"unknown size in append\n"); exit(EXIT_FAILURE);
-                } NEXT();
+                }
             } NEXT();
             CASE(OP_APPEND_SPLAT) {
                 uint32_t dstarray=R[opv->fdst.a];

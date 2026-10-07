@@ -1145,8 +1145,10 @@ array_fixed_elt_assign(eltsize,ctx,mem,c,code,{{false,partcode,{{{src_flag1,src1
 array_var_elt_assign_pre(eltsize,ctx,arrayf,array,startf,start,n,code,{}) -> code;
 array_var_elt_assign_pre(eltsize,ctx,arrayf,array,startf,start,n,code,{{false,_,{{{src_flag,src,sz}},tp,_}},*rest})
     -> array_var_elt_assign_pre(eltsize,ctx,arrayf,array,startf,start,n+1,{*code,{ctx_fnr(ctx),if(src_flag==BindImm,OpPrependImm,OpPrependReg),0,0,arrayf,array,src_flag,src,startf,start+(n<<32),eltsize}},rest);
+array_var_elt_assign_pre(eltsize,ctx,arrayf,array,startf,start,n,code,{{false,_,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,consume}},*rest})
+    -> array_var_elt_assign_pre(eltsize,ctx,arrayf,array,startf,start,n+1,{*code,{ctx_fnr(ctx),if(consume>=Consume,OpPrependListConsume,OpPrependList),0,0,arrayf,array,src_flag1,src1+(src2<<32),startf,start+(n<<32)}},rest);
 
-array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,code,{}) -> code;
+    array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,code,{}) -> code;
 array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,code,{{false,_,{{{src_flag,src,sz}},tp,_}},*rest})
     -> array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),if(src_flag==BindImm,OpAppendImm,OpAppendReg),0,0,arrayf,array,src_flag,src,0,0,eltsize}},rest);
 array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,code,{{true,_,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,consume}},*rest})
