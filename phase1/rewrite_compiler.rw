@@ -1053,16 +1053,10 @@ generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,subtype,pre_splat,
     update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,post_splat) => ctx,sum_const_post,sum_code,sum_src_flag,sum_src
     update array_var_elt_assign_pre(sz,ctx,BindReg,newarray,BindReg,newstart,0,{},pre_splat) => code_pre
     update array_var_elt_assign_post(sz,ctx,BindReg,newarray,BindReg,newstart,{},post_splat) => code_post
-    update get_realloc_op(sum_src_flag,depth) => op,src1mod
     -> ctx,false,
-        {*precode,*sum_code,{ctx_fnr(ctx),op,0,0,BindReg,newarray,array_flag,array,BindImm,bits_to_bytes(sz),sum_const_pre},
+        {*precode,*sum_code,{ctx_fnr(ctx),OpReallocVar+if(BindReg!=sum_src_flag,1,0)+if(depth>0,2,0),0,0,BindReg,newarray,array_flag,array+if(depth==0,0,(depth-1)<<32),BindImm,bits_to_bytes(sz),sum_const_pre},
         {ctx_fnr(ctx),OpCont,0,0,BindReg,newstart,start_flag,start,sum_src_flag,sum_src,sum_const_post},*code_pre,*code_post},
     {{{{BindReg,newarray,32},{BindReg,newstart,32}},stype,Consume}};
-
-get_realloc_op(BindImm,0) -> OpReallocFixed,0;
-get_realloc_op(BindReg,0) -> OpReallocVar,0;
-get_realloc_op(BindImm,n) -> OpReallocListFixed,(n-1)<<32;
-get_realloc_op(BindReg,n) -> OpReallocListVar,(n-1)<<32;
 
 generate_expr_code_aux_map(post_arrow,ctx,sofar,{0,_},{}) -> ctx,sofar;
 generate_expr_code_aux_map(post_arrow,ctx,sofar,{1},{}) -> ctx,sofar;
@@ -1151,10 +1145,8 @@ array_var_elt_assign_pre(eltsize,ctx,arrayf,array,startf,start,n,code,{{false,_,
     array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,code,{}) -> code;
 array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,code,{{false,_,{{{src_flag,src,sz}},tp,_}},*rest})
     -> array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),if(src_flag==BindImm,OpAppendImm,OpAppendReg),0,0,arrayf,array,src_flag,src,0,0,eltsize}},rest);
-array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,code,{{true,_,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,consume}},*rest})
-    -> array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),if(consume>=Consume,OpAppendSplatConsume,OpAppendSplat),0,0,arrayf,array,src_flag1,src1,src_flag2,src2,eltsize}},rest);
-array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,code,{{false,_,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,consume}},*rest})
-    -> array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),if(consume>=Consume,OpAppendListConsume,OpAppendList),0,0,arrayf,array,src_flag1,src1,src_flag2,src2,eltsize}},rest);
+array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,code,{{issplat,_,{{{src_flag1,src1,sz},{src_flag2,src2,sz}},tp,consume}},*rest})
+    -> array_var_elt_assign_post(eltsize,ctx,arrayf,array,startf,start,{*code,{ctx_fnr(ctx),OpAppendList+if(issplat,2,0)+if(consume>0,1,0),0,0,arrayf,array,src_flag1,src1,src_flag2,src2,eltsize}},rest);
 
 decompose_stypes({0,n}) -> n,{0,n};
 decompose_stypes({1,a,_,*rest}) -> a,{1,*rest};
