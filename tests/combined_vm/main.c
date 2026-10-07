@@ -12,6 +12,7 @@ int main(int argc, char** argv) {
     rw_instance_init(exe,&p);
 
     int64_t result0;
+    int64_t result1;
     bool resultb;
     codepoint resultc;
     char* resultc1=NULL;
@@ -19,7 +20,9 @@ int main(int argc, char** argv) {
     int ret_code;
     size_t sz;
     int64_t* array;
+    bool* arrayb;
 
+#if true
     printf("f:");
     exe->allocated=0;
     ret_code=rw_f(exe,&result0,&resultc1,&resultc2);
@@ -111,11 +114,38 @@ int main(int argc, char** argv) {
     ret_code=rw_testprime(exe,11,&resultb);
     if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
 
+    printf("nprime:");
+    exe->allocated=0;
+    ret_code=rw_nprime(exe,1000,&array,&sz);
+    if(!ret_code && sz==1000 && array[999]==7919) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
+    free(array);
+
     // printf("nprime:");
     // exe->allocated=0;
     // ret_code=rw_nprime(exe,200000,&array,&sz);
     // if(!ret_code && sz==200000 && array[199999]==2750159) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
     // free(array);
+
+    printf("test_match_list:");
+    exe->allocated=0;
+    ret_code=rw_test_match_list(exe,&result0);
+    if(!ret_code && result0==2) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("test_match_list_list:");
+    exe->allocated=0;
+    ret_code=rw_test_match_list_list(exe,&arrayb,&sz);
+    if(!ret_code && sz==1 && !arrayb[0]) { printf("success\n"); } else { printf("fail:%d %ld %d\n",ret_code,sz,arrayb[0]); };
+    free(arrayb);
+
+    printf("test_match_list_list2:");
+    exe->allocated=0;
+    ret_code=rw_test_match_list_list2(exe,&resultb);
+    if(!ret_code && !resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
+
+    printf("test_match_list_list3:");
+    exe->allocated=0;
+    ret_code=rw_test_match_list_list3(exe);
+    if(!ret_code) { printf("success\n"); } else { printf("fail:%d\n",ret_code); };
 
     printf("len_nqueens:");
     exe->allocated=0;
@@ -128,11 +158,55 @@ int main(int argc, char** argv) {
     if(!ret_code && sz==8 && array[0]==4 && array[7]==1) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
     free(array);
 
-    printf("nprime:");
+    printf("len2:");
     exe->allocated=0;
-    ret_code=rw_nprime(exe,1000,&array,&sz);
-    if(!ret_code && sz==1000 && array[999]==7919) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,sz); };
-    free(array);
+    ret_code=rw_len2(exe,"-126",&result0);
+    if(!ret_code && result0==4) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("nth2:");
+    exe->allocated=0;
+    ret_code=rw_nth2(exe,2,"-126",&resultc);
+    if(!ret_code && resultc=='2') { printf("success\n"); } else { printf("fail:%d %c\n",ret_code,resultc); };
+
+    printf("nth2:");
+    exe->allocated=0;
+    ret_code=rw_nth2(exe,5,"-126",&resultc);
+    if(ret_code==5) { printf("success\n"); } else { printf("fail:%d\n",ret_code); };
+
+    printf("nth2:");
+    exe->allocated=0;
+    ret_code=rw_nth2(exe,-1,"-126",&resultc);
+    if(ret_code==5) { printf("success\n"); } else { printf("fail:%d\n",ret_code); };
+
+    printf("nth3:");
+    exe->allocated=0;
+    ret_code=rw_nth3(exe,1,&resultc1);
+    if(!ret_code && strcmp(resultc1,"cd")==0) { printf("success\n"); } else { printf("fail:%d %s\n",ret_code,resultc1); };
+    free(resultc1);
+
+    printf("append_keep:");
+    exe->allocated=0;
+    ret_code=rw_append_keep(exe,"xyzzy",&resultc1,&resultc2);
+    if(!ret_code && strcmp(resultc1,"xyzzyz")==0 && strcmp(resultc2,"xyzzy")==0) { printf("success\n"); } else { printf("fail:%d %s %s\n",ret_code,resultc1,resultc2); };
+    free(resultc1);
+    free(resultc2);
+
+    printf("append_keep_list_test:");
+    exe->allocated=0;
+    ret_code=rw_append_keep_list_test(exe,&result0,&result1);
+    if(!ret_code && result0==5 && result1==3) { printf("success\n"); } else { printf("fail:%d %ld %ld\n",ret_code,result0,result1); };
+
+    printf("insert_char:");
+    exe->allocated=0;
+    ret_code=rw_insert_char(exe,2,'X',"abcd",&resultc1);
+    if(!ret_code && strcmp(resultc1,"abXd")==0) { printf("success\n"); } else { printf("fail:%d %s\n",ret_code,resultc1); };
+    free(resultc1);
+
+#endif
+    printf("insert_string:");
+    exe->allocated=0;
+    ret_code=rw_insert_string(exe,1,"XYZ",&result0);
+    if(!ret_code && result0==3) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
     printf("Heap size=%d\n",exe->end_of_heap*8);
 

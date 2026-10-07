@@ -11,7 +11,7 @@ test_vm: combined.exe
 
 combined.exe: ../../vm/src/vm.c main.c $(CORE_DEPS)
 	$(REWRITE_CPP) combined_vm
-	clang -O3 -ggdb3 -Wall -Wextra -pedantic -I../../vm/include/ -I../../vm/generated/ ../../vm/src/vm.c main.c -o $@
+	clang -ggdb3 -Wall -Wextra -pedantic -I../../vm/include/ -I../../vm/generated/ ../../vm/src/vm.c main.c -o $@
 
 test_native: combined_native.exe
 	./combined_native.exe

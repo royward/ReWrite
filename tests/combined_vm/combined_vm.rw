@@ -150,3 +150,51 @@ nqueens_try(col_so_far,col_todo,c,rows_done) -> nqueens_aux({},{*col_so_far,*col
 attack(c,offset,{}) -> false;
 attack(c,offset,{x,*rest}) when c+offset==x || c-offset==x -> true;
 attack(c,offset,{_,*rest}) -> attack(c,offset+1,rest);
+
+:- export test_match_list() -> i64;
+test_match_list() match {1,2,3} => {_,x,*_} -> x;
+
+:- export test_match_list_list() -> value [bool];
+test_match_list_list() match {{{false}}} => {{x}} -> x;
+
+:- export test_match_list_list2() -> bool;
+test_match_list_list2() match {{{false}}} => {{{x}}} -> x;
+
+:- export test_match_list_list3() -> ;
+test_match_list_list3() match {{{false}}} => _ ->;
+
+// :- export joinstringtest() -> string;
+// joinstringtest() match {"ab","cd"} => {x,y} -> {*x,*y};
+
+// :- export splatsplat() -> value string;
+// splatsplat() match splatsplat_aux() => x -> {**x};
+
+:- splatsplat_aux() -> [string];
+splatsplat_aux() -> {"ab","cd","ef"};
+
+:- export len2(value string) -> i64;
+len2(x) -> length(x);
+
+:- export nth2(i64,value string) -> char;
+nth2(x,y) -> nth(x,y);
+
+:- export nth3(i64) -> value string;
+nth3(x) -> nth(x,splatsplat_aux());
+
+:- export append_keep(value string) -> value string,value string;
+append_keep(s) -> {*s,'z'},s;
+
+:- append_keep_list([string],string) -> [string],[string];
+append_keep_list(s,t) -> {t,*s,t},s;
+
+:- export append_keep_list_test() -> i64,i64;
+append_keep_list_test() match append_keep_list(splatsplat_aux(),"gh") => x,y -> length(x),length(y);
+
+:- export insert_char(i64,char,value string) -> value string;
+insert_char(x,y,z) -> nth_insert(x,y,z);
+
+:- insert_string_aux(i64,string,[string]) -> [string];
+insert_string_aux(x,y,z) -> nth_insert(x,y,z);
+
+:- export insert_string(i64,value string) -> i64;
+insert_string(x,y) match insert_string_aux(x,y,splatsplat_aux()) => t -> length(t);
