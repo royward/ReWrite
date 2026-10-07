@@ -189,3 +189,12 @@ append_keep_list(s,t) -> {t,*s,t},s;
 
 :- export append_keep_list_test() -> i64,i64;
 append_keep_list_test() match append_keep_list(splatsplat_aux(),"gh") => x,y -> length(x),length(y);
+
+:- export insert_char(i64,char,value string) -> value string;
+insert_char(x,y,z) -> nth_insert(x,y,z);
+
+:- insert_string_aux(i64,string,[string]) -> [string];
+insert_string_aux(x,y,z) -> nth_insert(x,y,z);
+
+:- export insert_string(i64,value string) -> i64;
+insert_string(x,y) match insert_string_aux(x,y,splatsplat_aux()) => t -> length(t);

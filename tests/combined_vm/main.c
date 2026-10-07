@@ -190,12 +190,23 @@ int main(int argc, char** argv) {
     if(!ret_code && strcmp(resultc1,"xyzzyz")==0 && strcmp(resultc2,"xyzzy")==0) { printf("success\n"); } else { printf("fail:%d %s %s\n",ret_code,resultc1,resultc2); };
     free(resultc1);
     free(resultc2);
-#endif
 
     printf("append_keep_list_test:");
     exe->allocated=0;
     ret_code=rw_append_keep_list_test(exe,&result0,&result1);
-    if(!ret_code && result0==5 && result1==3) { printf("success\n"); } else { printf("fail:%d %ld %ld\n",ret_code,result0, result1); };
+    if(!ret_code && result0==5 && result1==3) { printf("success\n"); } else { printf("fail:%d %ld %ld\n",ret_code,result0,result1); };
+
+    printf("insert_char:");
+    exe->allocated=0;
+    ret_code=rw_insert_char(exe,2,'X',"abcd",&resultc1);
+    if(!ret_code && strcmp(resultc1,"abXd")==0) { printf("success\n"); } else { printf("fail:%d %s\n",ret_code,resultc1); };
+    free(resultc1);
+
+#endif
+    printf("insert_string:");
+    exe->allocated=0;
+    ret_code=rw_insert_string(exe,1,"XYZ",&result0);
+    if(!ret_code && result0==3) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
     printf("Heap size=%d\n",exe->end_of_heap*8);
 

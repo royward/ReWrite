@@ -1104,6 +1104,46 @@ generate_expr_code_library(2,post_arrow,ctx,stypes,args) // nth
         *addref,
         *gen_types_deref_free(consume!=0,ctx,tp,{{sf1,src1,32},{sf2,src2,32}})},
     {{memindex,dsttp,Consume}};
+generate_expr_code_library(3,post_arrow,ctx,stypes,{arg_index,arg_elt,arg_list}) // nth_insert
+    match decompose_stypes(stypes) => listtype,_
+    match nth(listtype,ctx_get_types(ctx)) => {_,_,{2,elttype},_}
+    match nth(elttype,ctx_get_types(ctx)) => {_,_,_,storage}
+    update generate_expr_code_aux(true,ctx,{1,TypeI64},arg_index) => ctx,false,codei,{{{{flagi,srci,64}},_,_}}
+    update generate_expr_code_aux(true,ctx,{1,elttype},arg_elt) => ctx,false,codee,{{storagee,_,consumee}}
+    update generate_expr_code_aux(true,ctx,{1,listtype},arg_list) => ctx,false,codel,{{{{flagl1,l1,32},{flagl2,l2,32}},_,consumel}}
+    match sum_sub_alloc(0,storage) => sz
+    match depth_count(0,ctx_get_types(ctx),elttype) => depth
+    update ctx_newreg(ctx,32) => ctx,newarray
+    update ctx_newreg(ctx,64) => ctx,parrayold
+    update ctx_newreg(ctx,64) => ctx,parray
+    update ctx_newreg(ctx,32) => ctx,newstart
+    update ctx_newreg(ctx,32) => ctx,end
+    update ctx_newreg(ctx,32) => ctx,index
+    update ctx_newreg(ctx,32) => ctx,len
+    update ctx_newreg(ctx,64) => ctx,pbegin
+    update generate_conditional_rhs(ctx,{},TypeU32,OpCompLtBr,ErrOutOfRangeIndex,{{flagi,srci,32},{BindReg,len,32}}) => ctx,check_code
+    match generate_get_stride(pbegin,storage) => sz_one,sz_tot,memindex,
+    update move_mem_to_reg(true,ctx,{},{},memindex) => ctx,mv_code,memindex2
+    update gen_types_addref(ctx,elttype,storagee,1) => ctx,add_ref
+    -> ctx,false,{*codei,*codee,*codel,
+        *code_or_not(consumel==Borrow,{{ctx_fnr(ctx),OpLea,0,0,BindReg,parrayold,flagl1,l1},{ctx_fnr(ctx),OpIncMem,0,0,0,parrayold,0,32,BindImm,1,4}}),
+        {ctx_fnr(ctx),OpReallocFixed+if(depth>0,2,0),0,0,BindReg,newarray,flagl1,l1+if(depth==0,0,(depth-1)<<32),BindImm,bits_to_bytes(sz),0},
+        {ctx_fnr(ctx),OpCont,0,0,BindReg,newstart,flagl2,l2,BindImm,0,0},
+        {ctx_fnr(ctx),OpLea,0,0,BindReg,parray,BindReg,newarray},
+        {ctx_fnr(ctx),OpLoad,3,0,BindReg,end,0,parray+(8<<32)},
+        {ctx_fnr(ctx),OpMinus,xt(TypeU32),BindReg,len,BindReg,end,BindReg,newstart},
+        *check_code,
+        {ctx_fnr(ctx),OpPlus,xt(TypeU32),BindReg,index,flagi,srci,BindReg,newstart},
+        {ctx_fnr(ctx),OpLeaScaleReg,0,0,BindReg,pbegin,BindReg,parray,BindReg,index,bits_to_bytes(sz)},
+        *mv_code,
+        *code_or_not(consumee==Borrow,add_ref),
+        *generate_store(ctx,{},memindex,storagee),
+        *gen_types_deref_free(true,ctx,elttype,memindex2)
+    },
+    {{{{BindReg,newarray,32},{BindReg,newstart,32}},listtype,Consume}};
+
+generate_store(ctx,sofar,{},{}) -> sofar;
+generate_store(ctx,sofar,{{BindMem,m,sz},*rd},{{src_flag,src,sz},*rs}) -> generate_store(ctx,{*sofar,{ctx_fnr(ctx),OpStore,get_size_scale(sz),0,m&Max_u32,src_flag,src,0,0,m>>32}},rd,rs);
 
 split_splat(sofar,{}) -> sofar,{},{};
 split_splat(sofar,{{_,{},{}},*rest}) -> split_splat(sofar,rest);
