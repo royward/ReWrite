@@ -268,21 +268,21 @@ op_symbol(OpXor) -> "^";
 op_symbol(OpMove) -> "";
 
 generate_define_list(defs,oplist,name,op)
-    match nth(op,oplist) => {}
-    update nth_insert(op,name,oplist) => oplist
+    match nth(oplist,op) => {}
+    update nth_insert(oplist,op,name) => oplist
     -> {*defs,'#define ',*name,' 0x',*int_to_hex(3,{},op),'\n'},oplist;
 
 int_to_hex(0,sofar,_) -> sofar;
 int_to_hex(n,sofar,v) when v&15<10 -> int_to_hex(n-1,{'0'+(v&15),*sofar},v>>4);
 int_to_hex(n,sofar,v)-> int_to_hex(n-1,{'A'+(v&15)-10,*sofar},v>>4);
 
-nth(0,{a,*_}) -> a;
-nth(n,{_,*rest}) -> nth(n-1,rest);
+nth({a,*_},0) -> a;
+nth({_,*rest},n) -> nth(rest,n-1);
 
-nth_insert(n,v,target) -> nth_insert_aux(n,v,{},target);
+nth_insert(target,n,v) -> nth_insert_aux({},target,n,v);
 
-nth_insert_aux(0,v,sofar,{_,*rest}) -> {*sofar,v,*rest};
-nth_insert_aux(n,v,sofar,{a,*rest}) -> nth_insert_aux(n-1,v,{*sofar,a},rest);
+nth_insert_aux(sofar,{_,*rest},0,v) -> {*sofar,v,*rest};
+nth_insert_aux(sofar,{a,*rest},n,v) -> nth_insert_aux({*sofar,a},rest,n-1,v);
 
 listnv(n,v) -> listn_aux(0,n,{},v);
 

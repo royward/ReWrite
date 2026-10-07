@@ -165,17 +165,17 @@ int main(int argc, char** argv) {
 
     printf("nth2:");
     exe->allocated=0;
-    ret_code=rw_nth2(exe,2,"-126",&resultc);
+    ret_code=rw_nth2(exe,"-126",2,&resultc);
     if(!ret_code && resultc=='2') { printf("success\n"); } else { printf("fail:%d %c\n",ret_code,resultc); };
 
     printf("nth2:");
     exe->allocated=0;
-    ret_code=rw_nth2(exe,5,"-126",&resultc);
+    ret_code=rw_nth2(exe,"-126",5,&resultc);
     if(ret_code==5) { printf("success\n"); } else { printf("fail:%d\n",ret_code); };
 
     printf("nth2:");
     exe->allocated=0;
-    ret_code=rw_nth2(exe,-1,"-126",&resultc);
+    ret_code=rw_nth2(exe,"-126",-1,&resultc);
     if(ret_code==5) { printf("success\n"); } else { printf("fail:%d\n",ret_code); };
 
     printf("nth3:");
@@ -198,7 +198,7 @@ int main(int argc, char** argv) {
 
     printf("insert_char:");
     exe->allocated=0;
-    ret_code=rw_insert_char(exe,2,'X',"abcd",&resultc1);
+    ret_code=rw_insert_char(exe,"abcd",2,'X',&resultc1);
     if(!ret_code && strcmp(resultc1,"abXd")==0) { printf("success\n"); } else { printf("fail:%d %s\n",ret_code,resultc1); };
     free(resultc1);
 
