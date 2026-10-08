@@ -493,14 +493,6 @@ parse_params1(consts,bindings,params,rest) -> bindings,params,rest; // deal with
 // Compiler
 ///////////////////////////////////////////////////////////
 
-nth({a,*_},0) -> a;
-nth({_,*rest},n) -> nth(rest,n-1);
-
-nth_insert(target,n,v) -> nth_insert_aux({},target,n,v);
-
-nth_insert_aux(sofar,{_,*rest},0,v) -> {*sofar,v,*rest};
-nth_insert_aux(sofar,{a,*rest},n,v) -> nth_insert_aux({*sofar,a},rest,n-1,v);
-
 get_aligned_bitmask(n,sofar,{},sz) -> get_aligned_bitmask(n,sofar,{0},sz);
 get_aligned_bitmask(n,sofar,{-1,*rest},sz) -> get_aligned_bitmask(n+64,{*sofar,-1},rest,sz); // short circuit if fully allocated
 get_aligned_bitmask(n,sofar,{b,*rest},sz) match find_bitmask(0,b,sz,(1<<sz)-1) => true,offset,new -> {*sofar,new,*rest},n+offset;

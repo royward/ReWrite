@@ -276,14 +276,6 @@ int_to_hex(0,sofar,_) -> sofar;
 int_to_hex(n,sofar,v) when v&15<10 -> int_to_hex(n-1,{'0'+(v&15),*sofar},v>>4);
 int_to_hex(n,sofar,v)-> int_to_hex(n-1,{'A'+(v&15)-10,*sofar},v>>4);
 
-nth({a,*_},0) -> a;
-nth({_,*rest},n) -> nth(rest,n-1);
-
-nth_insert(target,n,v) -> nth_insert_aux({},target,n,v);
-
-nth_insert_aux(sofar,{_,*rest},0,v) -> {*sofar,v,*rest};
-nth_insert_aux(sofar,{a,*rest},n,v) -> nth_insert_aux({*sofar,a},rest,n-1,v);
-
 listnv(n,v) -> listn_aux(0,n,{},v);
 
 listn_aux(n,n,sofar,v) -> sofar;

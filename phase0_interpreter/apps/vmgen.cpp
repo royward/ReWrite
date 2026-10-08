@@ -96,33 +96,11 @@ int main(int argc, char** argv) {
         write_string_to_file_fast(RW_ROOT+pathout+"disassemble.inc",results[2].get_string());
         write_string_to_file_fast(RW_ROOT+pathout+"execute.inc",results[3].get_string());
         write_string_to_file_fast(RW_ROOT+pathout+"oplabels.inc",results[4].get_string());
-        return 0;
+        uint32_t free_size=DataVector::count_free();
+        std::cout << "List use: " << free_size << '/' << DataVector::data_vectors.size()-1 << " freed" << std::endl;
+       return 0;
     } catch(const std::runtime_error& e) {
         std::cout << "Error: " << e.what() << std::endl;
         return 1;
     }
-    // CLI::App app{"ReWrite Stage 1 interpreter"};
-    // std::string filename;
-    // std::string callexpr;
-    // bool fast = false;
-    // app.add_option("file", filename, "Source file to interpret")->required();
-    // app.add_option("call", callexpr, "Expression to evaluate")->required();
-    // app.add_flag("--fast", fast, "Enable fast execution mode");
-    // CLI11_PARSE(app, argc, argv);
-    // try {
-    //     std::string s=load_file(filename);
-    //     //std::println("{}",s);
-    //     Program prog(std::vector{std::make_pair(filename,s)},fast);
-    //     std::vector<DataElement> results=prog.run_string(callexpr);
-    //     std::cout << "Results:" << std::endl;
-    //     for(auto& r : results) {
-    //         std::cout << r.to_string() << std::endl;
-    //     }
-    //     uint32_t free_size=DataVector::count_free();
-    //     std::cout << "List use: " << free_size << '/' << DataVector::data_vectors.size()-1 << " freed" << std::endl;
-    //     return 0;
-    // } catch(const std::runtime_error& e) {
-    //     std::cout << "Error: " << e.what() << std::endl;
-    //     return 1;
-    // }
 }

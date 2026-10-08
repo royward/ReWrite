@@ -90,7 +90,7 @@ public:
         }
         return *this;
     }
-    uint32_t get_refcount() {
+    uint32_t get_refcount() const {
         return DataVector::data_vectors[pool_index].refcount;
     }
 };

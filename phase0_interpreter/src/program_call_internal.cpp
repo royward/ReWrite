@@ -149,6 +149,83 @@ void do_call_library(TokenKind op, const VecDataElement& args, VecDataElement& s
             }
             std::cout << std::endl;
         } break;
+        case Length: {
+            check_arg_count("length",args,1);
+            check_type<DataList>("length",args.data[args.offset]);
+            const DataContainer& d0=std::get<DataList>(args.data[args.offset].value).value;
+            const std::vector<DataElement>& x0f=DataVector::data_vectors[d0.pool_index].list;
+            sofar.data.push_back(DataElement{DataInt{static_cast<int64_t>(x0f.size()-d0.offset)}});
+        } break;
+        case Nth: {
+            check_arg_count("nth",args,2);
+            check_type<DataList>("nth",args.data[args.offset]);
+            check_type<DataInt>("nth",args.data[args.offset+1]);
+            std::size_t index=std::get<DataInt>(args.data[args.offset+1].value).value;
+            const DataContainer& d0=std::get<DataList>(args.data[args.offset].value).value;
+            const std::vector<DataElement>& x0f=DataVector::data_vectors[d0.pool_index].list;
+            if(index<0 || index+d0.offset>=x0f.size()) {
+                std::stringstream msg;
+                msg << "out of bounds for nth: " << index << '/' << x0f.size()-d0.offset;
+                throw std::runtime_error(msg.str());
+            }
+            const DataElement& ret=x0f[index+d0.offset];
+            //ret.incref();
+            sofar.data.push_back(ret);
+        } break;
+        case NthTake: {
+            check_arg_count("nth_take",args,2);
+            check_type<DataList>("nth_take",args.data[args.offset]);
+            check_type<DataInt>("nth_take",args.data[args.offset+1]);
+            std::size_t index=std::get<DataInt>(args.data[args.offset+1].value).value;
+            const DataContainer& d0=std::get<DataList>(args.data[args.offset].value).value;
+            std::vector<DataElement>& x0f=DataVector::data_vectors[d0.pool_index].list;
+            if(index<0 || index+d0.offset>=x0f.size()) {
+                std::stringstream msg;
+                msg << "out of bounds for nth_take: " << index << '/' << x0f.size()-d0.offset;
+                throw std::runtime_error(msg.str());
+            }
+            if(d0.get_refcount()==1) { // just process in place
+                const DataElement& ret=x0f[index+d0.offset];
+                x0f[index+d0.offset]=DataElement{DataInt{0}};
+                sofar.data.push_back(args.data[args.offset]);
+                sofar.data.push_back(ret);
+            } else {
+                std::vector<DataElement> copy(x0f.begin()+d0.offset,x0f.end());
+                const DataElement& ret=copy[index];
+                copy[index]=DataElement{DataInt{0}};
+                uint32_t newvec=DataVector::allocate();
+                DataVector::data_vectors[newvec].list=std::move(copy);
+                DataContainer dc(newvec,0);
+                DataElement x=DataElement{DataList{std::move(dc)}};
+                sofar.data.push_back(x);
+                sofar.data.push_back(ret);
+            }
+        } break;
+        case NthInsert: {
+            check_arg_count("nth_insert",args,3);
+            check_type<DataList>("nth_insert",args.data[args.offset]);
+            check_type<DataInt>("nth_insert",args.data[args.offset+1]);
+            int64_t index=std::get<DataInt>(args.data[args.offset+1].value).value;
+            const DataContainer& d0=std::get<DataList>(args.data[args.offset].value).value;
+            std::vector<DataElement>& x0f=DataVector::data_vectors[d0.pool_index].list;
+            if(index<0 || index+d0.offset>=static_cast<int64_t>(x0f.size())) {
+                std::stringstream msg;
+                msg << "out of bounds for nth_insert: " << index << '/' << x0f.size()-d0.offset;
+                throw std::runtime_error(msg.str());
+            }
+            if(d0.get_refcount()==1) { // just process in place
+                x0f[index+d0.offset]=args.data[args.offset+2];
+                sofar.data.push_back(args.data[args.offset]);
+            } else {
+                std::vector<DataElement> copy(x0f.begin()+d0.offset,x0f.end());
+                copy[index]=args.data[args.offset+2];
+                uint32_t newvec=DataVector::allocate();
+                DataVector::data_vectors[newvec].list=std::move(copy);
+                DataContainer dc(newvec,0);
+                DataElement x=DataElement{DataList{std::move(dc)}};
+                sofar.data.push_back(x);
+            }
+        } break;
         default: {
             std::stringstream msg;
             msg << "unknown library function: " << static_cast<int>(op);
