@@ -1559,11 +1559,6 @@ ctype_in_extra({_,_,{1},_},tp,name) -> "";
 ctype_in_extra({_,_,_,_},TypeString,name) -> "";
 ctype_in_extra({_,_,{2,_},_},tp,name) -> {',size_t ',*name,'_len'};
 
-// is_unsigned(_) -> false;
-//
-// z_or_s(tp) when is_unsigned(tp) -> 'z';
-// z_or_s(_) -> 's';
-
 create_export_vm_in(types,code,sofar,_,{},{}) -> code,sofar;
 create_export_vm_in(types,code,sofar,n,{{_,TypeString,_},*rest},{val,*vrest}) match val => true
     match int2s(n) => i ->

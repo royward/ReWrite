@@ -37,6 +37,10 @@ const std::unordered_map<std::string, TokenKind> library_map = {
     {"println", PrintLn},
     {"println_any", PrintLnAny},
     {"println_debug", PrintLnDebug},
+    // {"length", Length},
+    // {"nth", Nth},
+    // {"nth_insert", NthInsert},
+    // {"nth_take", NthTake},
 };
 
 std::vector<std::string_view> disambiguate(std::vector<std::string_view> v) {

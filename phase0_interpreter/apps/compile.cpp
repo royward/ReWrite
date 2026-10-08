@@ -122,6 +122,8 @@ int main(int argc, char** argv) {
             std::vector<uint64_t> data=results[1].get_vec_u64();
             write_binary_to_file(infile+".rwo",(const uint8_t*)data.data(),data.size()*8);
         }
+        uint32_t free_size=DataVector::count_free();
+        std::cout << "List use: " << free_size << '/' << DataVector::data_vectors.size()-1 << " freed" << std::endl;
         return 0;
     } catch(const std::runtime_error& e) {
         std::cout << "Error: " << e.what() << std::endl;

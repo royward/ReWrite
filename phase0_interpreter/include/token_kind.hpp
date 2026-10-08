@@ -80,4 +80,8 @@ enum TokenKind {
     PrintLn,
     PrintLnAny,
     PrintLnDebug,
+    Length,
+    Nth,
+    NthInsert,
+    NthTake,
 };
