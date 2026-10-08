@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: CC0-1.0
 
 // Convert integer to Roman Numeral.
+export fn int_to_roman(i64) -> value string;
 int_to_roman(i) when i>=1000 -> {'M',*int_to_roman(i-1000)};
 int_to_roman(i) when i>=900 -> {'CM',*int_to_roman(i-900)};
 int_to_roman(i) when i>=500 -> {'D',*int_to_roman(i-500)};
@@ -17,10 +18,12 @@ int_to_roman(i) when i>=4 -> {'IV',*int_to_roman(i-4)};
 int_to_roman(i) when i>=1 -> {'I',*int_to_roman(i-1)};
 int_to_roman(_) -> "";
 
+fn to_uppercase(char) -> char;
 to_uppercase(c) when c>='a' when c<='z' -> c-32;
 to_uppercase(c) -> c;
 
 // Convert Roman Numeral to integer. Does not validate that the Roman Numeral is well formed.
+fn roman_to_int_convert(char) -> i64;
 roman_to_int_convert('I') -> 1;
 roman_to_int_convert('V') -> 5;
 roman_to_int_convert('X') -> 10;
@@ -29,8 +32,10 @@ roman_to_int_convert('C') -> 100;
 roman_to_int_convert('D') -> 500;
 roman_to_int_convert('M') -> 1000;
 
+fn roman_to_int_convert_case(char) -> i64;
 roman_to_int_convert_case(x) -> roman_to_int_convert(to_uppercase(x));
 
+export fn roman_to_int(value string) -> i64;
 roman_to_int("") -> 0;
 roman_to_int({a,b,*rest}) when roman_to_int_convert_case(a)<roman_to_int_convert_case(b) ->
     roman_to_int_convert_case(b)-roman_to_int_convert_case(a)+roman_to_int(rest);

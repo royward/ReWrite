@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: CC0-1.0
 
 // Imagine this is some function that is expensive to compute
+fn expensive(i64) -> i64;
 expensive(n) -> n+n+n;
 
 // Use match to bind it to result, then use result twice
+export fn use_twice(i64) -> i64;
 use_twice(n) match expensive(n) => result -> result*result;

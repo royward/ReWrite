@@ -1,6 +1,7 @@
 // Example: min and max, showing multiple returns
 // SPDX-License-Identifier: CC0-1.0
 
+export fn member(i64, value [i64]) -> bool;
 member(_,{}) -> false;
 member(x,{x,*_}) -> true;
 member(x,{_,*rest}) -> member(x,rest);

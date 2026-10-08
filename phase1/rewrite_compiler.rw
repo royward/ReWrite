@@ -71,10 +71,10 @@ const ErrUser=10;
 
 const OpBuildIOList=1000000;
 
-:- basename(string) -> string;
+fn basename(string) -> string;
 basename(s) -> basename_aux(s, s);
 
-:- basename_aux(string, string) -> string;
+fn basename_aux(string, string) -> string;
 basename_aux({}, last) -> last;
 basename_aux({'/', *rest}, _) -> basename_aux(rest, rest);
 basename_aux({_, *rest}, last) -> basename_aux(rest, last);
@@ -182,6 +182,7 @@ lex_check_spec_identifier("@update") -> UpdateDecline;
 lex_check_spec_identifier("when") -> When;
 lex_check_spec_identifier("type") -> Type;
 lex_check_spec_identifier("export") -> Export;
+lex_check_spec_identifier("fn") -> TypeFn;
 lex_check_spec_identifier("_") -> Wildcard;
 lex_check_spec_identifier(x) -> Identifier;
 
@@ -204,7 +205,6 @@ lexer_string(row,col,sofar,endtok,{c,*rest}) -> lexer_string(row,col+1,{*sofar,c
 
 lexer_two_symbol('&&') -> AndAnd;
 lexer_two_symbol('->') -> Arrow;
-lexer_two_symbol(':-') -> TypeFn;
 lexer_two_symbol('==') -> EqualEqual;
 lexer_two_symbol('=>') -> DoubleArrow;
 lexer_two_symbol('>=') -> GreaterEqual;
@@ -328,7 +328,7 @@ parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{fnlineno
     update parse_types(true,false,{},{},Semicolon,types,type_lookup,rest) => types_rhs,value_rhs,rest,types,type_lookup
     update get_add_symbol_table(0,{},fnnames,name,{false,fnlineno+1,symsz,types_lhs,types_rhs,value_lhs,value_rhs}) => fnnames,_ ->
     parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,type_lookup,rest);
-parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{fnlineno,_,TypeFn,_},{_,_,Export,_},{_,_,Identifier,name},{_,_,LParen,_},*rest})
+parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{fnlineno,_,Export,_},{_,_,TypeFn,_},{_,_,Identifier,name},{_,_,LParen,_},*rest})
     update parse_types(true,false,{},{},RParen,types,type_lookup,rest) => types_lhs,value_lhs,rest,types,type_lookup
     update rest => {{_,_,Arrow,_},*rest}
     update parse_types(true,false,{},{},Semicolon,types,type_lookup,rest) => types_rhs,value_rhs,rest,types,type_lookup
@@ -1277,14 +1277,14 @@ xemit_instruction_build(sofar,n,{}) -> xemit_instruction_build({*sofar,0},n-1,{}
 xemit_instruction_build(sofar,n,{a}) -> xemit_instruction_build({*sofar,a},n-1,{});
 xemit_instruction_build(sofar,n,{a,b,*rest}) -> xemit_instruction_build({*sofar,a+(b<<32)},n-1,rest);
 
-:- text_to_u64([i64], string) -> [i64];
+fn text_to_u64([i64], string) -> [i64];
 text_to_u64(sofar, {}) -> sofar;
 text_to_u64(sofar, s)
     update pack8(s, 0, 0) => word, rest
     -> text_to_u64({*sofar, word}, rest);
 
 // pack8(remaining, shift, acc): pack up to 8 chars, first char in the low byte
-:- pack8(string, i64, i64) -> i64, string;
+fn pack8(string, i64, i64) -> i64, string;
 pack8({}, _, acc) -> acc, {};
 pack8(s, 64, acc) -> acc, s;
 pack8({c, *rest}, shift, acc) -> pack8(rest, shift + 8, acc + ((c - '\0') << shift));

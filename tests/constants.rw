@@ -6,6 +6,7 @@ const TokPlus = 2;
 const TokMinus = 3;
 const TokEof = 0;
 
+export fn eval(i64,i64,i64) -> i64
 eval(TokNumber, a, _) -> a; // just return the first one
 eval(TokPlus, a, b) -> a+b;
 eval(TokMinus, a, b) -> a-b;

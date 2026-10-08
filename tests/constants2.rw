@@ -3,4 +3,5 @@
 
 const name='World';
 
+export fn hello() -> value string;
 hello() -> {'Hello ', name ,'!'};

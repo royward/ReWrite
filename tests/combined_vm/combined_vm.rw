@@ -2,66 +2,66 @@
 // NOTE: this will disappear as the native versions can do anything the VM version can
 // SPDX-License-Identifier: CC0-1.0
 
-:- g() -> char,char;
+fn g() -> char,char;
 g() -> 'cd';
 
-:- export f() -> i64,value string, value string;
+export fn f() -> i64,value string, value string;
 f() -> 0,{'ab',g()},"test";
 
-:- export h(value string, value string, i64) -> value string, char;
+export fn h(value string, value string, i64) -> value string, char;
 h(s,{_,a,'x'},0) -> s,a;
 
-:- export cdr(value [i64]) -> value [i64];
+export fn cdr(value [i64]) -> value [i64];
 cdr({a,*rest}) -> rest;
 
-:- export car(value string) -> char;
+export fn car(value string) -> char;
 car({a,*rest}) -> a;
 
-:- export len(value string) -> i64;
+export fn len(value string) -> i64;
 len("") -> 0;
 len({a,*rest}) -> len(rest)+1;
 
-:- export len_int(value [i64]) -> i64;
+export fn len_int(value [i64]) -> i64;
 len_int({}) -> 0;
 len_int({a,*rest}) -> len_int(rest)+1;
 
-:- export member(i64, value [i64]) -> bool;
+export fn member(i64, value [i64]) -> bool;
 member(_,{}) -> false;
 member(x,{x,*_}) -> true;
 member(x,{_,*rest}) -> member(x,rest);
 
-:- temp() -> bool;
+fn temp() -> bool;
 temp() -> member(2,{1,2,3});
 
-:- export listn2(i64) -> value string;
+export fn listn2(i64) -> value string;
 listn2(n) -> listn_aux(0,n,{});
 
-:- listn_aux(i64,i64,string) -> string;
+fn listn_aux(i64,i64,string) -> string;
 listn_aux(n,n,sofar) -> sofar;
 listn_aux(n,m,sofar) -> listn_aux(n+1,m,{*sofar,'a'+n});
 
-:- export listn(i64) -> value string;
+export fn listn(i64) -> value string;
 listn(0) -> {};
 listn(n) -> {*listn(n-1),'a'+n-1};
 
-:- hw_aux() -> string,string,string;
+fn hw_aux() -> string,string,string;
 hw_aux() -> "hello ","world","!";
 
-:- export hw(value string) -> value string,value string;
+export fn hw(value string) -> value string,value string;
 hw(s) -> {*hw_aux(),*s,*hw_aux()},s;
 
-:- export strdup(value string) -> value string,value string;
+export fn strdup(value string) -> value string,value string;
 strdup(x) -> x,x;
 
-:- export string_to_int(value string) -> i64;
+export fn string_to_int(value string) -> i64;
 string_to_int({'-',*rest}) -> -string_to_int_pos(rest,0);
 string_to_int(s) -> string_to_int_pos(s,0);
 
-:- string_to_int_pos(string, i64) -> i64;
+fn string_to_int_pos(string, i64) -> i64;
 string_to_int_pos({},acc) -> acc;
 string_to_int_pos({c,*rest},acc) -> string_to_int_pos(rest,acc*10+(c-'0'));
 
-:- export int_to_roman(i64) -> value string;
+export fn int_to_roman(i64) -> value string;
 int_to_roman(i) when i>=1000 -> {'M',*int_to_roman(i-1000)};
 int_to_roman(i) when i>=900 -> {'CM',*int_to_roman(i-900)};
 int_to_roman(i) when i>=500 -> {'D',*int_to_roman(i-500)};
@@ -77,11 +77,11 @@ int_to_roman(i) when i>=4 -> {'IV',*int_to_roman(i-4)};
 int_to_roman(i) when i>=1 -> {'I',*int_to_roman(i-1)};
 int_to_roman(_) -> "";
 
-:- to_uppercase(char) -> char;
+fn to_uppercase(char) -> char;
 to_uppercase(c) when c>='a' when c<='z' -> c-32;
 to_uppercase(c) -> c;
 
-:- roman_to_int_convert(char) -> i64;
+fn roman_to_int_convert(char) -> i64;
 roman_to_int_convert('I') -> 1;
 roman_to_int_convert('V') -> 5;
 roman_to_int_convert('X') -> 10;
@@ -90,111 +90,111 @@ roman_to_int_convert('C') -> 100;
 roman_to_int_convert('D') -> 500;
 roman_to_int_convert('M') -> 1000;
 
-:- roman_to_int_convert_case(char) -> i64;
+fn roman_to_int_convert_case(char) -> i64;
 roman_to_int_convert_case(x) -> roman_to_int_convert(to_uppercase(x));
 
-:- export roman_to_int(value string) -> i64;
+export fn roman_to_int(value string) -> i64;
 roman_to_int("") -> 0;
 roman_to_int({a,b,*rest}) when roman_to_int_convert_case(a)<roman_to_int_convert_case(b) ->
     roman_to_int_convert_case(b)-roman_to_int_convert_case(a)+roman_to_int(rest);
 roman_to_int({a,*rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
 
-:- export nprime(i64) -> value [i64];
+export fn nprime(i64) -> value [i64];
 nprime(n) -> nprime_aux(n,2,{});
 
-:- nprime_aux(i64,i64,[i64]) -> [i64];
+fn nprime_aux(i64,i64,[i64]) -> [i64];
 nprime_aux(0,_,sofar) -> sofar;
 nprime_aux(n,p,sofar) when isprime(p,sofar) -> nprime_aux(n-1,p+1,{*sofar,p});
 nprime_aux(n,p,sofar) -> nprime_aux(n,p+1,sofar);
 
-:- isprime(i64,[i64]) -> bool;
+fn isprime(i64,[i64]) -> bool;
 isprime(n,{i,*_}) when i*i>n -> true;
 isprime(n,{i,*_}) when n%i==0 -> false;
 isprime(n,{_,*rest}) -> isprime(n,rest);
 isprime(_,{}) -> true;
 
-:- export testprime(i64) -> bool;
+export fn testprime(i64) -> bool;
 testprime(n) -> isprime(n,{2,3,5,7,11});
 
-:- export car_nqueens(i64) -> value [i64];
+export fn car_nqueens(i64) -> value [i64];
 car_nqueens(x) -> car_nqueens_aux(nqueens(x));
 
-:- car_nqueens_aux([[i64]]) -> [i64];
+fn car_nqueens_aux([[i64]]) -> [i64];
 car_nqueens_aux({x,*_}) -> x;
 
-:- export len_nqueens(i64) -> i64;
+export fn len_nqueens(i64) -> i64;
 len_nqueens(x) -> length_nqueens_aux(nqueens(x));
 
-:- length_nqueens_aux([[i64]]) -> i64;
+fn length_nqueens_aux([[i64]]) -> i64;
 length_nqueens_aux({}) -> 0;
 length_nqueens_aux({_,*rest}) -> 1+length_nqueens_aux(rest);
 
-:- nqueens(i64) -> [[i64]];
+fn nqueens(i64) -> [[i64]];
 nqueens(n) -> nqueens_aux({},listn1(n),{});
 
-:- listn1(i64) -> [i64];
+fn listn1(i64) -> [i64];
 listn1(0) -> {};
 listn1(n) -> {*listn1(n-1),n};
 
 // nqueens_aux(column_choices_sofar, column_choices_todo, rows_done)
-:- nqueens_aux([i64],[i64],[i64]) -> [[i64]];
+fn nqueens_aux([i64],[i64],[i64]) -> [[i64]];
 nqueens_aux({},{},solution) -> {solution};
 nqueens_aux(_,{},solution) -> {};
 nqueens_aux(col_so_far,{c,*col_todo},rows_done) -> {*nqueens_try(col_so_far,col_todo,c,rows_done),*nqueens_aux({*col_so_far,c},col_todo,rows_done)};
 
-:- nqueens_try([i64],[i64],i64,[i64]) -> [[i64]];
+fn nqueens_try([i64],[i64],i64,[i64]) -> [[i64]];
 nqueens_try(col_so_far,col_todo,c,rows_done) when attack(c,1,rows_done) -> {}; // no solutions here
 nqueens_try(col_so_far,col_todo,c,rows_done) -> nqueens_aux({},{*col_so_far,*col_todo},{c,*rows_done}); // got another row
 
-:- attack(i64, i64, [i64]) -> bool;
+fn attack(i64, i64, [i64]) -> bool;
 attack(c,offset,{}) -> false;
 attack(c,offset,{x,*rest}) when c+offset==x || c-offset==x -> true;
 attack(c,offset,{_,*rest}) -> attack(c,offset+1,rest);
 
-:- export test_match_list() -> i64;
+export fn test_match_list() -> i64;
 test_match_list() match {1,2,3} => {_,x,*_} -> x;
 
-:- export test_match_list_list() -> value [bool];
+export fn test_match_list_list() -> value [bool];
 test_match_list_list() match {{{false}}} => {{x}} -> x;
 
-:- export test_match_list_list2() -> bool;
+export fn test_match_list_list2() -> bool;
 test_match_list_list2() match {{{false}}} => {{{x}}} -> x;
 
-:- export test_match_list_list3() -> ;
+export fn test_match_list_list3() -> ;
 test_match_list_list3() match {{{false}}} => _ ->;
 
-// :- export joinstringtest() -> string;
+// export fn joinstringtest() -> string;
 // joinstringtest() match {"ab","cd"} => {x,y} -> {*x,*y};
 
-// :- export splatsplat() -> value string;
+// export fn splatsplat() -> value string;
 // splatsplat() match splatsplat_aux() => x -> {**x};
 
-:- splatsplat_aux() -> [string];
+fn splatsplat_aux() -> [string];
 splatsplat_aux() -> {"ab","cd","ef"};
 
-:- export len2(value string) -> i64;
+export fn len2(value string) -> i64;
 len2(x) -> length(x);
 
-:- export nth2(value string,i64) -> char;
+export fn nth2(value string,i64) -> char;
 nth2(x,y) -> nth(x,y);
 
-:- export nth3(i64) -> value string;
+export fn nth3(i64) -> value string;
 nth3(x) -> nth(splatsplat_aux(),x);
 
-:- export append_keep(value string) -> value string,value string;
+export fn append_keep(value string) -> value string,value string;
 append_keep(s) -> {*s,'z'},s;
 
-:- append_keep_list([string],string) -> [string],[string];
+fn append_keep_list([string],string) -> [string],[string];
 append_keep_list(s,t) -> {t,*s,t},s;
 
-:- export append_keep_list_test() -> i64,i64;
+export fn append_keep_list_test() -> i64,i64;
 append_keep_list_test() match append_keep_list(splatsplat_aux(),"gh") => x,y -> length(x),length(y);
 
-:- export insert_char(value string,i64,char) -> value string;
+export fn insert_char(value string,i64,char) -> value string;
 insert_char(x,y,z) -> nth_insert(x,y,z);
 
-:- insert_string_aux([string],i64,string) -> [string];
+fn insert_string_aux([string],i64,string) -> [string];
 insert_string_aux(x,y,z) -> nth_insert(x,y,z);
 
-:- export insert_string(i64,value string) -> i64;
+export fn insert_string(i64,value string) -> i64;
 insert_string(x,y) match insert_string_aux(splatsplat_aux(),x,y) => t -> length(t);
