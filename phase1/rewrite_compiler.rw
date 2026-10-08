@@ -660,7 +660,7 @@ ctx_update_lbl_id({types,type_lookup,target,tailcall,active,lbl_decline,lbl_id,f
     {types,type_lookup,target,tailcall,active,lbl_decline,lbl_id+1,fn_id,rule_id,linerule,bindings,reg_count,table};
 
 depth_count(n,_,0) -> n; // HACK - deal with unknown types to make length({}) work
-depth_count(n,types,tp) @match nth(types,tp) => {_,_,{1},_} -> n;
+depth_count(n,types,tp) @match nth(types,tp) => {_,_,{1},{0,sz}} -> n,sz;
 depth_count(n,types,tp) @match nth(types,tp) => {_,_,{2,sub_type},_} -> depth_count(n+1,types,sub_type);
 
 // TODO expand this to deal properly with types. Just scalars and lists of scalars for now
@@ -668,7 +668,7 @@ gen_types_deref_free(false,_,_,_) -> {};
 gen_types_deref_free(_,ctx,tp,{_}) -> {};
 gen_types_deref_free(_,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz1}})
     match ctx_get_types(ctx) => types
-    match depth_count(0,types,tp) => depth
+    match depth_count(0,types,tp) => depth,_
     -> {{ctx_fnr(ctx),if(depth<2,OpDerefFree,OpDerefFreeList),0,0,src_flag1,src1,0,0,0,0,depth-1}};
 
 gen_types_addref(ctx,tp,{},_) -> ctx,{};
@@ -678,6 +678,7 @@ gen_types_addref(ctx,tp,{{src_flag1,src1,sz1},_},v)
     -> ctx,{{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},{ctx_fnr(ctx),OpIncMem,0,0,0,parray,0,32,BindImm,v,4}};
 
 gen_types_do_compare(ctx,tp,{{srcflag1,src1,sz}},{{srcflag2,src2,sz}}) -> ctx,{},srcflag1,src1,srcflag2,src2,sz;
+//gen_types_do_compare(ctx,tp,{{sf1a,src1a,32},{sf1b,src1b,32}},{sf2a,src2a,32},{sf2b,src2b,32}}) -> ctx,{},srcflag1,src1,srcflag2,src2,sz;
 
 // deal with tail recursion (error if sigs don't match)
 compile_rule(target,linerule,ctx,sofar,{pf1,pf2,params},clauses,{{ExprCall,fn_id,args}},regs_left,type_left,regs_right,type_right)
@@ -1042,7 +1043,7 @@ generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,subtype,args_code,
     -> ctx,false,{{ctx_fnr(ctx),OpAlloc,0,0,BindReg,newarray,BindImm,bits_to_bytes(sz),BindImm,c},{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,BindReg,newarray},*code,{ctx_fnr(ctx),OpStore,3,0,0,parray,BindImm,c,0,0,8}},
     {{{{BindReg,newarray,32},{BindImm,0,32}},stype,Consume}};
 generate_expr_code_list(ctx,newarray,parray,newstart,sz,stype,subtype,pre_splat,{{true,precode,{{{array_flag,array,32},{start_flag,start,32}},stype,_}}},post_splat) // first splat - check for prepend and append
-    match depth_count(0,ctx_get_types(ctx),subtype) => depth
+    match depth_count(0,ctx_get_types(ctx),subtype) => depth,_
     update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,pre_splat) => ctx,sum_const_pre,{},BindImm,0
     update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,post_splat) => ctx,sum_const_post,sum_code,sum_src_flag,sum_src
     update array_var_elt_assign_pre(sz,ctx,BindReg,newarray,BindReg,newstart,0,{},pre_splat) => code_pre
@@ -1104,7 +1105,7 @@ generate_expr_code_library(3,post_arrow,ctx,stypes,args) // nth_insert
     match nth(ctx_get_types(ctx),listtype) => {_,_,{2,elttype},_}
     match nth(ctx_get_types(ctx),elttype) => {_,_,_,storage}
     match sum_sub_alloc(0,storage) => sz
-    match depth_count(0,ctx_get_types(ctx),elttype) => depth
+    match depth_count(0,ctx_get_types(ctx),elttype) => depth,_
     update ctx_newreg(ctx,32) => ctx,newarray
     update ctx_newreg(ctx,64) => ctx,parrayold
     update ctx_newreg(ctx,64) => ctx,parray
@@ -1139,7 +1140,7 @@ generate_expr_code_library(4,post_arrow,ctx,stypes,args) // nth_take
     match nth(ctx_get_types(ctx),listtype) => {_,_,{2,elttype},_}
     match nth(ctx_get_types(ctx),elttype) => {_,_,_,storage}
     match sum_sub_alloc(0,storage) => sz
-    match depth_count(0,ctx_get_types(ctx),elttype) => depth
+    match depth_count(0,ctx_get_types(ctx),elttype) => depth,_
     update ctx_newreg(ctx,32) => ctx,newarray
     update ctx_newreg(ctx,64) => ctx,parrayold
     update ctx_newreg(ctx,64) => ctx,parray
