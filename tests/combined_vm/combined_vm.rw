@@ -201,3 +201,7 @@ insert_string(x,y) match insert_string_aux(splatsplat_aux(),x,y) => t -> length(
 
 export fn nth_take_string(value string,i64) -> value string,char;
 nth_take_string(x,y) match nth_take(x,y) => a,b -> a,b;
+
+// export fn equal_string(value string,value string) -> bool;
+// equal_string(x,x) -> true;
+// equal_string(_,_) -> false;

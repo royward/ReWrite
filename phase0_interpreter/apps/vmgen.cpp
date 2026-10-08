@@ -77,7 +77,7 @@ void write_string_to_file_fast(const std::string& filename, const std::string& c
 }
 
 int main(int argc, char** argv) {
-    CLI::App app{"ReWrite Stage 1 interpreter"};
+    CLI::App app{"ReWrite Stage 1 VM generator"};
     bool fast = false;
     app.add_flag("--fast", fast, "Enable fast execution mode");
     CLI11_PARSE(app, argc, argv);

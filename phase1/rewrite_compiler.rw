@@ -659,6 +659,10 @@ ctx_set_lbl_id({types,type_lookup,target,tailcall,active,lbl_decline,_,fn_id,rul
 ctx_update_lbl_id({types,type_lookup,target,tailcall,active,lbl_decline,lbl_id,fn_id,rule_id,linerule,bindings,reg_count,table}) ->
     {types,type_lookup,target,tailcall,active,lbl_decline,lbl_id+1,fn_id,rule_id,linerule,bindings,reg_count,table};
 
+depth_count(n,_,0) -> n; // HACK - deal with unknown types to make length({}) work
+depth_count(n,types,tp) @match nth(types,tp) => {_,_,{1},_} -> n;
+depth_count(n,types,tp) @match nth(types,tp) => {_,_,{2,sub_type},_} -> depth_count(n+1,types,sub_type);
+
 // TODO expand this to deal properly with types. Just scalars and lists of scalars for now
 gen_types_deref_free(false,_,_,_) -> {};
 gen_types_deref_free(_,ctx,tp,{_}) -> {};
@@ -666,10 +670,6 @@ gen_types_deref_free(_,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz1}})
     match ctx_get_types(ctx) => types
     match depth_count(0,types,tp) => depth
     -> {{ctx_fnr(ctx),if(depth<2,OpDerefFree,OpDerefFreeList),0,0,src_flag1,src1,0,0,0,0,depth-1}};
-
-depth_count(n,_,0) -> n; // HACK - deal with unknown types to make length({}) work
-depth_count(n,types,tp) @match nth(types,tp) => {_,_,{1},_} -> n;
-depth_count(n,types,tp) @match nth(types,tp) => {_,_,{2,sub_type},_} -> depth_count(n+1,types,sub_type);
 
 gen_types_addref(ctx,tp,{},_) -> ctx,{};
 gen_types_addref(ctx,tp,{_},_) -> ctx,{};
@@ -761,7 +761,7 @@ generate_param_code(owned,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const
     generate_param_code(owned,false,bindlevel,newstride,ctx,{*sofar0,*mv_code,*code},sofar1,type_left,rest);
 generate_param_code(owned,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{{{src_flag,src,sz}},tp,_},type_left
-    update generate_conditional_rhs(ctx,{*sofar0,*mv_code},tp,OpCompEqBr,ErrNoMatchRhs,{{src_flag,src,sz},{BindImm,val,sz}}) => ctx,code ->
+    update generate_conditional_rhs(ctx,{*sofar0,*mv_code},tp,OpCompEqBr,ErrNoMatchRhs,src_flag,src,BindImm,val,sz) => ctx,code ->
     generate_param_code(owned,true,bindlevel,newstride,ctx,code,sofar1,type_left,rest);
 generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
     @update gen_param_code_next_type(false,ctx,stride,typex) => ctx,mv_code,newstride,{{{BindMem,src1,sz},{BindMem,src2,sz}},tp,_},type_left
@@ -867,7 +867,7 @@ generate_list_min_size_aux({ParamSplatWild,_}) -> 0,1;
 sum_sub_alloc(n,{}) -> n;
 sum_sub_alloc(n,{_,sz,*rest}) -> sum_sub_alloc(n+sz,rest);
 
-generate_conditional_rhs(ctx,code,tp,cmp_op,err,{{src_flag,src,sz},{src_flag2,src2,sz}})
+generate_conditional_rhs(ctx,code,tp,cmp_op,err,src_flag,src,src_flag2,src2,sz)
     update ctx_update_lbl_id(ctx) => ctx
     match ctx_get_lbl_stuff(ctx) => target,active,lbl_decline,lbl_id
     update generate_conditional(ctx,target,active,lbl_id,lbl_id,cmp_op,tp,sz,src_flag,src,src_flag2,src2) => _,ctx,newcode
@@ -889,7 +889,7 @@ generate_bind_variable(count,false,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
     -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
 generate_bind_variable(count,true,bindlevel,ctx,{{src_flag,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
-    update generate_conditional_rhs(ctx,{},tp,OpCompEqBr,ErrNoMatchRhs,{{src_flag,src,sz},{src_flag2,src2,sz}}) => ctx,code
+    update generate_conditional_rhs(ctx,{},tp,OpCompEqBr,ErrNoMatchRhs,src_flag,src,src_flag2,src2,sz) => ctx,code
     -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},code,{};
 
 generate_bind_variable_aux(ctx,bind,code,{}) -> ctx,bind,code;
@@ -1083,7 +1083,7 @@ generate_expr_code_library(2,post_arrow,ctx,stypes,args) // nth
     update ctx_newreg(ctx,32) => ctx,index
     update ctx_newreg(ctx,32) => ctx,len
     update ctx_newreg(ctx,64) => ctx,pbegin
-    update generate_conditional_rhs(ctx,{},TypeU32,OpCompLtBr,ErrOutOfRangeIndex,{{indf,ind,32},{BindReg,len,32}}) => ctx,check_code
+    update generate_conditional_rhs(ctx,{},TypeU32,OpCompLtBr,ErrOutOfRangeIndex,indf,ind,BindReg,len,32) => ctx,check_code
     match generate_get_stride(pbegin,storage) => sz_one,sz_tot,memindex,
     update move_mem_to_reg(true,ctx,{},{},memindex) => ctx,mv_code,memindex
     update gen_types_addref(ctx,dsttp,memindex,1) => ctx,addref
@@ -1112,7 +1112,7 @@ generate_expr_code_library(3,post_arrow,ctx,stypes,args) // nth_insert
     update ctx_newreg(ctx,32) => ctx,index
     update ctx_newreg(ctx,32) => ctx,len
     update ctx_newreg(ctx,64) => ctx,pbegin
-    update generate_conditional_rhs(ctx,{},TypeU32,OpCompLtBr,ErrOutOfRangeIndex,{{indf,ind,32},{BindReg,len,32}}) => ctx,check_code
+    update generate_conditional_rhs(ctx,{},TypeU32,OpCompLtBr,ErrOutOfRangeIndex,indf,ind,BindReg,len,32) => ctx,check_code
     match generate_get_stride(pbegin,storage) => sz_one,sz_tot,memindex,
     update move_mem_to_reg(true,ctx,{},{},memindex) => ctx,mv_code,memindex2
     update gen_types_addref(ctx,elttype,storagee,1) => ctx,add_ref
@@ -1147,7 +1147,7 @@ generate_expr_code_library(4,post_arrow,ctx,stypes,args) // nth_take
     update ctx_newreg(ctx,32) => ctx,index
     update ctx_newreg(ctx,32) => ctx,len
     update ctx_newreg(ctx,64) => ctx,pbegin
-    update generate_conditional_rhs(ctx,{},TypeU32,OpCompLtBr,ErrOutOfRangeIndex,{{indf,ind,32},{BindReg,len,32}}) => ctx,check_code
+    update generate_conditional_rhs(ctx,{},TypeU32,OpCompLtBr,ErrOutOfRangeIndex,indf,ind,BindReg,len,32) => ctx,check_code
     match generate_get_stride(pbegin,storage) => sz_one,sz_tot,memindex,
     update move_mem_to_reg(true,ctx,{},{},memindex) => ctx,mv_code,memindex2
     update generate_tombstone(ctx,elttype,nth(ctx_get_types(ctx),elttype)) => ctx,tomb_mv,{tomb_store,_,_}
