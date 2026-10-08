@@ -194,7 +194,10 @@ export fn insert_char(value string,i64,char) -> value string;
 insert_char(x,y,z) -> nth_insert(x,y,z);
 
 fn insert_string_aux([string],i64,string) -> [string];
-insert_string_aux(x,y,z) -> nth_insert(x,y,z);
+insert_string_aux(x,y,z) match nth_insert(x,y,z) => t -> t;
 
 export fn insert_string(i64,value string) -> i64;
 insert_string(x,y) match insert_string_aux(splatsplat_aux(),x,y) => t -> length(t);
+
+export fn nth_take_string(value string,i64) -> value string,char;
+nth_take_string(x,y) match nth_take(x,y) => a,b -> a,b;

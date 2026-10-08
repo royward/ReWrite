@@ -208,6 +208,12 @@ int main(int argc, char** argv) {
     ret_code=rw_insert_string(exe,1,"XYZ",&result0);
     if(!ret_code && result0==3) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
 
+    printf("nth_take_string:");
+    exe->allocated=0;
+    ret_code=rw_nth_take_string(exe,"xyzzy",1,&resultc1,&resultc);
+    if(!ret_code && strcmp(resultc1,"x\xEF\xBF\xBDzzy")==0 && resultc=='y') { printf("success\n"); } else { printf("fail:%d %s %c\n",ret_code,resultc1,resultc); };
+    free(resultc1);
+
     printf("Heap size=%d\n",exe->end_of_heap*8);
 
     program_unload(&p);
