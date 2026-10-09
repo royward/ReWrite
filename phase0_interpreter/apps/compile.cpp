@@ -91,11 +91,12 @@ int main(int argc, char** argv) {
     CLI::App app{"ReWrite Stage 1 interpreter"};
     bool fast = false;
     bool native = false;
-    std::string infile;
+    std::vector<std::string> infiles;
     std::string outfile;
-    app.add_option("infile", infile, "Source file to interpret")->required();
+    app.add_option("infiles", infiles, "Source files to interpret")->required()->check(CLI::ExistingFile);
     app.add_flag("--fast", fast, "Enable fast execution mode");
     app.add_flag("--native", native, "Compile native");
+    app.add_option("-o,--output", outfile, "Output file");
     CLI11_PARSE(app, argc, argv);
     std::string popcodes="opcodes.rw";
     std::string pcompile="rewrite_compiler.rw";
@@ -104,23 +105,37 @@ int main(int argc, char** argv) {
         std::string opcodes=load_file(RW_ROOT+pathin+popcodes);
         std::string compile=load_file(RW_ROOT+pathin+pcompile);
         Program prog(std::vector{std::make_pair(popcodes,opcodes),std::make_pair(pcompile,compile)},fast);
-        std::string in=load_file(infile+".rw");
         std::vector<DataElement> args;
-        DataElement::push_string(args,infile);
-        DataElement::push_string(args,in);
+        DataElement::push_string(args,outfile);
+        for(std::string infile : infiles) {
+            std::string in=load_file(infile);
+            DataElement::push_string(args,infile);
+            DataElement::push_string(args,in);
+        }
+        for(size_t i=0;i<4-infiles.size();i++) {
+            DataElement::push_string(args,"");
+            DataElement::push_string(args,"");
+        }
         std::unordered_map<std::string, std::size_t> param_id_map;
-        param_id_map["f0"]=0;
-        param_id_map["s0"]=1;
+        param_id_map["outfile"]=0;
+        param_id_map["f1"]=1;
+        param_id_map["s1"]=2;
+        param_id_map["f2"]=3;
+        param_id_map["s2"]=4;
+        param_id_map["f3"]=5;
+        param_id_map["s3"]=6;
+        param_id_map["f4"]=7;
+        param_id_map["s4"]=8;
         if(native) {
             std::cout << "native\n";
-            std::vector<DataElement> results=prog.run_string_args(std::string("full_compile_native(f0,s0)"),param_id_map,args);
-            write_string_to_file(infile+"_native.h",results[0].get_string());
-            write_string_to_file(infile+"_native.ll",results[1].get_string());
+            std::vector<DataElement> results=prog.run_string_args(std::string("full_compile_native(outfile,f1,s1,f2,s2,f3,s3,f4,s4)"),param_id_map,args);
+            write_string_to_file(outfile+"_native.h",results[0].get_string());
+            write_string_to_file(outfile+"_native.ll",results[1].get_string());
         } else {
-            std::vector<DataElement> results=prog.run_string_args(std::string("full_compile_vm(f0,s0)"),param_id_map,args);
-            write_string_to_file(infile+".h",results[0].get_string());
+            std::vector<DataElement> results=prog.run_string_args(std::string("full_compile_vm(outfile,f1,s1,f2,s2,f3,s3,f4,s4)"),param_id_map,args);
+            write_string_to_file(outfile+".h",results[0].get_string());
             std::vector<uint64_t> data=results[1].get_vec_u64();
-            write_binary_to_file(infile+".rwo",(const uint8_t*)data.data(),data.size()*8);
+            write_binary_to_file(outfile+".rwo",(const uint8_t*)data.data(),data.size()*8);
         }
         uint32_t free_size=DataVector::count_free();
         std::cout << "List use: " << free_size << '/' << DataVector::data_vectors.size()-1 << " freed" << std::endl;

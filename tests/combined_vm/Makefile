@@ -11,7 +11,7 @@ test_vm: combined.exe
 	./combined.exe
 
 combined.exe: FORCE
-	$(REWRITE_CPP) combined_vm
+	$(REWRITE_CPP) combined_vm.rw -o combined_vm
 	clang -ggdb3 -Wall -Wextra -pedantic -I../../vm/include/ -I../../vm/generated/ ../../vm/src/vm.c main.c -o $@
 
 test_native: combined_native.exe
