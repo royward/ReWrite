@@ -100,6 +100,7 @@ full_compile_native(outfile,f1,s1,f2,s2,f3,s3,f4,s4)
 compile1(target,types,type_lookup,lbl_id,_,table,symtext,symsz,sofar,{}) -> types,lbl_id,table,symtext,symsz,sofar;
 compile1(target,types,type_lookup,lbl_id,n,table,symtext,symsz,sofar,{rules,*rest})
     match nth(table,n) => {_,_,_,name,reg_count1,bitmask1,type_left,regs_left,reg_count2,bitmask2,type_right,_}
+    match println_any(name) =>
     update compile_function(types,type_lookup,target,reg_count1,true,lbl_id,n,table,0,
         {{n,0,OpLabel,0,0,0,n}},
         rules,0,bitmask_or({},bitmask1,bitmask2),reg_count1,type_left,reg_count2,type_right) => types,type_lookup,lbl_id,code
@@ -1254,6 +1255,10 @@ binop(t1,t1,Minus) -> true,false,t1,OpMinus;
 binop(TypeChar,t1,Minus) -> true,false,TypeChar,OpMinus;
 binop(t1,t1,Star) -> true,false,t1,OpTimes;
 binop(t1,t1,Divide) -> true,false,t1,OpDiv;
+binop(t1,t1,ShiftLeft) -> true,false,t1,OpShiftLeft;
+binop(t1,t1,ShiftRight) -> true,false,t1,OpShiftRight;
+binop(t1,t1,And) -> true,false,t1,OpAnd;
+binop(t1,t1,Or) -> true,false,t1,OpOr;
 binop(t1,t1,Modulus) -> true,false,t1,OpMod;
 binop(t1,t1,Less) -> true,false,TypeBool,OpLt;
 binop(t1,t1,LessEqual) -> true,false,TypeBool,OpLte;

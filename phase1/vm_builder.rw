@@ -114,14 +114,21 @@ generate_inc_files()
     match process_oplist(0,{},oplist) => oplist2
     -> defs,oplist2,dis,exec,branch;
 
-fn process_oplist(i64,[string],[string]) -> string;
-process_oplist(n,full,{}) -> {*full,*listn_string(n,"&&L_OP_BAD,"),'\n'};
-process_oplist(n,full,{"",*rest}) -> process_oplist(n+1,full,rest);
-process_oplist(n,full,{name,*rest}) -> process_oplist(0,{*full,*listn_string(n,"&&L_OP_BAD,"),'&&L_',*name,','},rest);
-
 fn add_single_defs(string,[string],[i64]) -> string,[string];
 add_single_defs(defs,oplist,{}) -> defs,oplist;
 add_single_defs(defs,oplist,{op,*rest}) -> add_single_defs(generate_define_list(defs,oplist,{'OP_',*upper_snake_case({},true,op_name(op))},op),rest);
+
+fn generate_define_list(string,[string],string,i64) -> string,[string];
+generate_define_list(defs,oplist,name,op)
+    match nth(oplist,op) => {}
+    update nth_insert(oplist,op,name) => oplist
+    -> {*defs,'#define ',*name,' 0x',*int_to_hex(3,{},op),'\n'},oplist;
+
+
+fn process_oplist(i64,string,[string]) -> string;
+process_oplist(n,full,{}) -> {*full,*listn_string(n,"&&L_OP_BAD,"),'\n'};
+process_oplist(n,full,{"",*rest}) -> process_oplist(n+1,full,rest);
+process_oplist(n,full,{name,*rest}) -> process_oplist(0,{*full,*listn_string(n,"&&L_OP_BAD,"),'&&L_',*name,','},rest);
 
 fn generate_inc_files_aux(string,[string],string,string,string,[i64]) -> string,[string],string,string,string;
 generate_inc_files_aux(defs,oplist,dis,exec,branch,{}) -> defs,oplist,dis,exec,branch;
@@ -140,7 +147,7 @@ generate_inc_z(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,z,s,sd)
     update generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op+(1<<z),class,a,b,1,s,sd,'I') => defs,oplist,dis,exec,branch
     -> defs,oplist,dis,exec,branch;
 
-fn generate_inc_ss(string,[string],string,string,string,string,i64,i64,i64,i64,i64,i64,i64,i64) -> string,[string],string,string,string;
+fn generate_inc_ss(string,[string],string,string,string,string,i64,i64,i64,i64,i64,i64,i64,i64,char) -> string,[string],string,string,string;
 generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,z,16,sd,'X') -> generate_inc_sd(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,16,sd);
 generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,class,a,b,z,16,sd,zc) -> generate_inc_sd(defs,oplist,dis,exec,branch,{*name,zc},opb,op,a,b,z,16,sd);
 generate_inc_ss(defs,oplist,dis,exec,branch,name,opb,op,2,a,b,0,s,sd,zc)
@@ -185,11 +192,11 @@ generate_inc_final(defs,oplist,dis,exec,branch,name,opb,op,a,b,z,s,sd) when sd==
     -> defs,oplist,{*dis,'case ',*name,':{fprintf(out,',*dis1,');} break;\n'},{*exec,'CASE(',*name,') {\n\t',*exec1,';\n} NEXT();\n'},{*branch,*add_label_case(has_lbl,name)};
 generate_inc_final(defs,oplist,dis,exec,branch,_,_,_,_,_,_,_,_) -> defs,oplist,dis,exec,branch;
 
-fn add_label_case(false,string) -> string;
+fn add_label_case(bool,string) -> string;
 add_label_case(false,_) -> "";
 add_label_case(true,name) -> {'case ',*name,':\n'};
 
-fn generate_dis(i64,i64,i64,i64,i64,i64,i64,i64) -> string;
+fn generate_dis(i64,bool,i64,i64,i64,i64,i64,i64) -> string;
 generate_dis(1,_,opb,a,b,_,s,_) -> {'"let.x',*size_from_s(s),' r%u = ',*d_get_binding(a,1),*op_symbol(opb),*d_get_binding(b,1),'",opv->fdst.a,',*d_get_bind_val(a,1,'1'),',',*d_get_bind_val(b,1,'2')};
 generate_dis(2,has_lbl,opb,a,b,z,s,_)
     -> {*d_class2_start(has_lbl,z,s),*d_get_binding(a,z),*op_symbol(opb),*d_get_binding(b,z),'",',*d_class2_mid(has_lbl),*d_get_bind_val(a,z,'1'),',',*d_get_bind_val(b,z,'2'),*d_class2_end(has_lbl)};
@@ -202,7 +209,7 @@ generate_dis(5,has_lbl,opb,a,b,_,_,_)
 generate_dis(6,_,OpSext,_,_,_,s,sd) -> {'"sext.i',*size_from_s(s),'.i',*size_from_s(sd),' r%u = r%u",opv->fdst.a,opv->fsrc1.a'};
 generate_dis(7,_,opb,a,_,_,_,_) -> {'"let r%u = ',*op_symbol(opb),*d_get_binding(a,1),'",opv->fdst.a,',*d_get_bind_val(a,1,'1')};
 
-fn generate_exec(i64,i64,i64,i64,i64,i64,i64,i64) -> string;
+fn generate_exec(i64,bool,i64,i64,i64,i64,i64,i64) -> string;
 generate_exec(1,_,opb,a,b,_,s,_) -> {'R[opv->fdst.a]=',*e_size_from_s(s),'(',*e_get_bind_val(a,'1'),*e_op_symbol(opb),*e_get_bind_val(b,'2'),')'};
 generate_exec(2,has_lbl,opb,a,b,z,s,_)
     -> {*e_class2_start(has_lbl),'(uint',*size_from_s(s),'_t)((',*e_signed_size_from_s(z,s),*e_get_bind_val(a,'1'),')',*e_op_symbol(opb),'(',*e_signed_size_from_s(z,s),*e_get_bind_val(b,'2'),'))',*e_class2_end(has_lbl)};
@@ -303,21 +310,15 @@ op_symbol(OpOr) -> "|";
 op_symbol(OpXor) -> "^";
 op_symbol(OpMove) -> "";
 
-fn generate_define_list(string,[string],i64,string) -> string,[string];
-generate_define_list(defs,oplist,name,op)
-    match nth(oplist,op) => {}
-    update nth_insert(oplist,op,name) => oplist
-    -> {*defs,'#define ',*name,' 0x',*int_to_hex(3,{},op),'\n'},oplist;
-
 fn int_to_hex(i64,string,i64) -> string;
 int_to_hex(0,sofar,_) -> sofar;
 int_to_hex(n,sofar,v) when v&15<10 -> int_to_hex(n-1,{'0'+(v&15),*sofar},v>>4);
 int_to_hex(n,sofar,v)-> int_to_hex(n-1,{'A'+(v&15)-10,*sofar},v>>4);
 
-fn listnv(i64,i64) -> [i64];
+fn listnv(i64,string) -> [string];
 listnv(n,v) -> listn_aux(0,n,{},v);
 
-fn listn_aux(i64,i64,[i64],i64) -> [i64];
+fn listn_aux(i64,i64,[string],string) -> [string];
 listn_aux(n,n,sofar,v) -> sofar;
 listn_aux(n,m,sofar,v) -> listn_aux(n+1,m,{*sofar,v},v);
 

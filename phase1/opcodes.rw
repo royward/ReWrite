@@ -111,7 +111,7 @@ opclass(_) -> 10;
 
 // address encoding for each class - 16 means field not encoded
 //                    a  b  z  s sd
-fn opclass(i64) ->  i64,i64,i64,i64;
+fn opclass_encode(i64) ->  i64,i64,i64,i64,i64;
 opclass_encode(1) ->  4, 3,16, 5,16;
 opclass_encode(2) ->  9, 8,10, 5,16;
 opclass_encode(3) ->  0,16,16, 8,16;
