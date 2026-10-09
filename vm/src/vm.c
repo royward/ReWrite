@@ -302,6 +302,9 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
         case OP_APPEND_SPLAT_CONSUME: {
              fprintf(out,"append_splat_consume.%d (r%u) <- (r%u,r%u)",opv->fdst.b,opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a);
         } break;
+        case OP_COMPARE_LISTS: {
+             fprintf(out,"compare_lists %d <- (r%u,r%u) == (r%u,r%u) stride=%d depth=%d",opv->fdst.a,opv->fsrc1.a,opv->fsrc1.b,opv->fsrc2.a,opv->fsrc2.b,opv->fdst.b>>12,opv->fdst.b&0xFFF);
+        } break;
         case OP_CONT: {
             fprintf(out,"(continuation)");
         } break;
@@ -435,6 +438,37 @@ void splat_list_scalar_n(RWInstance* exe, uint32_t n, uint32_t more_levels, uint
     }
     if(consume) {
         deref_free(exe, array);
+    }
+}
+
+
+bool compare_lists(RWInstance* exe, uint32_t depth, uint64_t stride, uint32_t a1, uint32_t s1, uint32_t a2, uint32_t s2) {
+    uint32_t* parray1=rwu_get_header(exe,a1);
+    uint32_t* parray2=rwu_get_header(exe,a2);
+    uint32_t e1=parray1[2];
+    uint32_t e2=parray2[2];
+    uint32_t len=e1-s1;
+    if(len!=e2-s2) {
+        return false; // different lengths
+    }
+    if(a1==a2) {
+        return true; // same list (shortcut)
+    }
+    if(depth==0) {
+        uint8_t* d1=rwu_get_data(parray1);
+        uint8_t* d2=rwu_get_data(parray2);
+        return memcmp(d1+stride*s1,d2+stride*s2,stride*len)==0;
+    } else {
+        uint32_t* d1=rwu_get_data(parray1);
+        uint32_t* d2=rwu_get_data(parray2);
+        uint32_t s1_2=s1+s1;
+        uint32_t s2_2=s2+s2;
+        for(uint32_t i=0;i<len+len;i+=2) {
+            if(!compare_lists(exe,depth-1,stride,d1[i+s1_2],d1[i+s1_2+1],d2[i+s2_2],d2[i+s2_2+1])) {
+                return false;
+            }
+        }
+        return true;
     }
 }
 
@@ -846,7 +880,10 @@ dispatch:
                 uint32_t* d=rwu_get_data(pdstarray);
                 d[end+end]=array;
                 d[end+end+1]=start;
-         } NEXT();
+            } NEXT();
+            CASE(OP_COMPARE_LISTS) {
+                R[opv->fdst.a]=compare_lists(exe,opv->fdst.b&0xFFF,opv->fdst.b>>12,R[opv->fsrc1.a],R[opv->fsrc1.b],R[opv->fsrc2.a],R[opv->fsrc2.b]);
+            } NEXT();
             CASE(OP_DEREF_FREE) {
                 uint32_t array=R[opv->fdst.a];
                 deref_free(exe,array);

@@ -678,7 +678,10 @@ gen_types_addref(ctx,tp,{{src_flag1,src1,sz1},_},v)
     -> ctx,{{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},{ctx_fnr(ctx),OpIncMem,0,0,0,parray,0,32,BindImm,v,4}};
 
 gen_types_do_compare(ctx,tp,{{srcflag1,src1,sz}},{{srcflag2,src2,sz}}) -> ctx,{},srcflag1,src1,srcflag2,src2,sz;
-//gen_types_do_compare(ctx,tp,{{sf1a,src1a,32},{sf1b,src1b,32}},{sf2a,src2a,32},{sf2b,src2b,32}}) -> ctx,{},srcflag1,src1,srcflag2,src2,sz;
+gen_types_do_compare(ctx,tp,{{BindReg,src1a,32},{BindReg,src1b,32}},{{BindReg,src2a,32},{BindReg,src2b,32}})
+    match depth_count(0,ctx_get_types(ctx),tp) => depth,stride
+    update ctx_newreg(ctx,1) => ctx,result
+    -> ctx,{{ctx_fnr(ctx),OpCompareLists,0,0,BindReg,result,BindReg,src1a+(src1b<<32),BindReg,src2a+(src2b<<32),(depth-1)+((stride>>3)<<12)}},BindReg,result,BindImm,1,1;
 
 // deal with tail recursion (error if sigs don't match)
 compile_rule(target,linerule,ctx,sofar,{pf1,pf2,params},clauses,{{ExprCall,fn_id,args}},regs_left,type_left,regs_right,type_right)
@@ -717,8 +720,6 @@ extract_types(sofar,{}) -> {1,*sofar};
 extract_types(sofar,{{_,tp,consume},*rest}) -> extract_types({*sofar,tp,consume},rest);
 
 generate_params_clauses(target,ctx,{pf1,pf2,params},clauses,exprs,regs_left,type_left,regs_right)
-    //update generate_llvm_alloc_code(target,ctx_fnr(ctx),{},0,max(regs_left,regs_right)) => code
-    //update generate_llvm_store_code(target,ctx_fnr(ctx),code,0,type_left) => code
     update generate_param_code(true,false,1,{},ctx,{},{},type_left,params) => ctx,code0,code1
     update generate_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
     update generate_clause_code(2,ctx,code0,{*code1,*cleanup_code},clauses) => ctx,code0,code1 ->
@@ -875,24 +876,20 @@ generate_conditional_rhs(ctx,code,tp,cmp_op,err,src_flag,src,src_flag2,src2,sz)
     match ctx_get_fn_sig(ctx,fn_id) => {_,_,symoffset,_,_,_,_,_,_,_,_,_} ->
     ctx,{*code,*newcode,{ctx_fnr(ctx),OpError,0,0,BindImm,err,0,ctx_linerule(ctx),0,symoffset,0},{ctx_fnr(ctx),OpLabel,0,0,0,lbl_id}};
 
-// TODO have comparison deal with non-scalars, and reduce refcount where appropriate
 generate_bind_variable(count,post_arrow,bindlevel,ctx,storage,tp,{level,_,_,name}) when level<bindlevel
     update generate_bind_variable_aux(ctx,{},{},storage) => ctx,bind,code
     -> ctx,{bindlevel,tp,bind,name},code,{};
-// generate_bind_variable(count,false,bindlevel,ctx,{{BindImm,src,sz}},tp,{_,tp,{{src_flag2,src2,sz}},name})
-//     update ctx_newreg(ctx,sz) => ctx,newreg
-//     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompNeqBr,tp,sz,BindReg,newreg,src_flag2,src2) => lbl_decline,ctx,code
-//     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
-//     -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},{{ctx_fnr(ctx),OpLoad,sz,BindReg,newreg,BindImm,src},*code},{};
 generate_bind_variable(count,false,bindlevel,ctx,storage1,tp,{_,tp,storage2,name})
     update gen_types_do_compare(ctx,tp,storage1,storage2) => ctx,code_cmp,src_flag,src,src_flag2,src2,sz
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompNeqBr,tp,sz,src_flag,src,src_flag2,src2) => lbl_decline,ctx,code1
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
-    -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},{*code_cmp,*code1},{};
+    match gen_types_deref_free(true,ctx,tp,storage1) => free_code
+    -> ctx,{bindlevel,tp,storage2,name},{*code_cmp,*code1},free_code;
 generate_bind_variable(count,true,bindlevel,ctx,storage1,tp,{_,tp,storage2,name})
     update gen_types_do_compare(ctx,tp,storage1,storage2) => ctx,code_cmp,src_flag,src,src_flag2,src2,sz
     update generate_conditional_rhs(ctx,{},tp,OpCompEqBr,ErrNoMatchRhs,src_flag,src,src_flag2,src2,sz) => ctx,code1
-    -> ctx,{bindlevel,tp,{{src_flag2,src2,sz}},name},{*code_cmp,*code1},{};
+     match gen_types_deref_free(true,ctx,tp,storage1) => free_code
+   -> ctx,{bindlevel,tp,storage2,name},{*code_cmp,*code1},free_code;
 
 generate_bind_variable_aux(ctx,bind,code,{}) -> ctx,bind,code;
 generate_bind_variable_aux(ctx,bind,code,{{BindReg,src,sz},*rest}) -> generate_bind_variable_aux(ctx,{*bind,{BindReg,src,sz}},code,rest);

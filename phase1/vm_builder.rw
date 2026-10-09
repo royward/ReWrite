@@ -76,6 +76,7 @@ op_name(OpAppendSplatConsume) -> "AppendSplatConsume";
 op_name(OpAppendList) -> "AppendList";
 op_name(OpAppendListConsume) -> "AppendListConsume";
 op_name(OpExtractList) -> "ExtractList";
+op_name(OpCompareLists) -> "CompareLists";
 
 some_gen_ops() -> {OpPlus,OpLt,OpLte};
 all_gen_ops() ->
@@ -85,7 +86,7 @@ all_gen_ops() ->
     OpEqual,OpNotEqual,OpCompEqBr,OpCompNeqBr,OpAnd,OpOr,OpXor,OpSext};
 
 all_single_ops() -> {OpZext,OpLabel,OpCall,OpRet,OpGoto,OpLea,OpLeaScaleReg,OpLeaScaleImm,OpError,OpCallIO,
-    OpAlloc,OpReallocFixed,OpReallocVar,OpReallocListFixed,OpReallocListVar,OpEmptyList,OpDerefFree,OpDerefFreeList,OpIncMem,OpCont,
+    OpAlloc,OpReallocFixed,OpReallocVar,OpReallocListFixed,OpReallocListVar,OpEmptyList,OpDerefFree,OpDerefFreeList,OpIncMem,OpCont,OpCompareLists,
     OpPrependImm,OpPrependReg,OpPrependList,OpPrependListConsume,OpAppendImm,OpAppendReg,OpAppendSplat,OpAppendSplatConsume,OpAppendList,OpAppendListConsume,OpExtractList};
 
 has_label(OpCompLtBr) -> true;

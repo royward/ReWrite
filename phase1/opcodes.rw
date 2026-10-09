@@ -73,6 +73,8 @@ const OpAppendListConsume=751;
 const OpAppendSplat=752;
 const OpAppendSplatConsume=753;
 
+const OpCompareLists=754;
+
 const OpReallocVar=756;
 const OpReallocFixed=757;
 const OpReallocListVar=758;

@@ -172,6 +172,9 @@ test_match_list_list3() match {{{false}}} => _ ->;
 fn splatsplat_aux() -> [string];
 splatsplat_aux() -> {"ab","cd","ef"};
 
+fn splatsplat_aux2() -> [string];
+splatsplat_aux2() -> {"ab","cx","ef"};
+
 export fn len2(value string) -> i64;
 len2(x) -> length(x);
 
@@ -202,6 +205,16 @@ insert_string(x,y) match insert_string_aux(splatsplat_aux(),x,y) => t -> length(
 export fn nth_take_string(value string,i64) -> value string,char;
 nth_take_string(x,y) match nth_take(x,y) => a,b -> a,b;
 
-// export fn equal_string(value string,value string) -> bool;
-// equal_string(x,x) -> true;
-// equal_string(_,_) -> false;
+export fn equal_string(value string,value string) -> bool;
+equal_string(x,x) -> true;
+equal_string(_,_) -> false;
+
+fn equal_list_string([string],[string]) -> bool;
+equal_list_string(x,x) -> true;
+equal_list_string(_,_) -> false;
+
+export fn test_equal_list_string1() -> bool;
+test_equal_list_string1() -> equal_list_string(splatsplat_aux(),splatsplat_aux());
+
+export fn test_equal_list_string2() -> bool;
+test_equal_list_string2() -> equal_list_string(splatsplat_aux(),splatsplat_aux2());
