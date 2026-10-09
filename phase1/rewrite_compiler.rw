@@ -154,20 +154,20 @@ listnv(n,v) -> listn_aux(0,n,{},v);
 listn_aux(n,n,sofar,v) -> sofar;
 listn_aux(n,m,sofar,v) -> listn_aux(n+1,m,{*sofar,v},v);
 
-lex(s) -> lex_aux({},0,0,s);
+lex(s) -> lex_aux({},0,0,0,s);
 
-lex_aux(acc,row,col,{}) -> acc;
-lex_aux(acc,row,col,{c,*rest}) when is_start_token(c) match lex_get_token(1,{c},rest) => sz,val,newrest ->
-    lex_aux({*acc,{row,col,lex_check_spec_identifier(val),val}},row,col+sz,newrest);
-lex_aux(acc,row,col,{c,*rest}) when is_digit(c) match lex_get_digit(1,{c},rest) => sz,val,newrest -> lex_aux({*acc,{row,col,Integer,val}},row,col+sz,newrest);
-lex_aux(acc,row,col,{c,*rest}) when is_whitespace(c) -> lex_aux(acc,row,col+1,rest);
-lex_aux(acc,row,col,{'//',*rest}) match lex_aux_absorb_comment(rest) => newrest -> lex_aux(acc,row+1,0,newrest);
-lex_aux(acc,row,col,{'\n',*rest}) -> lex_aux(acc,row+1,0,rest);
-lex_aux(acc,row,col,{'"',*rest}) match lexer_string(row,col+1,{},'"',rest) => newrow,newcol,val,newrest -> lex_aux({*acc,{row,col,String,val}},newrow,newcol,newrest);
-lex_aux(acc,row,col,{'\'',*rest}) match lexer_string(row,col+1,{},'\'',rest) => newrow,newcol,val,newrest -> lex_aux({*acc,{row,col,Char,val}},newrow,newcol,newrest);
-lex_aux(acc,row,col,{'#',*rest}) match lex_get_token(1,{},rest) => sz,val,newrest -> lex_aux({*acc,{row,col,lex_do_hash(val),{'#',*val}}},row,col+sz,newrest);
-lex_aux(acc,row,col,{c1,c2,*rest}) match lexer_two_symbol(c1,c2) => sym when sym!=0 -> lex_aux({*acc,{row,col,sym,{c1,c2}}},row,col+2,rest);
-lex_aux(acc,row,col,{c,*rest}) match lexer_one_symbol(c) => sym when sym!=0 -> lex_aux({*acc,{row,col,sym,{c}}},row,col+1,rest);
+lex_aux(acc,f,row,col,{}) -> acc;
+lex_aux(acc,f,row,col,{c,*rest}) when is_start_token(c) match lex_get_token(1,{c},rest) => sz,val,newrest ->
+    lex_aux({*acc,{f,row,col,lex_check_spec_identifier(val),val}},f,row,col+sz,newrest);
+lex_aux(acc,f,row,col,{c,*rest}) when is_digit(c) match lex_get_digit(1,{c},rest) => sz,val,newrest -> lex_aux({*acc,{f,row,col,Integer,val}},f,row,col+sz,newrest);
+lex_aux(acc,f,row,col,{c,*rest}) when is_whitespace(c) -> lex_aux(acc,f,row,col+1,rest);
+lex_aux(acc,f,row,col,{'//',*rest}) match lex_aux_absorb_comment(rest) => newrest -> lex_aux(acc,f,row+1,0,newrest);
+lex_aux(acc,f,row,col,{'\n',*rest}) -> lex_aux(acc,f,row+1,0,rest);
+lex_aux(acc,f,row,col,{'"',*rest}) match lexer_string(row,col+1,{},'"',rest) => newrow,newcol,val,newrest -> lex_aux({*acc,{f,row,col,String,val}},f,newrow,newcol,newrest);
+lex_aux(acc,f,row,col,{'\'',*rest}) match lexer_string(row,col+1,{},'\'',rest) => newrow,newcol,val,newrest -> lex_aux({*acc,{f,row,col,Char,val}},f,newrow,newcol,newrest);
+lex_aux(acc,f,row,col,{'#',*rest}) match lex_get_token(1,{},rest) => sz,val,newrest -> lex_aux({*acc,{f,row,col,lex_do_hash(val),{'#',*val}}},f,row,col+sz,newrest);
+lex_aux(acc,f,row,col,{c1,c2,*rest}) match lexer_two_symbol(c1,c2) => sym when sym!=0 -> lex_aux({*acc,{f,row,col,sym,{c1,c2}}},f,row,col+2,rest);
+lex_aux(acc,f,row,col,{c,*rest}) match lexer_one_symbol(c) => sym when sym!=0 -> lex_aux({*acc,{f,row,col,sym,{c}}},f,row,col+1,rest);
 
 lex_get_token(col,sofar,{c,*rest}) when is_rest_token(c) -> lex_get_token(col+1,{*sofar,c},rest);
 lex_get_token(*x) -> *x;
@@ -316,41 +316,41 @@ get_add_symbol_table(n,sofar,{{key,val},*rest},key,val) -> {*sofar,{key,val},*re
 get_add_symbol_table(n,sofar,{x,*rest},key,val) -> get_add_symbol_table(n+1,{*sofar,x},rest,key,val);
 
 parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{}) -> rules,fnnames,symtext,symsz,types,type_lookup;
-parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{linerule,_,Identifier,name},{_,_,LParen,_},*rest})
+parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,linerule,_,Identifier,name},{_,_,_,LParen,_},*rest})
     update get_add_symbol_table(0,{},fnnames,name,false) => fnnames,fn_id
-    update parse_params(consts,{},{},rest) => bindings,params,{{_,_,RParen,_},*rest}
+    update parse_params(consts,{},{},rest) => bindings,params,{{_,_,_,RParen,_},*rest}
     update parse_function_match_clauses(consts,{},fnnames,bindings,Arrow,rest) => clauses,fnnames,bindings,rest
-    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,exprs,{{_,_,Semicolon,_},*rest}
+    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,exprs,{{_,_,_,Semicolon,_},*rest}
     -> parse_aux(target,add_rule({},rules,fn_id,{linerule+1,bindings,{0,{},params},clauses,exprs}),fnnames,symtext,symsz,consts,types,type_lookup,rest);
-parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{fnlineno,_,TypeFn,_},{_,_,Identifier,name},{_,_,LParen,_},*rest})
+parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,fnlineno,_,TypeFn,_},{_,_,_,Identifier,name},{_,_,_,LParen,_},*rest})
     update parse_types(true,false,{},{},RParen,types,type_lookup,rest) => types_lhs,value_lhs,rest,types,type_lookup
-    update rest => {{_,_,Arrow,_},*rest}
+    update rest => {{_,_,_,Arrow,_},*rest}
     update parse_types(true,false,{},{},Semicolon,types,type_lookup,rest) => types_rhs,value_rhs,rest,types,type_lookup
     update get_add_symbol_table(0,{},fnnames,name,{false,fnlineno+1,symsz,types_lhs,types_rhs,value_lhs,value_rhs}) => fnnames,_ ->
     parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,type_lookup,rest);
-parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{fnlineno,_,Export,_},{_,_,TypeFn,_},{_,_,Identifier,name},{_,_,LParen,_},*rest})
+parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,fnlineno,_,Export,_},{_,_,_,TypeFn,_},{_,_,_,Identifier,name},{_,_,_,LParen,_},*rest})
     update parse_types(true,false,{},{},RParen,types,type_lookup,rest) => types_lhs,value_lhs,rest,types,type_lookup
-    update rest => {{_,_,Arrow,_},*rest}
+    update rest => {{_,_,_,Arrow,_},*rest}
     update parse_types(true,false,{},{},Semicolon,types,type_lookup,rest) => types_rhs,value_rhs,rest,types,type_lookup
     update get_add_symbol_table(0,{},fnnames,name,{true,fnlineno+1,symsz,types_lhs,types_rhs,value_lhs,value_rhs}) => fnnames,_ ->
     parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,type_lookup,rest);
-parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,_,ConstToken,_},{_,_,Identifier,name},{_,_,Equal,_},{_,_,Integer,val},{_,_,Semicolon,_},*rest}) ->
+parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,_,_,ConstToken,_},{_,_,_,Identifier,name},{_,_,_,Equal,_},{_,_,_,Integer,val},{_,_,_,Semicolon,_},*rest}) ->
     parse_aux(target,rules,fnnames,symtext,symsz,add_symbol_table({},consts,name,string_to_int_pos(val,0)),types,type_lookup,rest);
 
 add_symtext(TargetVM,symtext,symsz,name) -> {*symtext,*name,'\0'},symsz+length(name)+1;
 add_symtext(TargetVMLL,symtext,symsz,name) -> {*symtext,*name,'\0'},symsz+length(name)+1;
 add_symtext(_,symtext,symsz,name) -> {*symtext,*name,'\\00'},symsz+length(name)+1;
 
-parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,type_lookup;
-parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,Identifier,_},{_,_,Colon,_},*rest}) -> parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,rest);
-parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,Identifier,"value"},*rest}) -> parse_types(top,true,sofar,sfval,endtok,types,type_lookup,rest);
-parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,Identifier,tp},*rest}) match lookup_symbol_table(type_lookup,tp) => true,convert ->
+parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,type_lookup;
+parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,Identifier,_},{_,_,_,Colon,_},*rest}) -> parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,rest);
+parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,Identifier,"value"},*rest}) -> parse_types(top,true,sofar,sfval,endtok,types,type_lookup,rest);
+parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,Identifier,tp},*rest}) match lookup_symbol_table(type_lookup,tp) => true,convert ->
     parse_types1(top,{*sofar,convert},{*sfval,isval},endtok,types,type_lookup,rest);
-parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,LBracket,_},*rest})
+parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,LBracket,_},*rest})
     update parse_types(false,false,{},{},RBracket,types,type_lookup,rest) => {this_type},_,rest,types,type_lookup
     update create_type_list(this_type,types,type_lookup) => newtp,types,type_lookup ->
     parse_types1(top,{*sofar,newtp},{*sfval,isval},endtok,types,type_lookup,rest);
-//parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,LBrace,_},*rest}) match parse_types(top,isval,{},sfval,RBrace,types,type_lookup,rest) => inside,rest,types,type_lookup ->
+//parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,LBrace,_},*rest}) match parse_types(top,isval,{},sfval,RBrace,types,type_lookup,rest) => inside,rest,types,type_lookup ->
 //    parse_types1(top,{*sofar,{true,inside}},{*sfval,isval},endtok,types,type_lookup,rest);
 
 create_type_list(elt_typeid,types,type_lookup)
@@ -364,19 +364,19 @@ check_add_type(n,name,def1,def2,type_lookup,sofar,{{name,b,def1,def2},*rest}) ->
 check_add_type(n,name,def1,def2,type_lookup,sofar,{{name,b,_},*rest}) -> #error(5); // names match, but not types
 check_add_type(n,name,def1,def2,type_lookup,sofar,{x,*rest}) -> check_add_type(n+1,name,def1,def2,type_lookup,{*sofar,x},rest);
 
-parse_types1(top,sofar,sfval,endtok,types,type_lookup,{{_,_,Comma,_},*rest}) -> parse_types(top,false,sofar,sfval,endtok,types,type_lookup,rest);
-parse_types1(top,sofar,sfval,endtok,types,type_lookup,{{_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,type_lookup; // deal with no trailing comma
+parse_types1(top,sofar,sfval,endtok,types,type_lookup,{{_,_,_,Comma,_},*rest}) -> parse_types(top,false,sofar,sfval,endtok,types,type_lookup,rest);
+parse_types1(top,sofar,sfval,endtok,types,type_lookup,{{_,_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,type_lookup; // deal with no trailing comma
 
 add_rule(sofar,{},n,x) -> add_rule(sofar,{{}},n,x);
 add_rule(sofar,{r,*rest},0,x) -> {*sofar,{*r,x},*rest};
 add_rule(sofar,{r,*rest},n,x) -> add_rule({*sofar,r},rest,n-1,x);
 
-parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,endtok,_},*rest}) -> sofar,fnnames,bindings,rest;
-parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,When,_},*rest})
+parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,_,endtok,_},*rest}) -> sofar,fnnames,bindings,rest;
+parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,_,When,_},*rest})
     update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames2,bindings,expr,rest2 ->
     parse_function_match_clauses(consts,{*sofar,{false,true,{0,{},{{Const,{TypeBool,1}}}},expr}},fnnames2,bindings,endtok,rest2);
-parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,tok,_},*rest}) match match_or_update(tok) => true,upd,decline
-    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,expr,{{_,_,DoubleArrow,_},*rest}
+parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,_,tok,_},*rest}) match match_or_update(tok) => true,upd,decline
+    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,expr,{{_,_,_,DoubleArrow,_},*rest}
     update parse_params(consts,bindings,{},rest) => bindings,params,rest ->
     parse_function_match_clauses(consts,{*sofar,{upd,decline,{0,{},params},expr}},fnnames,bindings,endtok,rest);
 
@@ -395,51 +395,51 @@ is_internal_function("nth_insert") -> 3;
 is_internal_function("nth_take") -> 4;
 is_internal_function(_) -> 0;
 
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Minus,_},{_,_,Integer,val},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeI64,-string_to_int_pos(val,0)}},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Integer,val},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeI64,string_to_int_pos(val,0)}},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,False,_},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeBool,0}},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,True,_},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeBool,1}},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,HashError,_},{_,_,LParen,_},*rest})
-    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,args,{{_,_,RParen,_},*rest} ->
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,Minus,_},{_,_,_,Integer,val},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeI64,-string_to_int_pos(val,0)}},pri,rest);
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,Integer,val},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeI64,string_to_int_pos(val,0)}},pri,rest);
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,False,_},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeBool,0}},pri,rest);
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,True,_},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeBool,1}},pri,rest);
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,HashError,_},{_,_,_,LParen,_},*rest})
+    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,args,{{_,_,_,RParen,_},*rest} ->
     parse_exprs1(consts,fnnames,bindings,sofar,{ExprError,args},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,HashNever,_},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{ExprError,{{1,{10,ErrNever}}}},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Identifier,id},{_,_,LParen,_},*rest})
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,HashNever,_},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{ExprError,{{1,{10,ErrNever}}}},pri,rest);
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,Identifier,id},{_,_,_,LParen,_},*rest})
     match is_internal_function(id) => int_id when int_id!=0
-    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,args,{{_,_,RParen,_},*rest} ->
+    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,args,{{_,_,_,RParen,_},*rest} ->
     parse_exprs1(consts,fnnames,bindings,sofar,{ExprCallLibrary,int_id,args},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Identifier,id},{_,_,LParen,_},*rest})
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,Identifier,id},{_,_,_,LParen,_},*rest})
     update get_add_symbol_table(0,{},fnnames,id,false) => fnnames,fn_id
-    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,args,{{_,_,RParen,_},*rest} ->
+    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,args,{{_,_,_,RParen,_},*rest} ->
     parse_exprs1(consts,fnnames,bindings,sofar,{ExprCall,fn_id,args},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,LBrace,_},*rest})
-    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,args,{{_,_,RBrace,_},*rest}  ->
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,LBrace,_},*rest})
+    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,args,{{_,_,_,RBrace,_},*rest}  ->
     parse_exprs1(consts,fnnames,bindings,sofar,{ExprList,args},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Star,_},*rest})
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,Star,_},*rest})
     update parse_exprs(consts,fnnames,bindings,{},200,rest) => fnnames,bindings,{arg},rest  ->
     parse_exprs1(consts,fnnames,bindings,sofar,{ExprSplat,arg},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,LParen,_},*rest})
-    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,{expr},{{_,_,RParen,_},*rest} ->
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,LParen,_},*rest})
+    update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,{expr},{{_,_,_,RParen,_},*rest} ->
     parse_exprs1(consts,fnnames,bindings,sofar,expr,pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Char,{c}},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeChar,char_to_int(c)}},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Char,str},*rest}) -> parse_exprs1nothis(consts,fnnames,bindings,{*sofar,*string_to_expr_param_list({},str)},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,String,str},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{ExprList,string_to_expr_param_list({},str)},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Identifier,id},*rest}) match lookup_symbol_table(consts,id) => ok,val when ok ->
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,Char,{c}},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeChar,char_to_int(c)}},pri,rest);
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,Char,str},*rest}) -> parse_exprs1nothis(consts,fnnames,bindings,{*sofar,*string_to_expr_param_list({},str)},pri,rest);
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,String,str},*rest}) -> parse_exprs1(consts,fnnames,bindings,sofar,{ExprList,string_to_expr_param_list({},str)},pri,rest);
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,Identifier,id},*rest}) match lookup_symbol_table(consts,id) => ok,val when ok ->
     parse_exprs1(consts,fnnames,bindings,sofar,{Const,{TypeI64,val}},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,Identifier,id},*rest})
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,Identifier,id},*rest})
     update get_noadd_symbol_list(0,{},bindings,id) => bindings,bindnum ->
     parse_exprs1(consts,fnnames,bindings,sofar,{ExprId,{bindnum,0,0}},pri,rest);
-parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,tok,_},*rest}) match prefix_binding_power(tok) => pre_pri when pre_pri>0
+parse_exprs(consts,fnnames,bindings,sofar,pri,{{_,_,_,tok,_},*rest}) match prefix_binding_power(tok) => pre_pri when pre_pri>0
     update parse_exprs(consts,fnnames,bindings,{},pre_pri,rest) => fnnames,bindings,{arg},rest ->
     parse_exprs1(consts,fnnames,bindings,sofar,{ExprCallInternal,tok,{arg}},pri,rest);
 parse_exprs(consts,fnnames,bindings,sofar,_,rest) -> fnnames,bindings,sofar,rest;
 
-parse_exprs1(consts,fnnames,bindings,sofar,this,1,{{_,_,Comma,_},*rest}) -> parse_exprs(consts,fnnames,bindings,{*sofar,this},1,rest);
-parse_exprs1(consts,fnnames,bindings,sofar,this,pri,{{r,c,tok,val},*rest}) match infix_binding_power(tok) => p1,p2 when p1>=pri
+parse_exprs1(consts,fnnames,bindings,sofar,this,1,{{_,_,_,Comma,_},*rest}) -> parse_exprs(consts,fnnames,bindings,{*sofar,this},1,rest);
+parse_exprs1(consts,fnnames,bindings,sofar,this,pri,{{f,r,c,tok,val},*rest}) match infix_binding_power(tok) => p1,p2 when p1>=pri
     update parse_exprs(consts,fnnames,bindings,{},p2,rest) => fnnames,bindings,second,rest ->
     parse_exprs1(consts,fnnames,bindings,sofar,{ExprCallInternal,tok,{this,*second}},pri,rest);
 parse_exprs1(consts,fnnames,bindings,sofar,this,_,rest) -> fnnames,bindings,{*sofar,this},rest;
 
-parse_exprs1nothis(consts,fnnames,bindings,sofar,1,{{_,_,Comma,_},*rest}) -> parse_exprs(consts,fnnames,bindings,sofar,1,rest);
+parse_exprs1nothis(consts,fnnames,bindings,sofar,1,{{_,_,_,Comma,_},*rest}) -> parse_exprs(consts,fnnames,bindings,sofar,1,rest);
 parse_exprs1nothis(consts,fnnames,bindings,sofar,_,rest) -> fnnames,bindings,sofar,rest;
 
 string_to_expr_param_list(sofar,{}) -> sofar;
@@ -470,23 +470,23 @@ infix_binding_power(Divide) -> 170,171;
 infix_binding_power(Modulus) -> 170,171;
 infix_binding_power(_) -> 0,0;
 
-parse_params(consts,bindings,params,{{_,_,False,_},*rest}) -> parse_params1(consts,bindings,{*params,{Const,{TypeBool,0}}},rest);
-parse_params(consts,bindings,params,{{_,_,True,_},*rest}) -> parse_params1(consts,bindings,{*params,{Const,{TypeBool,1}}},rest);
-parse_params(consts,bindings,params,{{_,_,Integer,val},*rest}) -> parse_params1(consts,bindings,{*params,{Const,{TypeI64,string_to_int_pos(val,0)}}},rest);
-parse_params(consts,bindings,params,{{_,_,Minus,_},{_,_,Integer,val},*rest}) -> parse_params1(consts,bindings,{*params,{Const,{TypeI64,-string_to_int_pos(val,0)}}},rest);
-parse_params(consts,bindings,params,{{_,_,Wildcard,_},*rest}) -> parse_params1(consts,bindings,{*params,{ParamWild,{}}},rest);
-parse_params(consts,bindings,params,{{_,_,Star,_},{_,_,Wildcard,_},*rest}) -> parse_params1(consts,bindings,{*params,{ParamSplatWild,{}}},rest);
-parse_params(consts,bindings,params,{{_,_,Identifier,name},*rest}) match lookup_symbol_table(consts,name) => ok,val when ok -> parse_params1(consts,bindings,{*params,{Const,{TypeI64,val}}},rest);
-parse_params(consts,bindings,params,{{_,_,Identifier,name},*rest}) match get_add_symbol_list(0,{},bindings,name) => newbindings,id -> parse_params1(consts,newbindings,{*params,{ParamId,{id,0}}},rest);
-parse_params(consts,bindings,params,{{_,_,Star,_},{_,_,Identifier,name},*rest}) update get_add_symbol_list(0,{},bindings,name) => bindings,id ->
+parse_params(consts,bindings,params,{{_,_,_,False,_},*rest}) -> parse_params1(consts,bindings,{*params,{Const,{TypeBool,0}}},rest);
+parse_params(consts,bindings,params,{{_,_,_,True,_},*rest}) -> parse_params1(consts,bindings,{*params,{Const,{TypeBool,1}}},rest);
+parse_params(consts,bindings,params,{{_,_,_,Integer,val},*rest}) -> parse_params1(consts,bindings,{*params,{Const,{TypeI64,string_to_int_pos(val,0)}}},rest);
+parse_params(consts,bindings,params,{{_,_,_,Minus,_},{_,_,_,Integer,val},*rest}) -> parse_params1(consts,bindings,{*params,{Const,{TypeI64,-string_to_int_pos(val,0)}}},rest);
+parse_params(consts,bindings,params,{{_,_,_,Wildcard,_},*rest}) -> parse_params1(consts,bindings,{*params,{ParamWild,{}}},rest);
+parse_params(consts,bindings,params,{{_,_,_,Star,_},{_,_,_,Wildcard,_},*rest}) -> parse_params1(consts,bindings,{*params,{ParamSplatWild,{}}},rest);
+parse_params(consts,bindings,params,{{_,_,_,Identifier,name},*rest}) match lookup_symbol_table(consts,name) => ok,val when ok -> parse_params1(consts,bindings,{*params,{Const,{TypeI64,val}}},rest);
+parse_params(consts,bindings,params,{{_,_,_,Identifier,name},*rest}) match get_add_symbol_list(0,{},bindings,name) => newbindings,id -> parse_params1(consts,newbindings,{*params,{ParamId,{id,0}}},rest);
+parse_params(consts,bindings,params,{{_,_,_,Star,_},{_,_,_,Identifier,name},*rest}) update get_add_symbol_list(0,{},bindings,name) => bindings,id ->
     parse_params1(consts,bindings,{*params,{ParamSplat,{id,0}}},rest);
-parse_params(consts,bindings,params,{{_,_,LBrace,_},*rest}) update parse_params(consts,bindings,{},rest) => bindings,list_params,{{_,_,RBrace,_},*rest} ->
+parse_params(consts,bindings,params,{{_,_,_,LBrace,_},*rest}) update parse_params(consts,bindings,{},rest) => bindings,list_params,{{_,_,_,RBrace,_},*rest} ->
     parse_params1(consts,bindings,{*params,{ParamList,list_params}},rest);
-parse_params(consts,bindings,params,{{_,_,Char,str},*rest}) -> parse_params1(consts,bindings,{*params,*string_to_expr_param_list({},str)},rest);
-parse_params(consts,bindings,params,{{_,_,String,str},*rest}) -> parse_params1(consts,bindings,{*params,{ParamList,string_to_expr_param_list({},str)}},rest);
+parse_params(consts,bindings,params,{{_,_,_,Char,str},*rest}) -> parse_params1(consts,bindings,{*params,*string_to_expr_param_list({},str)},rest);
+parse_params(consts,bindings,params,{{_,_,_,String,str},*rest}) -> parse_params1(consts,bindings,{*params,{ParamList,string_to_expr_param_list({},str)}},rest);
 parse_params(consts,bindings,params,rest) -> bindings,params,rest;
 
-parse_params1(consts,bindings,params,{{_,_,Comma,_},*rest}) -> parse_params(consts,bindings,params,rest);
+parse_params1(consts,bindings,params,{{_,_,_,Comma,_},*rest}) -> parse_params(consts,bindings,params,rest);
 parse_params1(consts,bindings,params,rest) -> bindings,params,rest; // deal with no trailing comma
 
 ///////////////////////////////////////////////////////////
