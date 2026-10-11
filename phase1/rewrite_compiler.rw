@@ -373,11 +373,11 @@ add_rule(sofar,{r,*rest},n,x) -> add_rule({*sofar,r},rest,n-1,x);
 parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,_,endtok,_},*rest}) -> sofar,fnnames,bindings,rest;
 parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,_,When,_},*rest})
     update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames2,bindings,expr,rest2 ->
-    parse_function_match_clauses(consts,{*sofar,{false,true,{0,{},{{Const,{TypeBool,1}}}},expr}},fnnames2,bindings,endtok,rest2);
+    parse_function_match_clauses(consts,{*sofar,{false,true,0,{0,{},{{Const,{TypeBool,1}}}},expr}},fnnames2,bindings,endtok,rest2);
 parse_function_match_clauses(consts,sofar,fnnames,bindings,endtok,{{_,_,_,tok,_},*rest}) match match_or_update(tok) => true,upd,decline
     update parse_exprs(consts,fnnames,bindings,{},1,rest) => fnnames,bindings,expr,{{_,_,_,DoubleArrow,_},*rest}
     update parse_params(consts,bindings,{},rest) => bindings,params,rest ->
-    parse_function_match_clauses(consts,{*sofar,{upd,decline,{0,{},params},expr}},fnnames,bindings,endtok,rest);
+    parse_function_match_clauses(consts,{*sofar,{upd,decline,0,{0,{},params},expr}},fnnames,bindings,endtok,rest);
 
 match_or_update(Match) -> true,false,false;
 match_or_update(Update) -> true,true,false;
@@ -602,7 +602,7 @@ calc_counts_param_map_rev(counts,{param,*rest})
     update calc_counts_param_map_rev(counts,rest) => counts,rest2 update calc_counts_param(counts,param) => counts,param2 -> counts,{param2,*rest2};
 
 calc_counts_clause_map_rev(types,counts,{}) -> 0,counts,{};
-calc_counts_clause_map_rev(types,counts,{{upd_flag,decline,{_,_,params},exprs},*rest})
+calc_counts_clause_map_rev(types,counts,{{upd_flag,decline,_,{_,_,params},exprs},*rest})
     //match println_any(222,counts) =>
     update calc_counts_clause_map_rev(types,counts,rest) => maydecline,counts,rest
     match calc_counts_maydecline(decline,maydecline,counts) => pf1,pf2,next_maydecline
@@ -610,7 +610,7 @@ calc_counts_clause_map_rev(types,counts,{{upd_flag,decline,{_,_,params},exprs},*
     //match println_any(555,counts,calc_counts_clear_touched(upd_flag,{},counts)) =>
     update calc_counts_clear_touched(upd_flag,{},counts) => counts
     update calc_counts_expr_map_rev(types,true,counts,exprs) => counts,exprs
-    -> next_maydecline,counts,{{upd_flag,decline,{pf1,pf2,params},exprs},*rest};
+    -> next_maydecline,counts,{{upd_flag,decline,next_maydecline,{pf1,pf2,params},exprs},*rest};
 
 code_length(n,{}) -> n;
 code_length(n,{{_,a},*rest}) -> code_length(n+length(a),rest);
@@ -730,7 +730,7 @@ generate_params_clauses(target,ctx,{pf1,pf2,params},clauses,exprs,regs_left,type
     ctx,{*code0,*code1};
 
 generate_clause_code(bind_level,ctx,code0,code1,{}) -> ctx,code0,code1;
-generate_clause_code(bind_level,ctx,code0,code1,{{update_flag,decline,matchx,expr},*rest})
+generate_clause_code(bind_level,ctx,code0,code1,{{update_flag,decline,committed,matchx,expr},*rest})
     update update_bind_level(bind_level,update_flag) => bind_level,this_bind_level
     update generate_clause_code_aux(this_bind_level,!decline,ctx,code0,code1,expr,matchx) => ctx,code0,code1 ->
     generate_clause_code(bind_level,ctx,code0,code1,rest);
