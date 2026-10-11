@@ -239,6 +239,20 @@ int main(int argc, char** argv) {
     ret_code=rw_test_equal_list_string2(exe,&resultb);
     if(!ret_code && !resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
 
+    printf("multi_append1:");
+    exe->allocated=0;
+    ret_code=rw_multi_append1(exe,"xyzzy",&resultc1,&resultc2);
+    if(!ret_code && strcmp(resultc1,"xyzzy0")==0 && strcmp(resultc2,"xyzzy1")==0) { printf("success\n"); } else { printf("fail:%d %s %s\n",ret_code,resultc1,resultc2); };
+    free(resultc1);
+    free(resultc2);
+
+    printf("multi_append2:");
+    exe->allocated=0;
+    ret_code=rw_multi_append2(exe,"xyzzy",&resultc1,&resultc2);
+    if(!ret_code && strcmp(resultc1,"xyzzy0")==0 && strcmp(resultc2,"xyzzy1")==0) { printf("success\n"); } else { printf("fail:%d %s %s\n",ret_code,resultc1,resultc2); };
+    free(resultc1);
+    free(resultc2);
+
     printf("Heap size=%d\n",exe->end_of_heap*8);
 
     program_unload(&p);

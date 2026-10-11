@@ -629,10 +629,10 @@ dispatch:
                 uint32_t stride=opv->src2;
                 uint32_t* parray=rwu_get_header(exe,array);
                 uint32_t end=parray[2];
-                if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
-                    R[opv->fdst.a]=array;
-                    R[opv2->fdst.a]=start-pre;
-                } else {
+                // if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
+                //     R[opv->fdst.a]=array;
+                //     R[opv2->fdst.a]=start-pre;
+                // } else {
                     uint32_t sz=max_uint32(pre+post+end-start+2,8);
                     uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
                     uint32_t ret=alloc(exe,full_size,stride);
@@ -642,7 +642,7 @@ dispatch:
                     deref_free(exe,array);
                     R[opv->fdst.a]=ret;
                     R[opv2->fdst.a]=0;
-                }
+                // }
                 opvb++;
             } NEXT();
             CASE(OP_REALLOC_FIXED) {
@@ -654,10 +654,10 @@ dispatch:
                 uint32_t stride=opv->src2;
                 uint32_t* parray=rwu_get_header(exe,array);
                 uint32_t end=parray[2];
-                if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
-                    R[opv->fdst.a]=array;
-                    R[opv2->fdst.a]=start-pre;
-                } else {
+                // if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
+                //     R[opv->fdst.a]=array;
+                //     R[opv2->fdst.a]=start-pre;
+                // } else {
                     uint32_t sz=max_uint32(pre+post+end-start+2,8);
                     uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
                     uint32_t ret=alloc(exe,full_size,stride);
@@ -667,7 +667,7 @@ dispatch:
                     deref_free(exe,array);
                     R[opv->fdst.a]=ret;
                     R[opv2->fdst.a]=0;
-                }
+                // }
                 opvb++;
             } NEXT();
             CASE(OP_REALLOC_LIST_VAR) {

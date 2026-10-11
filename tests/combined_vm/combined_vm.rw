@@ -218,3 +218,12 @@ test_equal_list_string1() -> equal_list_string(splatsplat_aux(),splatsplat_aux()
 
 export fn test_equal_list_string2() -> bool;
 test_equal_list_string2() -> equal_list_string(splatsplat_aux(),splatsplat_aux2());
+
+export fn multi_append1(value string) -> value string,value string;
+multi_append1(s) -> {*s,'0'},{*s,'1'};
+
+fn ids(string) -> string;
+ids(x) -> x;
+
+export fn multi_append2(value string) -> value string,value string;
+multi_append2(s) match ids({*s,'0'}) => t0 match ids({*s,'1'}) => t1 -> t0,t1;
