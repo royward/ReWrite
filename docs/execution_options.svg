@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!-- Creator: fig2dev Version 3.2.9a -->
-<!-- CreationDate: 2026-10-11 11:16:22 -->
+<!-- CreationDate: 2026-10-12 11:33:21 -->
 <!-- Magnification: 1.05 -->
 <svg	xmlns="http://www.w3.org/2000/svg"
 	xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -9,13 +9,6 @@
 <g fill="none">
 <!-- Line -->
 <rect x="675" y="2250" width="11700" height="10350" fill="#ffffff"/>
-<!-- Line -->
-<rect x="5850" y="4500" width="2700" height="1125"
-	stroke="#000000" stroke-width="8px"/>
-<!-- Text -->
-<text xml:space="preserve" x="7200" y="4950" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">ReWrite compiler</text>
-<!-- Text -->
-<text xml:space="preserve" x="7200" y="5310" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">written in ReWrite</text>
 <!-- Line -->
 <rect x="4500" y="2475" width="2700" height="1125"
 	stroke="#000000" stroke-width="8px"/>
@@ -39,13 +32,13 @@
 <defs>
 <clipPath id="cp1">
 	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
-		M 7085,4246 6989,4318 7198,4515 7215,4502z"/>
+		M 6969,3990 6881,4071 7109,4245 7125,4231z"/>
 </clipPath>
 </defs>
-<polyline points=" 6525,3600 7200,4500" clip-path="url(#cp1)"
+<polyline points=" 6525,3600 7110,4230" clip-path="url(#cp1)"
 	stroke="#000000" stroke-width="15px"/>
-<!-- Forward arrow to point 7200,4500 -->
-<polygon points=" 6989,4318 7181,4474 7085,4246 6989,4318"
+<!-- Forward arrow to point 7110,4230 -->
+<polygon points=" 6881,4071 7088,4206 6969,3990 6881,4071"
 	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
 <!-- Line -->
 <defs>
@@ -215,6 +208,9 @@
 <!-- Line -->
 <rect x="810" y="6660" width="1980" height="1350"
 	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<rect x="5850" y="4230" width="2700" height="1395"
+	stroke="#000000" stroke-width="8px"/>
 <!-- Text -->
 <text xml:space="preserve" x="8325" y="11700" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">link and run</text>
 <!-- Text -->
@@ -273,5 +269,11 @@
 <text xml:space="preserve" x="2790" y="8550" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="200" text-anchor="middle">bootstrap</text>
 <!-- Text -->
 <text xml:space="preserve" x="4950" y="10035" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">written in C and ReWrite</text>
+<!-- Text -->
+<text xml:space="preserve" x="7200" y="5400" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">rewrite_compiler.rw</text>
+<!-- Text -->
+<text xml:space="preserve" x="7200" y="5040" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">written in ReWrite</text>
+<!-- Text -->
+<text xml:space="preserve" x="7200" y="4680" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">ReWrite compiler</text>
 </g>
 </svg>

@@ -724,9 +724,9 @@ extract_types(sofar,{}) -> {1,*sofar};
 extract_types(sofar,{{_,tp,consume},*rest}) -> extract_types({*sofar,tp,consume},rest);
 
 generate_params_clauses(target,ctx,{pf1,pf2,params},clauses,exprs,regs_left,type_left,regs_right)
-    update generate_param_code(true,false,1,{},ctx,{},{},type_left,params) => ctx,code0,code1
+    update generate_param_code(true,false,1,{},ctx,{},{},{},type_left,params) => ctx,c_match,c_commit,c_post
     update generate_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
-    update generate_clause_code(2,ctx,code0,{*code1,*cleanup_code},clauses) => ctx,code0,code1 ->
+    update generate_clause_code(2,ctx,c_match,{*c_commit,*cleanup_code,*c_post},clauses) => ctx,code0,code1 ->
     ctx,{*code0,*code1};
 
 generate_clause_code(bind_level,ctx,code0,code1,{}) -> ctx,code0,code1;
@@ -740,9 +740,9 @@ update_bind_level(bind_level,_) -> bind_level+1,bind_level;
 
 generate_clause_code_aux(bind_level,post_arrow,ctx,code0,code1,expr,{pf1,pf2,matchx})
     update generate_expr_code_untyped(post_arrow,ctx,code0,{},expr) => ctx,etypes,code0
-    update generate_param_code(true,post_arrow,bind_level,{},ctx,code0,code1,etypes,matchx) => ctx,code0,code1,
+    update generate_param_code(true,post_arrow,bind_level,{},ctx,code0,code1,{},etypes,matchx) => ctx,c_match,c_commit,c_post,
     update generate_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
-    -> ctx,{*code0,*cleanup_code},code1;
+    -> ctx,{*c_match,*cleanup_code},{*c_commit,*c_post};
 
 generate_commit_cleanup(ctx,1,cleanup) -> generate_commit_cleanup_aux(ctx,{},ctx_bindings(ctx),cleanup);
 generate_commit_cleanup(ctx,_,_) -> ctx,{};
@@ -756,19 +756,19 @@ generate_commit_cleanup_aux(ctx,code,{{_,tp,storage,_},*bindrest},{{n,_},*cleanr
     update gen_types_addref(ctx,tp,storage,n-1) => ctx,codeaddref
     -> generate_commit_cleanup_aux(ctx,{*code,*codeaddref},bindrest,cleanrest);
 
-generate_param_code(owned,post_arrow,bindlevel,{},ctx,sofar0,sofar1,{},{}) -> ctx,sofar0,sofar1;
-generate_param_code(owned,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,_,_,_},ctx,sofar0,sofar1,{},{})
-    -> ctx,sofar0,sofar1;
-generate_param_code(owned,false,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
+generate_param_code(owned,post_arrow,bindlevel,{},ctx,c_match,c_commit,c_post,{},{}) -> ctx,c_match,c_commit,c_post;
+generate_param_code(owned,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,_,_,_},ctx,c_match,c_commit,c_post,{},{})
+    -> ctx,c_match,c_commit,c_post;
+generate_param_code(owned,false,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{Const,{tp,val}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{{{src_flag,src,sz}},tp,_},type_left
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompNeqBr,tp,sz,src_flag,src,BindImm,val) => lbl_decline,ctx,code
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx ->
-    generate_param_code(owned,false,bindlevel,newstride,ctx,{*sofar0,*mv_code,*code},sofar1,type_left,rest);
-generate_param_code(owned,true,bindlevel,stride,ctx,sofar0,sofar1,typex,{{Const,{tp,val}},*rest})
+    generate_param_code(owned,false,bindlevel,newstride,ctx,{*c_match,*mv_code,*code},c_commit,c_post,type_left,rest);
+generate_param_code(owned,true,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{Const,{tp,val}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{{{src_flag,src,sz}},tp,_},type_left
-    update generate_conditional_rhs(ctx,{*sofar0,*mv_code},tp,OpCompEqBr,ErrNoMatchRhs,src_flag,src,BindImm,val,sz) => ctx,code ->
-    generate_param_code(owned,true,bindlevel,newstride,ctx,code,sofar1,type_left,rest);
-generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
+    update generate_conditional_rhs(ctx,{*c_match,*mv_code},tp,OpCompEqBr,ErrNoMatchRhs,src_flag,src,BindImm,val,sz) => ctx,code ->
+    generate_param_code(owned,true,bindlevel,newstride,ctx,code,c_commit,c_post,type_left,rest);
+generate_param_code(owned,post_arrow,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{ParamId,{id,count}},*rest})
     @update gen_param_code_next_type(false,ctx,stride,typex) => ctx,mv_code,newstride,{{{BindMem,src1,sz},{BindMem,src2,sz}},tp,_},type_left
     @match newstride => {_,psrc_flagp,srcp,*_}
     @match nth(ctx_get_types(ctx),tp) => {_,_,{2,sub_type},_}
@@ -778,36 +778,36 @@ generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update ctx_newreg(ctx,32) => ctx,begin
     update generate_bind_variable(count,post_arrow,bindlevel,ctx,{{BindReg,array,sz},{BindReg,begin,sz}},tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(bindings,id,newbind)) => ctx ->
-    generate_param_code(owned,post_arrow,bindlevel,newstride,ctx,{*sofar0,*mv_code,{ctx_fnr(ctx),OpExtractList,0,0,0,array,BindReg,src1,BindReg,src2,srcp},*code0},{*sofar1,*code1},type_left,rest);
-generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamId,{id,count}},*rest})
+    generate_param_code(owned,post_arrow,bindlevel,newstride,ctx,{*c_match,*mv_code,{ctx_fnr(ctx),OpExtractList,0,0,0,array,BindReg,src1,BindReg,src2,srcp},*code0},{*c_commit,*code1},c_post,type_left,rest);
+generate_param_code(owned,post_arrow,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{ParamId,{id,count}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{storage,tp,_},type_left
     update ctx_bindings(ctx) => bindings
     update nth(bindings,id) => bind
     update generate_bind_variable(count,post_arrow,bindlevel,ctx,storage,tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(bindings,id,newbind)) => ctx ->
-    generate_param_code(owned,post_arrow,bindlevel,newstride,ctx,{*sofar0,*mv_code,*code0},{*sofar1,*code1},type_left,rest);
-generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest})
+    generate_param_code(owned,post_arrow,bindlevel,newstride,ctx,{*c_match,*mv_code,*code0},{*c_commit,*code1},c_post,type_left,rest);
+generate_param_code(owned,post_arrow,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{ParamWild,{}},*rest})
     @update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,{},{{{src_flag,src,sz},_},tp,_},type_left
     @match nth(ctx_get_types(ctx),tp) => {_,_,{2,_},_}
     update ctx_newreg(ctx,32) => ctx,newreg
     match gen_types_deref_free(owned,ctx,tp,{{BindReg,newreg,32},{BindReg,newreg,32}}) => free_code
-    -> generate_param_code(owned,post_arrow,bindlevel,{},ctx,{*sofar0,*mv_code},
-        {*sofar1,{ctx_fnr(ctx),OpMove,get_size_scale(sz),BindReg,newreg,src_flag,src},*free_code},type_left,rest);
-generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamWild,{}},*rest})
+    -> generate_param_code(owned,post_arrow,bindlevel,{},ctx,{*c_match,*mv_code},
+        {*c_commit,{ctx_fnr(ctx),OpMove,get_size_scale(sz),BindReg,newreg,src_flag,src},*free_code},c_post,type_left,rest);
+generate_param_code(owned,post_arrow,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{ParamWild,{}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,_,type_left
-    -> generate_param_code(owned,post_arrow,bindlevel,newstride,ctx,{*sofar0,*mv_code},sofar1,type_left,rest);
-generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,{}},*rest})
+    -> generate_param_code(owned,post_arrow,bindlevel,newstride,ctx,{*c_match,*mv_code},c_commit,c_post,type_left,rest);
+generate_param_code(owned,post_arrow,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{ParamList,{}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) =>ctx,mv_code,newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,pend
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompNeqBr,TypeU32,32,src_flag2,src2,BindReg,pend) => lbl_decline,ctx,code
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
     update gen_types_deref_free(owned&&true,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
-    -> generate_param_code(owned,post_arrow,bindlevel,newstride,ctx,{*sofar0,*mv_code,
+    -> generate_param_code(owned,post_arrow,bindlevel,newstride,ctx,{*c_match,*mv_code,
         {ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},
         {ctx_fnr(ctx),OpLoad,3,0,BindReg,pend,0,parray+(8<<32)},*code},
-        {*sofar1,*codefree},type_left,rest);
-generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{ParamList,elements},*rest})
+        {*c_commit,*codefree},c_post,type_left,rest);
+generate_param_code(owned,post_arrow,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{ParamList,elements},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
     match nth(ctx_get_types(ctx),tp) => {_,_,{2,sub_type},_}
     match nth(ctx_get_types(ctx),sub_type) => {_,_,_,sub_alloc}
@@ -820,23 +820,23 @@ generate_param_code(owned,post_arrow,bindlevel,stride,ctx,sofar0,sofar1,typex,{{
     update generate_conditional(ctx,ctx_get_lbl_stuff(ctx),if(splatcount!=0,OpCompLtBr,OpCompNeqBr),TypeU32,32,BindReg,len,BindImm,min_size) => lbl_decline,ctx,code
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
     update gen_types_deref_free(owned&&(splatcount==0),ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
-    update generate_param_code(false,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,bits_to_bytes(sz_one),0,min_size+splatcount},ctx,{},{},{{memindex,sub_type,Consume}},elements) => ctx,code1,code2
-    -> generate_param_code(owned,post_arrow,bindlevel,newstride,ctx,{*sofar0,*mv_code,
+    update generate_param_code(false,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,bits_to_bytes(sz_one),0,min_size+splatcount},ctx,{},{},{},{{memindex,sub_type,Consume}},elements) => ctx,code1,code2,code3
+    -> generate_param_code(owned,post_arrow,bindlevel,newstride,ctx,{*c_match,*mv_code,
         {ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},
         {ctx_fnr(ctx),OpLoad,3,0,BindReg,pend,0,parray+(8<<32)},
         {ctx_fnr(ctx),OpMinus,xt(TypeU32),BindReg,len,BindReg,pend,src_flag2,src2},*code,
         {ctx_fnr(ctx),if(src_flag2==BindReg,OpLeaScaleReg,OpLeaScaleImm),0,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,bits_to_bytes(sz_tot)},
-        *code1},{*sofar1,*codefree,*code2},type_left,rest);
-generate_param_code(owned,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{access,t,_},*_},{{ParamSplatWild,{}}}) // note: no rest here
+        *code1},{*c_commit,*codefree,*code2},{*c_post,*code3},type_left,rest);
+generate_param_code(owned,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,c_match,c_commit,c_post,{{access,t,_},*_},{{ParamSplatWild,{}}}) // note: no rest here
     match gen_types_deref_free(true,ctx,tp,{{src_flag1,src1,32},{src_flag2,src2,32}}) => codefree
-    -> ctx,sofar0,{*sofar1,*codefree};
-generate_param_code(owned,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,sofar0,sofar1,{{access,t,_},*_},{{ParamSplat,{id,count}}}) // note: no rest here
+    -> ctx,c_match,{*c_commit,*codefree},c_post;
+generate_param_code(owned,post_arrow,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,c_match,c_commit,c_post,{{access,t,_},*_},{{ParamSplat,{id,count}}}) // note: no rest here
     update ctx_bindings(ctx) => bindings
     update ctx_newreg(ctx,32) => ctx,start
     update nth(bindings,id) => bind
     update generate_bind_variable(count,post_arrow,bindlevel,ctx,{{src_flag1,src1,32},{BindReg,start,32}},tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(bindings,id,newbind)) => ctx
-    -> ctx,{*sofar0,{ctx_fnr(ctx),OpPlus,xt(TypeU32),BindReg,start,src_flag2,src2,BindImm,pos},*code0},{*sofar1,*code1};
+    -> ctx,{*c_match,{ctx_fnr(ctx),OpPlus,xt(TypeU32),BindReg,start,src_flag2,src2,BindImm,pos},*code0},{*c_commit,*code1},c_post;
 
 move_mem_to_reg(false,ctx,_,_,sofar,) -> ctx,{},sofar;
 move_mem_to_reg(_,ctx,code,sofar,{}) -> ctx,code,sofar;
