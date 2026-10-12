@@ -726,23 +726,23 @@ extract_types(sofar,{{_,tp,consume},*rest}) -> extract_types({*sofar,tp,consume}
 generate_params_clauses(target,ctx,{pf1,pf2,params},clauses,exprs,regs_left,type_left,regs_right)
     update generate_param_code(true,false,1,{},ctx,{},{},{},type_left,params) => ctx,c_match,c_commit,c_post
     update generate_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
-    update generate_clause_code(2,ctx,c_match,{*c_commit,*cleanup_code,*c_post},clauses) => ctx,code0,code1 ->
-    ctx,{*code0,*code1};
+    update generate_clause_code(2,ctx,c_match,{*c_commit,*cleanup_code},c_post,clauses) => ctx,c_match,c_commit,c_post ->
+    ctx,{*c_match,*c_commit,*c_post};
 
-generate_clause_code(bind_level,ctx,code0,code1,{}) -> ctx,code0,code1;
-generate_clause_code(bind_level,ctx,code0,code1,{{update_flag,decline,committed,matchx,expr},*rest})
+generate_clause_code(bind_level,ctx,c_match,c_commit,c_post,{}) -> ctx,c_match,c_commit,c_post;
+generate_clause_code(bind_level,ctx,c_match,c_commit,c_post,{{update_flag,decline,committed,matchx,expr},*rest})
     update update_bind_level(bind_level,update_flag) => bind_level,this_bind_level
-    update generate_clause_code_aux(this_bind_level,!decline,ctx,code0,code1,expr,matchx) => ctx,code0,code1 ->
-    generate_clause_code(bind_level,ctx,code0,code1,rest);
+    update generate_clause_code_aux(this_bind_level,!decline,ctx,c_match,c_commit,c_post,expr,matchx) => ctx,c_match,c_commit,c_post ->
+    generate_clause_code(bind_level,ctx,c_match,c_commit,c_post,rest);
 
 update_bind_level(bind_level,false) -> bind_level,1;
 update_bind_level(bind_level,_) -> bind_level+1,bind_level;
 
-generate_clause_code_aux(bind_level,post_arrow,ctx,code0,code1,expr,{pf1,pf2,matchx})
-    update generate_expr_code_untyped(post_arrow,ctx,code0,{},expr) => ctx,etypes,code0
-    update generate_param_code(true,post_arrow,bind_level,{},ctx,code0,code1,{},etypes,matchx) => ctx,c_match,c_commit,c_post,
+generate_clause_code_aux(bind_level,post_arrow,ctx,c_match,c_commit,c_post,expr,{pf1,pf2,matchx})
+    update generate_expr_code_untyped(post_arrow,ctx,c_match,{},expr) => ctx,etypes,c_match
+    update generate_param_code(true,post_arrow,bind_level,{},ctx,c_match,c_commit,c_post,etypes,matchx) => ctx,c_match,c_commit,c_post,
     update generate_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
-    -> ctx,{*c_match,*cleanup_code},{*c_commit,*c_post};
+    -> ctx,c_match,{*c_commit,*cleanup_code},c_post;
 
 generate_commit_cleanup(ctx,1,cleanup) -> generate_commit_cleanup_aux(ctx,{},ctx_bindings(ctx),cleanup);
 generate_commit_cleanup(ctx,_,_) -> ctx,{};
