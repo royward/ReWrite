@@ -104,6 +104,7 @@ int rw_instance_init(RWInstance* exe, Program* p) {
     exe->program = p;
     exe->registers = (uint64_t*)malloc(REGISTERS_SIZE*sizeof(uint64_t));
     exe->heap8 = (uint64_t*)malloc(HEAP_SIZE*sizeof(uint8_t));
+    exe->allocated=0;
     // create an empty value
     uint32_t* header=rwu_get_header(exe,0);
     header[0]=2;
@@ -324,7 +325,7 @@ void program_disassemble(Program* program, FILE* out) {
     }
 }
 
-uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
+uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size, uint32_t pc) {
     uint64_t sz=((uint64_t)count)*size;
     uint64_t alloc=exe->end_of_heap;
     uint32_t full_size=(16+sz+7)>>3;
@@ -333,7 +334,7 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
     uint32_t* header=rwu_get_header(exe,alloc);
     header[0]=full_size;
     header[1]=1;
-    header[3]=0xDEADBEEF;
+    header[3]=pc;
     exe->end_of_heap+=full_size;
     return alloc;
 }
@@ -598,7 +599,7 @@ dispatch:
                 R[opv->fdst.a] = val+offset*opv->fdst.b;
             } NEXT();
             CASE(OP_ALLOC) {
-                R[opv->fdst.a] = alloc(exe,opv->src1,opv->src2);
+                R[opv->fdst.a] = alloc(exe,opv->src1,opv->src2,opvb-code);
             } NEXT();
             CASE(OP_EMPTY_LIST) {
                 R[opv->fdst.a]=0;
@@ -629,20 +630,21 @@ dispatch:
                 uint32_t stride=opv->src2;
                 uint32_t* parray=rwu_get_header(exe,array);
                 uint32_t end=parray[2];
-                // if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
-                //     R[opv->fdst.a]=array;
-                //     R[opv2->fdst.a]=start-pre;
-                // } else {
+                if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
+                    R[opv->fdst.a]=array;
+                    R[opv2->fdst.a]=start-pre;
+                } else {
                     uint32_t sz=max_uint32(pre+post+end-start+2,8);
                     uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
-                    uint32_t ret=alloc(exe,full_size,stride);
+                    uint32_t ret=alloc(exe,full_size,stride,0);
                     uint32_t* parray2=rwu_get_header(exe,ret);
                     memcpy((uint8_t*)(&parray2[4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
                     parray2[2]=pre+end;
+                    parray2[3]=opvb-code;
                     deref_free(exe,array);
                     R[opv->fdst.a]=ret;
                     R[opv2->fdst.a]=0;
-                // }
+                }
                 opvb++;
             } NEXT();
             CASE(OP_REALLOC_FIXED) {
@@ -654,20 +656,21 @@ dispatch:
                 uint32_t stride=opv->src2;
                 uint32_t* parray=rwu_get_header(exe,array);
                 uint32_t end=parray[2];
-                // if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
-                //     R[opv->fdst.a]=array;
-                //     R[opv2->fdst.a]=start-pre;
-                // } else {
+                if(parray[1]==1 && pre<=start && (end+post)*stride+16<=(parray[0]<<3)) {
+                    R[opv->fdst.a]=array;
+                    R[opv2->fdst.a]=start-pre;
+                } else {
                     uint32_t sz=max_uint32(pre+post+end-start+2,8);
                     uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
-                    uint32_t ret=alloc(exe,full_size,stride);
+                    uint32_t ret=alloc(exe,full_size,stride,0);
                     uint32_t* parray2=rwu_get_header(exe,ret);
                     memcpy((uint8_t*)(&parray2[4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
                     parray2[2]=pre+end;
+                    parray2[3]=opvb-code;
                     deref_free(exe,array);
                     R[opv->fdst.a]=ret;
                     R[opv2->fdst.a]=0;
-                // }
+                }
                 opvb++;
             } NEXT();
             CASE(OP_REALLOC_LIST_VAR) {
@@ -684,10 +687,11 @@ dispatch:
                 } else {
                     uint32_t sz=max_uint32(pre+post+end-start+2,8);
                     uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
-                    uint32_t ret=alloc(exe,full_size,8);
+                    uint32_t ret=alloc(exe,full_size,8,0);
                     uint32_t* parray2=rwu_get_header(exe,ret);
                     memcpy((uint8_t*)(&parray2[4+pre+pre]),&parray[4+start+start],(end-start)*8);
                     parray2[2]=pre+end;
+                    parray2[3]=opvb-code;
                     if(parray[1]==1) { // the array was unique, but had to be moved to make space
                         uint32_t* d=rwu_get_data(parray);
                         for(uint32_t i=0;i<start;i++) {
@@ -720,10 +724,11 @@ dispatch:
                 } else {
                     uint32_t sz=max_uint32(pre+post+end-start+2,8);
                     uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
-                    uint32_t ret=alloc(exe,full_size,8);
+                    uint32_t ret=alloc(exe,full_size,8,0);
                     uint32_t* parray2=rwu_get_header(exe,ret);
                     memcpy((uint8_t*)(&parray2[4+pre+pre]),&parray[4+start+start],(end-start)*8);
                     parray2[2]=pre+end;
+                    parray2[3]=opvb-code;
                     if(parray[1]==1) { // the array was unique, but had to be moved to make space
                         uint32_t* d=rwu_get_data(parray);
                         for(uint32_t i=0;i<start;i++) {

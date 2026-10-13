@@ -334,7 +334,7 @@ upper_snake_case(sofar,_,{c,*rest}) -> upper_snake_case({*sofar,to_uppercase(c)}
 export fn generate_inc_files() -> value string,value string,value string,value string,value string;
 generate_inc_files()
     match generate_inc_files_aux({},listnv(2048,""),{},{},{},all_gen_ops()) => defs,oplist,dis,exec,branch
-    match process_oplist(0,{},oplist) => oplist2
-    update add_single_defs(defs,oplist,all_single_ops()) => defs,oplist
-    -> defs,oplist2,dis,exec,branch;
+    match add_single_defs(defs,oplist,all_single_ops()) => defs2,oplist2
+    match process_oplist(0,{},oplist2) => oplist3
+    -> defs2,oplist3,dis,exec,branch;
 

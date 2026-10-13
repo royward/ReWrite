@@ -1574,7 +1574,7 @@ create_export_vm_in(types,code,sofar,n,{{_,TypeString,_},*rest},{val,*vrest}) ma
 create_export_vm_in(types,code,sofar,n,{{_,tp,_},*rest},{val,*vrest}) @match nth(types,tp) => {_,_,{2,subtp},_} match val => true
     match int2s(n) => i ->
     create_export_vm_in(types,{*code,
-        '\tuint32_t array',*i,'=alloc(a,(uint64_t)in',*i,'_len,sizeof(',*c_type_base(subtp),'));\n',
+        '\tuint32_t array',*i,'=alloc(a,(uint64_t)in',*i,'_len,sizeof(',*c_type_base(subtp),'),0);\n',
         '\trwu_set_len(a,array',*i,',in',*i,'_len);\n',
         '\tmemcpy(rwu_get_header_data(a,array',*i,',0),','in',*i,',in',*i,'_len*sizeof(',*c_type_base(subtp),'));\n'},
         {*sofar,'(uint64_t)array',*i,',0,'},n+1,rest,vrest);
