@@ -739,11 +739,8 @@ update_bind_level(bind_level,false) -> bind_level,1;
 update_bind_level(bind_level,_) -> bind_level+1,bind_level;
 
 gen_clause_code_aux(bind_level,committed,ctx,c_match,c_commit,c_post,expr,{pf1,pf2,matchx})
-    match println_any(committed) =>
     update gen_expr_code_untyped(committed,ctx,c_match,c_commit,c_post,{},expr) => ctx,etypes,c_match,c_commit,c_post
-    match println_any(c_match,c_commit,c_post) =>
     update gen_param_code(true,committed,bind_level,{},ctx,c_match,c_commit,c_post,etypes,matchx) => ctx,c_match,c_commit,c_post,
-    match println_any(c_match,c_commit,c_post) =>
     update gen_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
     -> ctx,c_match,{*c_commit,*cleanup_code},c_post;
 
@@ -832,7 +829,8 @@ gen_param_code(owned,committed,bindlevel,stride,ctx,c_match,c_commit,c_post,type
         {ctx_fnr(ctx),OpLoad,3,0,BindReg,pend,0,parray+(8<<32)},
         {ctx_fnr(ctx),OpMinus,xt(TypeU32),BindReg,len,BindReg,pend,src_flag2,src2},*code,
         {ctx_fnr(ctx),if(src_flag2==BindReg,OpLeaScaleReg,OpLeaScaleImm),0,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,bits_to_bytes(sz_tot)}},{}) => c_match,c_commit,c_post
-    -> gen_param_code(owned,committed,bindlevel,newstride,ctx,{*c_match,*code1},{*c_commit,*codefree,*code2},{*c_post,*code3},type_left,rest);
+    update {*c_match,*code1},{*c_commit,*code2},{*c_post,*code3} => c_match,c_commit,c_post
+    -> gen_param_code(owned,committed,bindlevel,newstride,ctx,gen_comm_apply(committed,c_match,c_commit,c_post,{},codefree),type_left,rest);
 gen_param_code(owned,committed,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,c_match,c_commit,c_post,{{access,t,_},*_},{{ParamSplatWild,{}}}) // note: no rest here
     match gen_types_deref_free(true,ctx,tp,{{src_flag1,src1,32},{src_flag2,src2,32}}) => codefree
     -> ctx,gen_comm_apply(committed,c_match,c_commit,c_post,{},codefree);
@@ -950,7 +948,7 @@ gen_expr_code(committed,ctx,outlist,c_match,c_commit,c_post,{},{}) -> ctx,outlis
 gen_expr_code(committed,ctx,outlist,c_match,c_commit,c_post,typelist,{expr,*rest})
     update gen_expr_code_aux(committed,ctx,extract_types({},typelist),expr) => ctx,false,code0,code1,code2,callout_ret
     update callout_insert(ctx,outlist,{},callout_ret,typelist) => ctx,outlist,code_insert,typelist_rest
-    -> gen_expr_code(committed,ctx,outlist,{*c_match,*code0},{*c_commit,*code1},{*c_post,*code2,*code_insert},typelist_rest,rest);
+    -> gen_expr_code(committed,ctx,outlist,gen_comm_apply(committed,{*c_match,*code0},{*c_commit,*code1},{*c_post,*code2},code_insert,{}),typelist_rest,rest);
 
 callout_insert(ctx,outlist,sofar,{},type_left_rest) -> ctx,outlist,sofar,type_left_rest;
 callout_insert(ctx,outlist,sofar,{{{},_,_},*rest0},{{{},_,_},*rest1}) -> callout_insert(ctx,outlist,sofar,rest0,rest1);
@@ -991,12 +989,12 @@ gen_expr_code_aux(committed,ctx,stypes,{ExprCallInternal,op,args})
     ctx,false,gen_comm_apply(committed,{},{},{},code,{}),x;
 gen_expr_code_aux(committed,ctx,stypes,{ExprCall,fn_id,args})
     match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
-    update gen_expr_code(committed,ctx,listnv(regleft,-2),{},{},{},params_left,args) => ctx,inlist,c_match,c_commit,c_pre
+    update gen_expr_code(committed,ctx,listnv(regleft,-2),{},{},{},params_left,args) => ctx,inlist,c_match,c_commit,c_post
     match ctx_get_reg_count(ctx)+1 => spinc
     update callout_enter(spinc,listnv(regright,-2),{},type_right) => _,newtyperight
     update ctx_put_reg_count(ctx,spinc+regright) => ctx
     match slice_iolist(ctx_get_reg_count(ctx),3,{},{},inlist) => {first_slice,*slices}
-    -> ctx,false,gen_comm_apply(committed,c_match,c_commit,c_pre,{slice_build_call(ctx_fnr(ctx),length(slices),fn_id,spinc,regleft,regright,first_slice),*slices},{}),newtyperight;
+    -> ctx,false,gen_comm_apply(committed,c_match,c_commit,c_post,{slice_build_call(ctx_fnr(ctx),length(slices),fn_id,spinc,regleft,regright,first_slice),*slices},{}),newtyperight;
 gen_expr_code_aux(committed,ctx,stypes,{ExprCallLibrary,fn_id,args}) -> gen_expr_code_library(fn_id,committed,ctx,stypes,args);
 gen_expr_code_aux(committed,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}})
     match ctx_fnr(ctx) => fn_id,_
