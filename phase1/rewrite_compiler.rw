@@ -739,8 +739,11 @@ update_bind_level(bind_level,false) -> bind_level,1;
 update_bind_level(bind_level,_) -> bind_level+1,bind_level;
 
 gen_clause_code_aux(bind_level,committed,ctx,c_match,c_commit,c_post,expr,{pf1,pf2,matchx})
+    match println_any(committed) =>
     update gen_expr_code_untyped(committed,ctx,c_match,c_commit,c_post,{},expr) => ctx,etypes,c_match,c_commit,c_post
+    match println_any(c_match,c_commit,c_post) =>
     update gen_param_code(true,committed,bind_level,{},ctx,c_match,c_commit,c_post,etypes,matchx) => ctx,c_match,c_commit,c_post,
+    match println_any(c_match,c_commit,c_post) =>
     update gen_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
     -> ctx,c_match,{*c_commit,*cleanup_code},c_post;
 
@@ -788,7 +791,7 @@ gen_param_code(owned,committed,bindlevel,stride,ctx,c_match,c_commit,c_post,type
     update nth(bindings,id) => bind
     update gen_bind_variable(count,committed,bindlevel,ctx,storage,tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(bindings,id,newbind)) => ctx ->
-    gen_param_code(owned,committed,bindlevel,newstride,ctx,gen_comm_apply(committed,c_match,c_commit,c_post,code0,code1),type_left,rest);
+    gen_param_code(owned,committed,bindlevel,newstride,ctx,gen_comm_apply(committed,c_match,c_commit,c_post,{*mv_code,*code0},code1),type_left,rest);
 gen_param_code(owned,committed,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{ParamWild,{}},*rest})
     @update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,{},{{{src_flag,src,sz},_},tp,_},type_left
     @match nth(ctx_get_types(ctx),tp) => {_,_,{2,_},_}
@@ -824,12 +827,13 @@ gen_param_code(owned,committed,bindlevel,stride,ctx,c_match,c_commit,c_post,type
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx
     update gen_types_deref_free(owned&&(splatcount==0),ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
     update gen_param_code(false,committed,bindlevel,{tp,src_flag1,src1,src_flag2,src2,bits_to_bytes(sz_one),0,min_size+splatcount},ctx,{},{},{},{{memindex,sub_type,Consume}},elements) => ctx,code1,code2,code3
-    -> gen_param_code(owned,committed,bindlevel,newstride,ctx,{*c_match,*mv_code,
-        {ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},
+    update gen_comm_apply(committed,c_match,c_commit,c_post,
+        {*mv_code,{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},
         {ctx_fnr(ctx),OpLoad,3,0,BindReg,pend,0,parray+(8<<32)},
         {ctx_fnr(ctx),OpMinus,xt(TypeU32),BindReg,len,BindReg,pend,src_flag2,src2},*code,
         {ctx_fnr(ctx),if(src_flag2==BindReg,OpLeaScaleReg,OpLeaScaleImm),0,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,bits_to_bytes(sz_tot)},
-        *code1},{*c_commit,*codefree,*code2},{*c_post,*code3},type_left,rest);
+        *code1},{}) => c_match,c_commit,c_post
+    -> gen_param_code(owned,committed,bindlevel,newstride,ctx,{*c_match,*code1},{*c_commit,*codefree,*code2},{*c_post,*code3},type_left,rest);
 gen_param_code(owned,committed,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,c_match,c_commit,c_post,{{access,t,_},*_},{{ParamSplatWild,{}}}) // note: no rest here
     match gen_types_deref_free(true,ctx,tp,{{src_flag1,src1,32},{src_flag2,src2,32}}) => codefree
     -> ctx,gen_comm_apply(committed,c_match,c_commit,c_post,{},codefree);

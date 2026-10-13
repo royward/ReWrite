@@ -232,7 +232,6 @@ int main(int argc, char** argv) {
     exe->allocated=0;
     ret_code=rw_test_equal_list_string1(exe,&resultb);
     if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
-#endif
 
     printf("test_equal_list_string2:");
     exe->allocated=0;
@@ -252,6 +251,7 @@ int main(int argc, char** argv) {
     if(!ret_code && strcmp(resultc1,"xyzzy0")==0 && strcmp(resultc2,"xyzzy1")==0) { printf("success\n"); } else { printf("fail:%d %s %s\n",ret_code,resultc1,resultc2); };
     free(resultc1);
     free(resultc2);
+#endif
 
     printf("Heap size=%d\n",exe->end_of_heap*8);
 
