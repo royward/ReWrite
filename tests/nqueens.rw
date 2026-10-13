@@ -1,7 +1,7 @@
 // Example: n-queens. Returns all solutions
 // SPDX-License-Identifier: CC0-1.0
 
-fn nqueens(i64) -> [[i64]];
+export fn nqueens(i64) -> [[i64]];
 nqueens(n) -> nqueens_aux({},listn1(n),{});
 
 fn listn1(i64) -> [i64];

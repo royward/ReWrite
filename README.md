@@ -1,6 +1,6 @@
 # ReWrite
 
-A rule-based language for expressing recursive computation through pattern matching. Initial version an interpreter in Modern C++, but the plan is to bootstrap it - write a ReWrite compiler in itself that generates instructions suitable for a Virtual Machine, and maybe eventually x86-64 and ARM machine code.
+A rule-based language for expressing recursive computation through pattern matching. Initial version an interpreter in Modern C++, but the plan is to bootstrap it - write a ReWrite compiler in itself that generates instructions suitable for a Virtual Machine and LLVM that can be targeted to run natively on x86-64 and ARM machines.
 
 - [Overview](#overview)
 - [License](#license)
@@ -28,19 +28,20 @@ A rule-based language for expressing recursive computation through pattern match
 
 ReWrite is a language designed to make complex decision logic easier. It has:
 
-* pattern matching instead of `if ... then ... else` chains or `case` statements,
+* pattern matching instead of `if ... then ... else` chains or `case` statements
 
 * variables that are bound through pattern matching rather than assigned
 
-* multiple return values, making functions that return complex results clean and readable
+* multiple return values without tuple machinery, making functions that return complex results readable
 
 * easy list construction and deconstruction using a splat operator.
 
-As a result, ReWrite programs often have "one thought per line".
+As a result, ReWrite programs often have "one thought per rule" or "one thought per line".
 
 A ReWrite program is a list of functions, where each function is a set of rules, and the execution path is that a function call will try each of the rules, then fire the first one that matches (without Prolog style backtracking). For a simple example:
 
 ```
+export fn fact(i64) -> i64;
 fact(0) -> 1;
 fact(n) -> n*fact(n-1);
 ```
@@ -48,18 +49,18 @@ fact(n) -> n*fact(n-1);
 Each call will check first if the argument is 0, in which case it will terminate returning 1, or it will calculate `fact(n)` recursively in terms of `fact(n-1)`.
 
 ReWrite:
-* is currently interpreted, with the goal of later being compiled.
-* will be strongly typed - it is currently dynamically typed, but this will change in the compiled version.
-* is mostly functional (does allow side effect for things like logging).
-* uses tail recursion instead of loops.
-* uses no garbage collector - everything is copied, modified in place or disposed of, so that there is exactly one reference to anything. This will be replaced by reference counting in the compiled version. Both of these techniques avoid garbage collection pauses and make memory management predictable.
+* will be fully compiled to either code that runs in a VM or to LLVM IR that can be converted to native code (currently only an interpreter for bootstrapping is fully working)
+* will be strongly typed (it is dynamically typed in the interpreter)
+* is mostly functional (does allow side effect for things like logging)
+* uses tail recursion instead of loops
+* uses no garbage collector - it uses reference counting instead
 * is intended to have the Rust/Haskell property that where possible things fail at parse or compile time rather than run time.
 
 ## License
 
 ReWrite is licensed under the [Apache License 2.0](LICENSE).
 
-Example programs (in the `tests/` directory) are released under [CC0 1.0 Universal (Public Domain)](https://creativecommons.org/publicdomain/zero/1.0/) — you are free to use them without restriction.
+Example programs (in the `tests/` directory) are released under [CC0 1.0 Universal (Public Domain)](https://creativecommons.org/publicdomain/zero/1.0/). You are free to use them without restriction.
 
 ## History and Motivation
 
@@ -67,48 +68,50 @@ In the 1990s, I got really interested in using pattern matching for programming,
 
 This idea lay dormant until recently, when as part of my work on the [Galaxy Generator Project](https://orange-kiwi.com/galaxy-generator/) (now being developed in Rust), I realised that some of the logic in there is going to get very complex, and there would be value in having a way of having some of the logic in a ReWrite style language in a module embedded into Rust. This avoids the whole library issue of trying to write a general purpose language. A lot has changed in language design in the last 30 years, so this project is not the original ReWrite - I'm using a more modern syntax, have somewhat more powerful semantics.
 
-Most importantly, the original ReWrite was dynamically typed (types checked at runtime), and this new project will be strongly statically typed (types checked at compile time), as that avoids runtime errors, and allows more optimal code generation.
+The most important change is the original ReWrite was dynamically typed (types checked at runtime), and this new project will be strongly statically typed (types checked at compile time), as that avoids runtime errors, and allows more optimal code generation.
 
-As a secondary motivation, I was interested to see how well Modern C++ could be used to rapidly develop the initial interpreter. The interpreter was written in under four days of actual development time, suggesting the approach was successful.
+As a secondary motivation, I was interested to see how well Modern C++ could be used to rapidly develop the initial interpreter. The initial interpreter was written in under four days of actual development time, although reference counting was later added (about another 3-4 days) to improve performance.
 
 ## Use cases
 
 ReWrite can be used for general programming, but is particularly good at dealing with complex-case logic. For instance, this makes it well suited to lexers, parsers and compilers. I also think it is going to have value in complex game logic (I haven't tested this yet), and converting a data structure into readable text (for example, planet descriptions).
 
-The example programs demonstrate recursive algorithms including prime generation and the n-queens problem, giving a sense of the language's expressive range beyond compiler construction.
+The example programs include prime generation and the n-queens problem, showing how non-trivial problems are expressed in ReWrite, particularly how tail recursion is used.
 
-It is designed to be embedded in other languages (currently C++, later will also support C and Rust), so the plan is to use it for the logic that goes alongside heavy numerical computation in the embedding language.
+It is designed to be embedded in other languages (currently C, later will also support C++ and Rust), so the plan is to use it for the logic that goes alongside GUI or heavy numerical computation in the embedding language.
 
 
 ## Installation
 
-ReWrite requires a C++23 compatible compiler (GCC 14+ or Clang 18+) and CMake 3.20+. It uses no platform-specific code and should work on any platform supporting these tools, but has only been tested on Linux.
+ReWrite requires a C++17 compatible compiler and CMake 3.20+. It uses no platform-specific code and should work on any platform supporting these tools, but has only been tested on Linux.
 
 ```bash
 git clone https://github.com/royward/rewrite.git
 cd rewrite
-cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
-cmake --build build/release
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release
 ```
 
-The binary will be at `build/release/phase0_interpreter/rewrite_cpp`.
+The binary will be at `build-release/phase0_interpreter/rewrite_cpp`.
 
 For a debug build:
 
 ```bash
-cmake -S . -B build/debug -DCMAKE_BUILD_TYPE=Debug
-cmake --build build/debug
+cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-debug
 ```
 
-I welcome bug reports if there is some issue where it won't build on another platform with a recent enough C++ compiler.
+I welcome bug reports if there are any building or other issues.
 
 Note that the phase 0 interpreter is not optimised for performance - it is merely a vehicle to bootstrap to phase 1 and beyond, where performance issues will be addressed.
 
-Note that once ReWrite builds itself in phase 1 and beyond, the VM is written in C and has no C++ dependency.
+Note that once ReWrite builds itself in phase 1 and beyond, the VM is written in C11 and has no C++ dependency.
 
 ## Usage
 
-ReWrite currently has a command line utility:
+I will document using the compiler once it is more complete.
+
+The ReWrite bootstrap interpreter has a command line utility:
 
 ```
 <path>/rewrite_cpp <program_file> <expression>
@@ -116,7 +119,7 @@ ReWrite currently has a command line utility:
 
 where `<expression>` is any valid ReWrite expression, which may call functions defined in `<program_file>`.
 
-So for instance (from the `build/release` directory):
+So for instance (from the `build-release/phase0_interpreter` directory):
 
 ```
 ./rewrite_cpp ../../tests/factorial.rw "fact(10)"
@@ -124,7 +127,7 @@ Results:
 3628800
 ```
 
-It is also possible to just use the classes directly (just look at `main.cpp` for the code for this). A note of caution with doing this - the current version is the throwaway prototype, and the API to phase 1 will be quite different.
+It is also possible to just use the classes directly by linking against `rwinterp` (just look at `apps/rewrite.cpp` for an example of the code for this). A note of caution with doing this - the current version is only meant for bootstrapping, and the API in phase 1 will be quite different.
 
 ## Language description
 
@@ -132,22 +135,33 @@ This section has examples which can all be found in the `tests` directory.
 
 #### General Structure
 
-The structure of a ReWrite program is simple - it is a list of functions, where each function is a list of rules of the form:
+The structure of a ReWrite program is simple - it is a list of functions, where each function has a signature describing the inputs and outputs:
 
 ```
-<function_name>(<pattern>)[when <guard expression>] -> <expressions>;
+[export] fn <function_name>(<input types>) -> <output types>;
 ```
 
-`[ ]` means that the part enclosed is optional. See [Match/Update Clauses](#matchupdate-clauses) for a more complete syntax.
+(`[ ]` indicates optional) followed by a list of rules of the form:
 
-The language just fires the first rule that successfully matches (it is a runtime error if none of them fire - later versions might make this a compile time error).
+```
+<function_name>(<pattern>)<clause>* -> <expressions>;
+```
+
+Where the optional clauses can for instance be [Guards](#guards) as described in the next section. Also see [Match/Update Clauses](#matchupdate-clauses) for a more complete syntax.
+
+NOTE: the interpreter ignores any lines starting with `fn` or `export` (or `type`). Signatures will however be required in the compiler. Because the interpreter is the only component fully running so far, I have included the signatures, but don't go into the details of how they are constructed.
+
+The language just fires the first rule that successfully matches the pattern and meets the requirements of any guards (it is a runtime error if none of them fire - later versions might make this a compile time error).
 
 So for instance, in the example from earlier:
 
 ```
+export fn fact(i64) -> i64;
 fact(0)->1;
 fact(n)->n*fact(n-1);
 ```
+
+The `fn` line indicates that the function takes one `i64` and returns one `i64`. The `export` simply indicates the compiler will produce a Foreign Function Interface definition for this function - if it is left out, this function can only be called from other functions. I am going to drop the `export` from the other examples shown here.
 
 If `fact(3)` is evaluated, it fails to match with the first rule, matches with the second which fires, so `n*fact(n-1)` is evaluated, which calls `fact(2)`.
 
@@ -160,10 +174,11 @@ Guards are useful when the condition can't be expressed purely as a pattern matc
 An alternative version of `fact` using a guard is:
 
 ```
+fn fact(i64) -> i64;
 fact(n) when n>0 -> n*fact(n-1);
 fact(_) -> 1;
 ```
-The first rule will fire if `n` is matched (which will match to any single argument), but the rule will fire only if the guard condition is met: `n>0`, giving the same result as the first version (except it won't crash the stack like the first version would).
+The first rule will fire if `n` is matched (which will match to any single argument), but the rule will fire only if the guard condition is met: `n>0`, giving the same result as the first version (except it won't crash the stack on a negative input like the first version would).
 
 The `_` is a special symbol that means "match with anything". Unlike a named parameter, it doesn't bind to anything, so you can use multiple `_` in the same rule without conflict.
 
@@ -174,6 +189,7 @@ See [Match/Update Clauses](#matchupdate-clauses) for a generalization of guards.
 So far, all the examples have treated function parameters like they would appear in most other languages. ReWrite does full matching, which is richer than this - the same identifier can appear as part of a match multiple times, but then it must be bound to the same value. For instance:
 
 ```
+fn equal(i64,i64) -> bool;
 equal(x,x) -> true;
 equal(_,_) -> false;
 ```
@@ -187,6 +203,7 @@ One unusual feature of ReWrite is that functions can return multiple values, and
 For instance, in the following, `min_max` returns two values, the min and the max:
 
 ```
+fn min_max(i64,i64) -> i64,i64;
 min_max(a,b) when a<b -> a,b;
 min_max(a,b) -> b,a;
 ```
@@ -194,16 +211,18 @@ min_max(a,b) -> b,a;
 and this will be taken as two parameters by another function, for instance:
 
 ```
+fn sub(i64,i64) -> i64;
 sub(a,b) -> b-a;
 ```
 so `sub(min_max(10,3))` and `sub(min_max(3,10))` will both return `7`.
 
-It's worth unpacking what is going on here: `min_max(10,3)` returns the results `3` (the min) and `10` (the max). The `3` and `10` are passed as two arguments to `sub(a,b)`, so `sub(3,10)` is evaluated.
+Breaking this down into steps: `min_max(10,3)` returns the results `3` (the min) and `10` (the max). The `3` and `10` are passed as two arguments to `sub(a,b)`, so `sub(3,10)` is evaluated.
 
 One motivation for this (using features not yet in the language) was `polar_to_rectangular`:
 
 ```
 // hypothetical - floating point not yet supported
+fn polar_to_rectangular(f64,f64) -> f64,f64;
 polar_to_rectangular(r, theta) -> r*cos(theta), r*sin(theta);
 ```
 
@@ -215,13 +234,18 @@ ReWrite has support for constructing lists, using `{ }`, so `{1,2,3}` is the lis
 
 ```
 // not in test directory as more powerful example below
+fn reverse3([i64]) -> [i64];
 reverse3({x,y,z}) -> {z,y,x};
 ```
+
+Compiler note: the `[i64]` in the signature indicates a list of `i64`.
+
 This will reverse a list of three elements. However this is not very general - we really want to reverse any sized list. To allow more powerful list processing, there is the splat `*` operator, which is effectively the inverse of the list operator. When used as part of a match, it means "take any number of elements and bind it to a list", when used as part of the expression on the right, it means "expand a list into its elements in the surrounding context", so `*{x}` = `x`, and {*list} = `list` (if `list` is a list).
 
 Here is a more generic reverse list function:
 
 ```
+fn reverse([i64]) -> [i64];
 reverse({}) -> {};
 reverse({a,*rest}) -> {*reverse(rest),a};
 ```
@@ -231,6 +255,7 @@ Working through this, if `reverse({1,2,3})` is called, then `a` will bind to `1`
 A splat doesn't need to be at the end of a list. An example that takes all the elements of a list except the first and last:
 
 ```
+fn middle([i64]) -> [i64];
 middle({_,*x,_}) -> x;
 ```
 
@@ -240,6 +265,7 @@ You might be tempted to use multiple splats:
 
 ```
 // This won't work (yet)
+fn member(i64,[i64]) -> bool;
 member(x,{*_,x,*_}) -> true;
 member(x,_) -> false;
 ```
@@ -249,6 +275,7 @@ This is conceptually nice, but the language doesn't (yet) support it - this is a
 The following will work:
 
 ```
+fn member(i64,[i64]) -> bool;
 member(_,{}) -> false;
 member(x,{x,*_}) -> true;
 member(x,{_,*rest}) -> member(x,rest);
@@ -257,6 +284,7 @@ member(x,{_,*rest}) -> member(x,rest);
 As part of an expression, splat can deal with more than one argument (if they are all lists):
 
 ```
+fn flatten([[i64]]) -> [i64];
 flatten(x) -> {**x};
 ```
 
@@ -265,6 +293,7 @@ Calling `flatten({{1,2},{3,4}})` returns `{1,2,3,4}`. `*{{1,2},{3,4}}` gives the
 For another example using list and splat:
 
 ```
+fn listn(i64) -> [i64];
 listn(0) -> {};
 listn(n) -> {*listn(n-1),n-1};
 ```
@@ -283,6 +312,7 @@ This allows for reasonably compact string pattern matching and string generation
 
 ```
 // Convert integer to Roman Numeral.
+fn int_to_roman(i64) -> string;
 int_to_roman(i) when i>=1000 -> {'M',*int_to_roman(i-1000)};
 int_to_roman(i) when i>=900 -> {'CM',*int_to_roman(i-900)};
 int_to_roman(i) when i>=500 -> {'D',*int_to_roman(i-500)};
@@ -298,10 +328,12 @@ int_to_roman(i) when i>=4 -> {'IV',*int_to_roman(i-4)};
 int_to_roman(i) when i>=1 -> {'I',*int_to_roman(i-1)};
 int_to_roman(_) -> "";
 
+fn to_uppercase(char) -> char;
 to_uppercase(c) when c>='a' && c<='z' -> c-32;
 to_uppercase(c) -> c;
 
 // Convert Roman Numeral to integer. Does not validate that the Roman Numeral is well formed.
+fn roman_to_int_convert(char) -> i64;
 roman_to_int_convert('I') -> 1;
 roman_to_int_convert('V') -> 5;
 roman_to_int_convert('X') -> 10;
@@ -310,8 +342,10 @@ roman_to_int_convert('C') -> 100;
 roman_to_int_convert('D') -> 500;
 roman_to_int_convert('M') -> 1000;
 
+fn roman_to_int_convert_case(char) -> i64;
 roman_to_int_convert_case(x) -> roman_to_int_convert(to_uppercase(x));
 
+fn roman_to_int(string) -> i64;
 roman_to_int("") -> 0;
 roman_to_int({a,b,*rest}) when roman_to_int_convert_case(a)<roman_to_int_convert_case(b) ->
     roman_to_int_convert_case(b)-roman_to_int_convert_case(a)+roman_to_int(rest);
@@ -322,6 +356,7 @@ roman_to_int({a,*rest}) -> roman_to_int_convert_case(a)+roman_to_int(rest);
 There are situations where it is useful to report a runtime error, or note that a particular match should not happen. For instance, the first factorial example (repeated from [General Structure](#general-structure)) will go into a loop until it overflows the stack if a negative number is passed in.
 
 ```
+fn fact(i64) -> i64;
 fact(0)->1;
 fact(n)->n*fact(n-1);
 ```
@@ -335,9 +370,10 @@ For the moment (phase 0), they both perform identically to produce runtime error
 
 To use either of those, put them on the right hand side of a rule. They can appear anywhere in an expression, though typically they are the sole expression on the right-hand side.
 
-For example:
+For instance:
 
 ```
+fn fact(i64) -> i64;
 fact(n) when n<0 -> #error(10);
 fact(0)->1;
 fact(n)->n*fact(n-1);
@@ -371,20 +407,24 @@ Let's see how this works. There are already examples of `when` in the sections s
 Imagine that we have an expensive function that we want to use twice:
 
 ```
+fn expensive(i64) -> i64;
 expensive(n) -> n+n+n; // Imagine this is expensive
 
 // Use match to bind it to result, then use result twice
+fn use_twice(i64) -> i64;
 use_twice(n) match expensive(n) => result -> result*result;
 ```
 
-In this case, result will be bound with the results of `expensive(x)`, and can now be used repeatedly in expressions.
+In this case, result will be bound with the results of `expensive(n)`, and can now be used repeatedly in expressions.
 
 Another case where match is useful is tying multiple calls together and having data threaded through it:
 
 ```
+fn min_max(i64,i64) -> i64,i64;
 min_max(a,b) when a<b -> a,b;
 min_max(a,b) -> b,a;
 
+fn clamp(i64,i64,i64) -> i64;
 clamp(x,lo,hi)
     match min_max(lo,hi) => lo2,hi2
     match min_max(x,lo2) => _,x2
@@ -397,6 +437,7 @@ In this case, having to have the `lo2`, `hi2`, `x2`, `x3` add extra complexity t
 For this reason, a variation of match called `update` is provided. `update` is the same as match, except that values on the right are re-bound (can change values), so the above example becomes:
 
 ```
+fn clamp(i64,i64,i64) -> i64;
 clamp(x,lo,hi)
     update min_max(lo,hi) => lo,hi
     update min_max(x,lo) => _,x
@@ -410,19 +451,21 @@ Note that when update rebinds a variable, it must be the same type as the origin
 
 When the pattern introduces only new variable names, `match` and `update` are equivalent.
 
-A match or update that fails to match generates an error, as a pattern that doesn't fit means there is an error in the program. Most clauses are like this: you are destructuring a shape you already know. Where a clause is genuinely a test, prefix it with `@` (`@match` or `@update`) and a failure declines the rule and tries the next one instead.
+A match or update that fails to match generates an error, as a pattern that doesn't fit means there is an error in the program, as most clauses are extracting or transforming data. Where a clause is a test that may fail, prefix it with `@` (`@match` or `@update`) and a failure declines the rule and tries the next one instead.
 
 A when guard is exactly this: `when <expressions>` is syntactic sugar for `@match <expressions> => true`.
 
-In practice, `@match` and `@update` should not need to be used very often, as most rule selection can be handled by patterns in the rule head or `when` clauses. The compiler in progress is currently around 1200 lines of code, and uses six `@match` and zero `@update`.
+In practice, `@match` and `@update` should not need to be used very often, as most rule selection can be handled by patterns in the rule head or `when` clauses. The compiler in progress is currently around 1800 lines of code, and has only about twenty `@match` and three `@update` clauses.
 
-For example, say I have a validation function that also does some processing on a result, and I only want to fire the rule if the validation function succeeds:
+For instance, say I have a validation function that also does some processing on a result, and I only want to fire the rule if the validation function succeeds:
 
 ```
 // only validate non-negative integers, multiply by 2
+fn validate(i64) -> bool,i64;
 validate(x) when x>=0 -> true, x*2;
 validate(_) -> false, 0;
 
+fn process(i64) -> i64;
 process(x) @match validate(x) => true,data -> data;
 process(_) -> #error(10);
 ```
@@ -435,15 +478,19 @@ The `@match validate(x) => true,data` will evaluate `validate(x)` which returns 
 Note that in all cases, each match and update clause could be avoided by using a one line helper function:
 
 ```
+fn process(i64) -> i64;
 process(x) -> process_helper(validate(x));
 
+fn process_helper(bool,i64) -> i64;
 process_helper(true,data) -> data;
 process_helper(_,_) -> #error(10);
 ```
 
 ```
+fn use_twice(i64) -> i64;
 use_twice(n) -> use_twice_helper(expensive(n));
 
+fn use_twice_helper(i64) -> i64;
 use_twice_helper(n) -> n*n;
 ```
 
@@ -459,6 +506,7 @@ const TokPlus = 2;
 const TokMinus = 3;
 const TokEof = 0;
 
+fn eval(i64,i64,i64) -> i64;
 eval(TokNumber, a, _) -> a; // just return the first one
 eval(TokPlus, a, b) -> a+b;
 eval(TokMinus, a, b) -> a-b;
@@ -468,11 +516,12 @@ eval(TokEof, _, _) -> TokEof;
 Note:
 * it is an error to try and declare a constant more than once
 * constants only take effect after they are declared, and can have expressions depending on other constants
-* it is legal for a const to have more than one expression - in this example, `name` expands to the 5 characters:
+* it is legal for a const to have more than one expression (NOTE: supported by the interpreter, but not yet the compiler) - in this example, `name` expands to the 5 characters:
 
 ```
 const name='World';
 
+fn hello() -> string;
 hello() -> {'Hello ', name ,'!'};
 ```
 
@@ -483,16 +532,19 @@ Calling `hello()` returns "Hello World!".
 ReWrite uses a lot of recursion. One thing to be aware of is that each recursive call typically uses another frame on the stack, so deep recursions can cause a stack overflow. This is mitigated by tail recursion - a jump (tail call) is used on the last operation performed by a function, so in:
 
 ```
-f(x) -> g(x),t(h(x))
+fn f(i64) -> i64;
+f(x) -> g(h(x));
 ```
 
-the `g(x)` and `h(x)` will be called, creating another level on the stack, but when it gets to `t(x)`, that is done with a jump rather than a call, as there would be nothing left to do on return.
+the `h(x)` will be called first, creating another level on the stack, but when `g( )` is called on the result, that is done with a jump rather than a call, as there would be nothing left to do on return.
 
 Code can always be made tail recursive with appropriate restructuring. For instance, the `listn` above is not tail recursive, but the following is:
 
 ```
+fn listn2(i64) -> [i64];
 listn2(n) -> listn_aux(0,n,{});
 
+fn listn_aux(i64,i64,[i64]) -> [i64];
 listn_aux(n,n,sofar) -> sofar;
 listn_aux(n,m,sofar) -> listn_aux(n+1,m,{*sofar,n});
 ```
@@ -508,12 +560,15 @@ Here are some examples that put these concepts together. I'm not going to work t
 The "find the nth prime number" was one of my milestone tests in ReWrite version 1, so it seemed fitting to include it here.
 
 ```
+fn nprime(i64) -> [i64];
 nprime(n) -> nprime_aux(n,2,{});
 
+fn nprime_aux(i64,i64,[i64]) -> [i64];
 nprime_aux(0,_,sofar) -> sofar;
 nprime_aux(n,p,sofar) when isprime(p,sofar) -> nprime_aux(n-1,p+1,{*sofar,p});
 nprime_aux(n,p,sofar) -> nprime_aux(n,p+1,sofar);
 
+fn isprime(i64,[i64]) -> bool;
 isprime(n,{i,*_}) when n%i==0 -> false;
 isprime(n,{i,*_}) when i*i>n -> true;
 isprime(n,{_,*rest}) -> isprime(n,rest);
@@ -522,28 +577,33 @@ isprime(_,{}) -> true;
 
 `nprime_aux` is effectively a loop, trying increasing numbers one at a time against the list of primes found so far.
 
-`isprime` is a good exemplar showing how rule matching can make code clear. There is a terminating condition ("we tried them all") first rule, another rule for exiting early, another one for "this is not prime", and lastly, "we tested this number, go try the next one".
+`isprime` is a good example showing how rule matching can make code clear. There is a rule for "this is not prime", another rule for exiting early, another for "we tested this number, go try the next one", and finally a terminating condition ("we tried them all").
 
 #### N-Queens
 
 This would not be complete without an example that is computationally more heavy. I've played a lot with Prolog and Prolog like languages, so the N-Queens problem is my selection here - "how can I place N queens on an NxN chessboard so that none of them take each other". This code returns all the solutions, as a list of which column each queen should go on for the corresponding row.
 
 ```
+fn nqueens(i64) -> [[i64]];
 nqueens(n) -> nqueens_aux({},listn1(n),{});
 
+fn listn1(i64) -> [i64];
 listn1(0) -> {};
 listn1(n) -> {*listn1(n-1),n};
 
 // nqueens_aux(column_choices_sofar, column_choices_todo, rows_done)
+fn nqueens_aux([i64],[i64],[i64]) -> [[i64]];
 nqueens_aux({},{},solution) -> {solution};
 nqueens_aux(_,{},solution) -> {};
 nqueens_aux(col_so_far,{c,*col_todo},rows_done) ->
     {*nqueens_try(col_so_far,col_todo,c,rows_done),
      *nqueens_aux({*col_so_far,c},col_todo,rows_done)};
 
+fn nqueens_try([i64],[i64],i64,[i64]) -> [[i64]];
 nqueens_try(col_so_far,col_todo,c,rows_done) when attack(c,1,rows_done) -> {}; // no solutions here
 nqueens_try(col_so_far,col_todo,c,rows_done) -> nqueens_aux({},{*col_so_far,*col_todo},{c,*rows_done}); // got another row
 
+fn attack(i64, i64, [i64]) -> bool;
 attack(c,offset,{}) -> false;
 attack(c,offset,{x,*rest}) when c+offset==x || c-offset==x -> true;
 attack(c,offset,{_,*rest}) -> attack(c,offset+1,rest);
@@ -566,16 +626,20 @@ This is done, barring any bug fixes.
 
 #### Phase 1 (0.1 release): compiling to VM
 
-This stage adds static typing but not other language features, and writing a ReWrite program that compiles itself to a VM targetted binary and LLVM IR code. Steps are:
+This stage adds everything needed for static typing but not other language features, and writing a ReWrite program that compiles itself to a VM targeted binary and LLVM IR code. Steps are:
 
-* Strong static typing (types checked at compile time)
+* Strong static typing (types checked at compile time), with i64, bool, char as the basic types, also string, list types, struct types and sum types.
 * write ReWrite -> VM, written in ReWrite itself (self-hosting)
 * write the VM in C (mostly done)
 * Interface from C (done enough for phase 1)
 
-This is in progress. ReWrite can parse itself, and simple functions compile and have the interface generated in both the VM and the LLVM-IR code, although complete LLVM-IR will wait till phase 2.
+This is in progress.
+* ReWrite can parse itself
+* simple non-list functions compile, have the interface generated and run in both the VM and the LLVM-IR code (although complete LLVM-IR will wait till phase 2).
+* Most of the examples given here (exceptions are `hello` and `middle`) can now be compiled and run in the VM.
+* The ReWrite code used to generate the repetitive parts of the VM now compiles and runs successfully under ReWrite.
 
-Once ReWrite can build and run itself, the interpreter remains as the bootstrap root, but no longer needs to track new language features. Later phases compile via the previous stage.
+Once ReWrite can build and run itself, the interpreter will remain frozen as the bootstrap root, but no longer get new language features. Later phases use the previous stage to compile.
 
 #### Phase 2 (0.2 release): more targets and higher level functions
 
