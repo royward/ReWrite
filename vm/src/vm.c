@@ -104,6 +104,7 @@ int rw_instance_init(RWInstance* exe, Program* p) {
     exe->program = p;
     exe->registers = (uint64_t*)malloc(REGISTERS_SIZE*sizeof(uint64_t));
     exe->heap8 = (uint64_t*)malloc(HEAP_SIZE*sizeof(uint8_t));
+    exe->allocated=0;
     // create an empty value
     uint32_t* header=rwu_get_header(exe,0);
     header[0]=2;
@@ -302,6 +303,9 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
         case OP_APPEND_SPLAT_CONSUME: {
              fprintf(out,"append_splat_consume.%d (r%u) <- (r%u,r%u)",opv->fdst.b,opv->fdst.a,opv->fsrc1.a,opv->fsrc2.a);
         } break;
+        case OP_COMPARE_LISTS: {
+             fprintf(out,"compare_lists %d <- (r%u,r%u) == (r%u,r%u) stride=%d depth=%d",opv->fdst.a,opv->fsrc1.a,opv->fsrc1.b,opv->fsrc2.a,opv->fsrc2.b,opv->fdst.b>>12,opv->fdst.b&0xFFF);
+        } break;
         case OP_CONT: {
             fprintf(out,"(continuation)");
         } break;
@@ -321,7 +325,7 @@ void program_disassemble(Program* program, FILE* out) {
     }
 }
 
-uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
+uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size, uint32_t pc) {
     uint64_t sz=((uint64_t)count)*size;
     uint64_t alloc=exe->end_of_heap;
     uint32_t full_size=(16+sz+7)>>3;
@@ -330,7 +334,7 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size) {
     uint32_t* header=rwu_get_header(exe,alloc);
     header[0]=full_size;
     header[1]=1;
-    header[3]=0xDEADBEEF;
+    header[3]=pc;
     exe->end_of_heap+=full_size;
     return alloc;
 }
@@ -435,6 +439,37 @@ void splat_list_scalar_n(RWInstance* exe, uint32_t n, uint32_t more_levels, uint
     }
     if(consume) {
         deref_free(exe, array);
+    }
+}
+
+
+bool compare_lists(RWInstance* exe, uint32_t depth, uint64_t stride, uint32_t a1, uint32_t s1, uint32_t a2, uint32_t s2) {
+    uint32_t* parray1=rwu_get_header(exe,a1);
+    uint32_t* parray2=rwu_get_header(exe,a2);
+    uint32_t e1=parray1[2];
+    uint32_t e2=parray2[2];
+    uint32_t len=e1-s1;
+    if(len!=e2-s2) {
+        return false; // different lengths
+    }
+    if(a1==a2) {
+        return true; // same list (shortcut)
+    }
+    if(depth==0) {
+        uint8_t* d1=rwu_get_data(parray1);
+        uint8_t* d2=rwu_get_data(parray2);
+        return memcmp(d1+stride*s1,d2+stride*s2,stride*len)==0;
+    } else {
+        uint32_t* d1=rwu_get_data(parray1);
+        uint32_t* d2=rwu_get_data(parray2);
+        uint32_t s1_2=s1+s1;
+        uint32_t s2_2=s2+s2;
+        for(uint32_t i=0;i<len+len;i+=2) {
+            if(!compare_lists(exe,depth-1,stride,d1[i+s1_2],d1[i+s1_2+1],d2[i+s2_2],d2[i+s2_2+1])) {
+                return false;
+            }
+        }
+        return true;
     }
 }
 
@@ -564,7 +599,7 @@ dispatch:
                 R[opv->fdst.a] = val+offset*opv->fdst.b;
             } NEXT();
             CASE(OP_ALLOC) {
-                R[opv->fdst.a] = alloc(exe,opv->src1,opv->src2);
+                R[opv->fdst.a] = alloc(exe,opv->src1,opv->src2,opvb-code);
             } NEXT();
             CASE(OP_EMPTY_LIST) {
                 R[opv->fdst.a]=0;
@@ -601,10 +636,11 @@ dispatch:
                 } else {
                     uint32_t sz=max_uint32(pre+post+end-start+2,8);
                     uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
-                    uint32_t ret=alloc(exe,full_size,stride);
+                    uint32_t ret=alloc(exe,full_size,stride,0);
                     uint32_t* parray2=rwu_get_header(exe,ret);
                     memcpy((uint8_t*)(&parray2[4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
                     parray2[2]=pre+end;
+                    parray2[3]=opvb-code;
                     deref_free(exe,array);
                     R[opv->fdst.a]=ret;
                     R[opv2->fdst.a]=0;
@@ -626,10 +662,11 @@ dispatch:
                 } else {
                     uint32_t sz=max_uint32(pre+post+end-start+2,8);
                     uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
-                    uint32_t ret=alloc(exe,full_size,stride);
+                    uint32_t ret=alloc(exe,full_size,stride,0);
                     uint32_t* parray2=rwu_get_header(exe,ret);
                     memcpy((uint8_t*)(&parray2[4])+pre*stride,(uint8_t*)(&parray[4])+start*stride,(end-start)*stride);
                     parray2[2]=pre+end;
+                    parray2[3]=opvb-code;
                     deref_free(exe,array);
                     R[opv->fdst.a]=ret;
                     R[opv2->fdst.a]=0;
@@ -650,10 +687,11 @@ dispatch:
                 } else {
                     uint32_t sz=max_uint32(pre+post+end-start+2,8);
                     uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
-                    uint32_t ret=alloc(exe,full_size,8);
+                    uint32_t ret=alloc(exe,full_size,8,0);
                     uint32_t* parray2=rwu_get_header(exe,ret);
                     memcpy((uint8_t*)(&parray2[4+pre+pre]),&parray[4+start+start],(end-start)*8);
                     parray2[2]=pre+end;
+                    parray2[3]=opvb-code;
                     if(parray[1]==1) { // the array was unique, but had to be moved to make space
                         uint32_t* d=rwu_get_data(parray);
                         for(uint32_t i=0;i<start;i++) {
@@ -686,10 +724,11 @@ dispatch:
                 } else {
                     uint32_t sz=max_uint32(pre+post+end-start+2,8);
                     uint32_t full_size=(1<<(64-__builtin_clzll(sz-1)))-2;
-                    uint32_t ret=alloc(exe,full_size,8);
+                    uint32_t ret=alloc(exe,full_size,8,0);
                     uint32_t* parray2=rwu_get_header(exe,ret);
                     memcpy((uint8_t*)(&parray2[4+pre+pre]),&parray[4+start+start],(end-start)*8);
                     parray2[2]=pre+end;
+                    parray2[3]=opvb-code;
                     if(parray[1]==1) { // the array was unique, but had to be moved to make space
                         uint32_t* d=rwu_get_data(parray);
                         for(uint32_t i=0;i<start;i++) {
@@ -846,7 +885,10 @@ dispatch:
                 uint32_t* d=rwu_get_data(pdstarray);
                 d[end+end]=array;
                 d[end+end+1]=start;
-         } NEXT();
+            } NEXT();
+            CASE(OP_COMPARE_LISTS) {
+                R[opv->fdst.a]=compare_lists(exe,opv->fdst.b&0xFFF,opv->fdst.b>>12,R[opv->fsrc1.a],R[opv->fsrc1.b],R[opv->fsrc2.a],R[opv->fsrc2.b]);
+            } NEXT();
             CASE(OP_DEREF_FREE) {
                 uint32_t array=R[opv->fdst.a];
                 deref_free(exe,array);

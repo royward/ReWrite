@@ -53,21 +53,3 @@ endfunction()
 rw_app(rewrite_cpp apps/rewrite.cpp)    # general-purpose runner (the old src/main.cpp)
 rw_app(rw_vmgen    apps/vmgen.cpp)      # runs the VM generator, writes the .inc files
 rw_app(rw_compile  apps/compile.cpp)    # runs the compiler, writes .rwo/.ll and .h
-
-# add_executable(rewrite_cpp
-#     src/lexer.cpp
-#     src/parser.cpp
-#     src/program.cpp
-#     src/program_call_internal.cpp
-#     src/main.cpp
-#     src/util.cpp
-#     src/data_element.cpp
-# )
-#
-# target_include_directories(rewrite_cpp PRIVATE include)
-# target_link_libraries(rewrite_cpp PRIVATE CLI11::CLI11)
-# target_compile_options(rewrite_cpp PRIVATE -Wall -Wextra -pedantic -Wredundant-move $<$<CXX_COMPILER_ID:Clang>:-fno-limit-debug-info>)
-# if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-#     target_compile_options(rewrite_cpp PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-#     target_link_options(rewrite_cpp PRIVATE -fsanitize=address,undefined)
-# endif()

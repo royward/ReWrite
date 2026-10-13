@@ -165,17 +165,17 @@ int main(int argc, char** argv) {
 
     printf("nth2:");
     exe->allocated=0;
-    ret_code=rw_nth2(exe,2,"-126",&resultc);
+    ret_code=rw_nth2(exe,"-126",2,&resultc);
     if(!ret_code && resultc=='2') { printf("success\n"); } else { printf("fail:%d %c\n",ret_code,resultc); };
 
     printf("nth2:");
     exe->allocated=0;
-    ret_code=rw_nth2(exe,5,"-126",&resultc);
+    ret_code=rw_nth2(exe,"-126",5,&resultc);
     if(ret_code==5) { printf("success\n"); } else { printf("fail:%d\n",ret_code); };
 
     printf("nth2:");
     exe->allocated=0;
-    ret_code=rw_nth2(exe,-1,"-126",&resultc);
+    ret_code=rw_nth2(exe,"-126",-1,&resultc);
     if(ret_code==5) { printf("success\n"); } else { printf("fail:%d\n",ret_code); };
 
     printf("nth3:");
@@ -198,15 +198,60 @@ int main(int argc, char** argv) {
 
     printf("insert_char:");
     exe->allocated=0;
-    ret_code=rw_insert_char(exe,2,'X',"abcd",&resultc1);
+    ret_code=rw_insert_char(exe,"abcd",2,'X',&resultc1);
     if(!ret_code && strcmp(resultc1,"abXd")==0) { printf("success\n"); } else { printf("fail:%d %s\n",ret_code,resultc1); };
     free(resultc1);
 
-#endif
     printf("insert_string:");
     exe->allocated=0;
     ret_code=rw_insert_string(exe,1,"XYZ",&result0);
     if(!ret_code && result0==3) { printf("success\n"); } else { printf("fail:%d %ld\n",ret_code,result0); };
+
+    printf("nth_take_string:");
+    exe->allocated=0;
+    ret_code=rw_nth_take_string(exe,"xyzzy",1,&resultc1,&resultc);
+    if(!ret_code && strcmp(resultc1,"x\xEF\xBF\xBDzzy")==0 && resultc=='y') { printf("success\n"); } else { printf("fail:%d %s %c\n",ret_code,resultc1,resultc); };
+    free(resultc1);
+
+    printf("equal_string:");
+    exe->allocated=0;
+    ret_code=rw_equal_string(exe,"xyzzy","xyzzyy",&resultb);
+    if(!ret_code && !resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
+
+    printf("equal_string:");
+    exe->allocated=0;
+    ret_code=rw_equal_string(exe,"xyzzy","xqzzy",&resultb);
+    if(!ret_code && !resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
+
+    printf("equal_string:");
+    exe->allocated=0;
+    ret_code=rw_equal_string(exe,"xyzzy","xyzzy",&resultb);
+    if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
+
+    printf("test_equal_list_string1:");
+    exe->allocated=0;
+    ret_code=rw_test_equal_list_string1(exe,&resultb);
+    if(!ret_code && resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
+
+    printf("test_equal_list_string2:");
+    exe->allocated=0;
+    ret_code=rw_test_equal_list_string2(exe,&resultb);
+    if(!ret_code && !resultb) { printf("success\n"); } else { printf("fail:%d %d\n",ret_code,resultb); };
+
+    printf("multi_append1:");
+    exe->allocated=0;
+    ret_code=rw_multi_append1(exe,"xyzzy",&resultc1,&resultc2);
+    if(!ret_code && strcmp(resultc1,"xyzzy0")==0 && strcmp(resultc2,"xyzzy1")==0) { printf("success\n"); } else { printf("fail:%d %s %s\n",ret_code,resultc1,resultc2); };
+    free(resultc1);
+    free(resultc2);
+
+    printf("multi_append2:");
+    exe->allocated=0;
+    ret_code=rw_multi_append2(exe,"xyzzy",&resultc1,&resultc2);
+    if(!ret_code && strcmp(resultc1,"xyzzy0")==0 && strcmp(resultc2,"xyzzy1")==0) { printf("success\n"); } else { printf("fail:%d %s %s\n",ret_code,resultc1,resultc2); };
+    free(resultc1);
+    free(resultc2);
+#endif
 
     printf("Heap size=%d\n",exe->end_of_heap*8);
 

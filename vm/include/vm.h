@@ -49,7 +49,6 @@ struct Program {
 typedef struct Program Program;
 
 struct ExecutionState {
-    uint32_t sp;
     uint32_t end_of_heap;
     uint64_t* registers;
     Program* program;
@@ -70,7 +69,7 @@ int rw_instance_init(RWInstance* exe, Program* p);
 void rw_instance_unload(RWInstance* exe);
 int rw_instance_get_error(RWInstance* exe, uint32_t* line, const char** function);
 
-uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size);
+uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size, uint32_t pc);
 void deref_free(RWInstance* exe, uint32_t p);
 
 static inline uint32_t* rwu_get_header(RWInstance* a, uint32_t x) {return (uint32_t*)(a->heap8+x);}
@@ -103,7 +102,7 @@ static inline int utf32_to_string(const uint32_t *src, uint32_t sz, char **dst) 
 
 static inline int string_to_utf32(RWInstance* exe, const char* src, uint32_t* dst, uint32_t* len) {
     size_t count=utf8_count_elements(src);
-    uint32_t m=alloc(exe,count,4);
+    uint32_t m=alloc(exe,count,4,0);
     int err=utf8_populate_buffer(src,(uint32_t*)(exe->heap8+m+2));
     *dst=m;
     *len=count;

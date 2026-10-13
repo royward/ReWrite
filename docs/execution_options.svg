@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Creator: fig2dev Version 3.2.9a -->
+<!-- CreationDate: 2026-10-12 11:33:21 -->
+<!-- Magnification: 1.05 -->
+<svg	xmlns="http://www.w3.org/2000/svg"
+	xmlns:xlink="http://www.w3.org/1999/xlink"
+	width="738pt" height="653pt"
+	viewBox="674 2249 11702 10352">
+<g fill="none">
+<!-- Line -->
+<rect x="675" y="2250" width="11700" height="10350" fill="#ffffff"/>
+<!-- Line -->
+<rect x="4500" y="2475" width="2700" height="1125"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Text -->
+<text xml:space="preserve" x="5850" y="3285" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">name.rw</text>
+<!-- Text -->
+<text xml:space="preserve" x="5850" y="2925" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">ReWrite source file</text>
+<!-- Line -->
+<defs>
+<clipPath id="cp0">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 4735,4125 4650,4040 4485,4275 4500,4290z"/>
+</clipPath>
+</defs>
+<polyline points=" 5175,3600 4500,4275" clip-path="url(#cp0)"
+	stroke="#000000" stroke-width="15px"/>
+<!-- Forward arrow to point 4500,4275 -->
+<polygon points=" 4650,4040 4523,4252 4735,4125 4650,4040"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp1">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 6969,3990 6881,4071 7109,4245 7125,4231z"/>
+</clipPath>
+</defs>
+<polyline points=" 6525,3600 7110,4230" clip-path="url(#cp1)"
+	stroke="#000000" stroke-width="15px"/>
+<!-- Forward arrow to point 7110,4230 -->
+<polygon points=" 6881,4071 7088,4206 6969,3990 6881,4071"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp2">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 5220,6457 5167,6350 4936,6520 4945,6539z"/>
+</clipPath>
+</defs>
+<polyline points=" 6750,5625 4950,6525" clip-path="url(#cp2)"
+	stroke="#000000" stroke-width="15px"/>
+<!-- Forward arrow to point 4950,6525 -->
+<polygon points=" 5167,6350 4979,6511 5220,6457 5167,6350"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp3">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 9450,6360 9402,6469 9680,6539 9689,6520z"/>
+</clipPath>
+</defs>
+<polyline points=" 7650,5625 9675,6525" clip-path="url(#cp3)"
+	stroke="#000000" stroke-width="15px"/>
+<!-- Forward arrow to point 9675,6525 -->
+<polygon points=" 9402,6469 9645,6512 9450,6360 9402,6469"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp4">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 5010,8953 4890,8953 4940,9236 4961,9236z"/>
+</clipPath>
+</defs>
+<polyline points=" 4950,8325 4950,9225" clip-path="url(#cp4)"
+	stroke="#000000" stroke-width="15px"/>
+<!-- Forward arrow to point 4950,9225 -->
+<polygon points=" 4890,8953 4950,9193 5010,8953 4890,8953"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp5">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 8560,9075 8475,8990 8310,9225 8325,9240z"/>
+</clipPath>
+</defs>
+<polyline points=" 9225,8325 8325,9225" clip-path="url(#cp5)"
+	stroke="#000000" stroke-width="15px"/>
+<!-- Forward arrow to point 8325,9225 -->
+<polygon points=" 8475,8990 8348,9202 8560,9075 8475,8990"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp6">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 10875,8990 10790,9075 11025,9240 11040,9225z"/>
+</clipPath>
+</defs>
+<polyline points=" 10125,8325 11025,9225" clip-path="url(#cp6)"
+	stroke="#000000" stroke-width="15px"/>
+<!-- Forward arrow to point 11025,9225 -->
+<polygon points=" 10790,9075 11002,9202 10875,8990 10790,9075"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp7">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 8385,10978 8265,10978 8315,11261 8336,11261z"/>
+</clipPath>
+</defs>
+<polyline points=" 8325,10350 8325,11250" clip-path="url(#cp7)"
+	stroke="#000000" stroke-width="15px"/>
+<!-- Forward arrow to point 8325,11250 -->
+<polygon points=" 8265,10978 8325,11218 8385,10978 8265,10978"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp8">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 11085,10978 10965,10978 11015,11261 11036,11261z"/>
+</clipPath>
+</defs>
+<polyline points=" 11025,10350 11025,11250" clip-path="url(#cp8)"
+	stroke="#000000" stroke-width="15px"/>
+<!-- Forward arrow to point 11025,11250 -->
+<polygon points=" 10965,10978 11025,11218 11085,10978 10965,10978"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<rect x="7200" y="9225" width="2250" height="1125"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<rect x="9900" y="9225" width="2250" height="1125"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp9">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 5578,4890 5578,5010 5861,4961 5861,4940z"/>
+</clipPath>
+</defs>
+<polyline points=" 4500,4950 5850,4950" clip-path="url(#cp9)"
+	stroke="#000000" stroke-width="15px" stroke-dasharray="60 60"/>
+<!-- Forward arrow to point 5850,4950 -->
+<polygon points=" 5578,5010 5818,4950 5578,4890 5578,5010"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<rect x="3150" y="9225" width="3600" height="1350"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<rect x="7425" y="11250" width="1800" height="1125"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<rect x="10125" y="11250" width="1800" height="1125"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<polyline points=" 3600,7425 6300,7425"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<rect x="3600" y="6525" width="2700" height="1800"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<rect x="8100" y="6525" width="3150" height="1800"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<polyline points=" 8100,7425 11250,7425"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<rect x="810" y="3825" width="3690" height="2115"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp10">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 2115,6105 2206,6184 2350,5939 2339,5930z"/>
+</clipPath>
+</defs>
+<polyline points=" 1710,6660 2340,5940" clip-path="url(#cp10)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point 2340,5940 -->
+<polygon points=" 2206,6184 2319,5964 2115,6105 2206,6184"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp11">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 3300,8908 3180,8908 3233,9187 3247,9187z"/>
+</clipPath>
+</defs>
+<polyline points=" 3240,5940 3240,9180" clip-path="url(#cp11)"
+	stroke="#000000" stroke-width="8px" stroke-dasharray="40 40"/>
+<!-- Forward arrow to point 3240,9180 -->
+<polygon points=" 3180,8908 3240,9148 3300,8908 3180,8908"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp12">
+	<path clip-rule="evenodd" d="M 674,2249 H 12376 V 12601 H 674 z
+		M 3046,9731 2947,9799 3148,9999 3159,9992z"/>
+</clipPath>
+</defs>
+<polyline points=" 1800,8010 3150,9990" clip-path="url(#cp12)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point 3150,9990 -->
+<polygon points=" 2947,9799 3132,9963 3046,9731 2947,9799"
+	stroke="#000000" stroke-width="15px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<polyline points=" 1890,9900"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<rect x="810" y="6660" width="1980" height="1350"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<rect x="5850" y="4230" width="2700" height="1395"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Text -->
+<text xml:space="preserve" x="8325" y="11700" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">link and run</text>
+<!-- Text -->
+<text xml:space="preserve" x="8325" y="12060" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">natively</text>
+<!-- Text -->
+<text xml:space="preserve" x="11025" y="11700" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">link and run</text>
+<!-- Text -->
+<text xml:space="preserve" x="11025" y="12060" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">natively</text>
+<!-- Text -->
+<text xml:space="preserve" x="8325" y="9675" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">x86-64 native</text>
+<!-- Text -->
+<text xml:space="preserve" x="11025" y="9675" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">AArch64 native</text>
+<!-- Text -->
+<text xml:space="preserve" x="8325" y="10035" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">crate or name.o</text>
+<!-- Text -->
+<text xml:space="preserve" x="11025" y="10035" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">crate or name.o</text>
+<!-- Text -->
+<text xml:space="preserve" x="2700" y="4635" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">written in C++</text>
+<!-- Text -->
+<text xml:space="preserve" x="2700" y="4995" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">executes code directly</text>
+<!-- Text -->
+<text xml:space="preserve" x="4950" y="9675" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">ReWrite Virtual Machine</text>
+<!-- Text -->
+<text xml:space="preserve" x="4950" y="10395" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">loads and runs .rwo file</text>
+<!-- Text -->
+<text xml:space="preserve" x="4950" y="7335" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">name.rwo</text>
+<!-- Text -->
+<text xml:space="preserve" x="9675" y="6975" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">ReWrite LLVM IR file</text>
+<!-- Text -->
+<text xml:space="preserve" x="9675" y="7335" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">name.ll</text>
+<!-- Text -->
+<text xml:space="preserve" x="4950" y="8190" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">name.rs or name.h</text>
+<!-- Text -->
+<text xml:space="preserve" x="4950" y="7830" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">Rust or C bindings</text>
+<!-- Text -->
+<text xml:space="preserve" x="9675" y="7830" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">Rust or C bindings</text>
+<!-- Text -->
+<text xml:space="preserve" x="9675" y="8190" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">name.rs or name.h</text>
+<!-- Text -->
+<text xml:space="preserve" x="2700" y="4275" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">ReWrite interpreter</text>
+<!-- Text -->
+<text xml:space="preserve" x="2700" y="5355" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">runs compiler source and</text>
+<!-- Text -->
+<text xml:space="preserve" x="2700" y="5715" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">vm source once</text>
+<!-- Text -->
+<text xml:space="preserve" x="4950" y="6975" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">ReWrite VM code</text>
+<!-- Text -->
+<text xml:space="preserve" x="1800" y="7830" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">vm_builder.rw</text>
+<!-- Text -->
+<text xml:space="preserve" x="1800" y="7470" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">vm source</text>
+<!-- Text -->
+<text xml:space="preserve" x="1800" y="7110" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">Partial</text>
+<!-- Text -->
+<text xml:space="preserve" x="4950" y="5175" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="200" text-anchor="middle">bootstrap</text>
+<!-- Text -->
+<text xml:space="preserve" x="2790" y="8550" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="200" text-anchor="middle">bootstrap</text>
+<!-- Text -->
+<text xml:space="preserve" x="4950" y="10035" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">written in C and ReWrite</text>
+<!-- Text -->
+<text xml:space="preserve" x="7200" y="5400" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">rewrite_compiler.rw</text>
+<!-- Text -->
+<text xml:space="preserve" x="7200" y="5040" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">written in ReWrite</text>
+<!-- Text -->
+<text xml:space="preserve" x="7200" y="4680" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="300" text-anchor="middle">ReWrite compiler</text>
+</g>
+</svg>

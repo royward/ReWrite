@@ -19,6 +19,7 @@
 
 #include <stdexcept>
 #include <sstream>
+#include <iostream>
 #include "token.hpp"
 
 std::string lex_string(std::string_view code, std::size_t& p, char term) {
@@ -59,6 +60,7 @@ std::vector<Token> lex(uint32_t file_id, std::string_view code) {
         bool use_transformed_string=false;
         std::string transformed_string;
         std::size_t start_p=p;
+        //std::cout << code[p] << std::flush;
         char c=code[p++];
         if(c=='_' || c=='@' || std::isalpha(static_cast<unsigned char>(c))) {
             while(p<len && (code[p]=='_' || code[p]=='@' || std::isalpha(static_cast<unsigned char>(code[p])) || std::isdigit(static_cast<unsigned char>(code[p])))) {
@@ -84,7 +86,7 @@ std::vector<Token> lex(uint32_t file_id, std::string_view code) {
                     token_kind=UpdateDecline;
                 } else if(sub=="when") {
                     token_kind=When;
-                } else if(sub=="type") {
+                } else if(sub=="type" || sub=="fn" || sub=="export" || sub=="eof_compiler") {
                     while(p<len && code[p]!=';') {
                         p++;
                     }
@@ -117,6 +119,10 @@ std::vector<Token> lex(uint32_t file_id, std::string_view code) {
                 case '*':token_kind=Star; break;
                 case '+':token_kind=Plus; break;
                 case '~':token_kind=Tilda; break;
+                case ':':token_kind=Colon; break;
+                case '.':token_kind=Dot; break;
+                case '%':token_kind=Modulus; break;
+                case '^':token_kind=Xor; break;
                 case '/': {
                     if(p<len && code[p]=='/') {
                         p++;
@@ -128,8 +134,6 @@ std::vector<Token> lex(uint32_t file_id, std::string_view code) {
                         token_kind=Divide;;
                     }
                 } break;
-                case '%':token_kind=Modulus; break;
-                case '^':token_kind=Xor; break;
                 case '-': {
                     if(p<len && code[p]=='>') {
                         p++;
@@ -178,20 +182,6 @@ std::vector<Token> lex(uint32_t file_id, std::string_view code) {
                     } else {
                         token_kind=Equal;
                     }
-                } break;
-                case ':': {
-                    if(p<len && code[p]=='-') {
-                        while(p<len && code[p]!=';') {
-                            p++;
-                        }
-                        if(p<len)p++;
-                        continue; // ignoring type information
-                    } else {
-                        token_kind=Colon;
-                    }
-                } break;
-                case '.': {
-                    token_kind=Dot;
                 } break;
                 case '&': {
                     if(p<len && code[p]=='&') {

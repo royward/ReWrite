@@ -2,6 +2,7 @@
 // This won't expand the stack
 // SPDX-License-Identifier: CC0-1.0
 
+export fn listn2(i64) -> value string;
 listn2(n) -> listn_aux(0,n,{});
 
 listn_aux(n,n,sofar) -> sofar;

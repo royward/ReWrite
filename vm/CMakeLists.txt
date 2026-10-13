@@ -1,42 +1,39 @@
 cmake_minimum_required(VERSION 3.20)
-project(rewrite_vm LANGUAGES C CXX)
+project(rewrite_vm VERSION 0.0.9 LANGUAGES C)
 
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+endif()
 
-include(FetchContent)
-FetchContent_Declare(
-    CLI11
-    GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-    GIT_TAG v2.6.2
+option(RW_SANITIZE "Build with address and undefined-behaviour sanitizers" OFF)
+
+# ---- Shared compile settings, inherited by everything that links it ----
+add_library(rw_vmsettings INTERFACE)
+target_compile_features(rw_vmsettings INTERFACE c_std_11)
+target_compile_options(rw_vmsettings INTERFACE
+    -Wall -Wextra -pedantic -ggdb3
+    $<$<COMPILE_LANGUAGE:CXX>:-Wredundant-move>
+    $<$<C_COMPILER_ID:Clang>:-fno-limit-debug-info>
+    $<$<BOOL:${RW_SANITIZE}>:-fsanitize=address,undefined -fno-omit-frame-pointer>
 )
-FetchContent_MakeAvailable(CLI11)
+target_link_options(rw_vmsettings INTERFACE
+    $<$<BOOL:${RW_SANITIZE}>:-fsanitize=address,undefined>
+)
+set(CMAKE_C_EXTENSIONS OFF)
 
-add_executable(rewrite_vm
-    src/main.cpp
+# ---- The VM as a library ----
+add_library(rwvm STATIC
     src/vm.c
 )
+target_include_directories(rwvm PUBLIC include generated)
+target_link_libraries(rwvm PUBLIC rw_vmsettings)
 
-target_include_directories(rewrite_vm PRIVATE include generated)
+# ---- Applications ----
+function(rw_app name source)
+    add_executable(${name} ${source})
+    target_link_libraries(${name} PRIVATE rwvm)
+    target_compile_definitions(${name} PRIVATE RW_ROOT="${CMAKE_SOURCE_DIR}")
+endfunction()
 
-target_link_libraries(rewrite_vm PRIVATE CLI11::CLI11)
-target_compile_options(rewrite_vm PRIVATE
-    -Wall -Wextra -Wpedantic
-    $<$<CONFIG:Release>:-O3>
-    $<$<CONFIG:Debug>:-g>
-)
-
-# Enable Sanitizers for Debug builds
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_compile_options(rewrite_vm PRIVATE
-        -g
-        -fno-omit-frame-pointer
-        -fsanitize=address,undefined
-    )
-    target_link_options(rewrite_vm PRIVATE
-        -fsanitize=address,undefined
-    )
-endif()
+rw_app(rw_disassembler apps/disassembler.c)
+rw_app(vm_gen apps/vm_gen.c)
