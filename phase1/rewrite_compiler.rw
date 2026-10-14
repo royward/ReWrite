@@ -522,7 +522,7 @@ annotate_table(types,sofar,{{name,{exportx,fnlineno,symoffset,types_left,types_r
         annotate_type_list_reg(types,0,0,{},create_start_annotated_list(types,{},types_right)),val_rhs}},rest);
 
 create_start_annotated_list(types,sofar,{}) -> sofar;
-create_start_annotated_list(types,sofar,{t,*rest}) match lookup_type_size_pri(t,types) => tps -> create_start_annotated_list(types,{*sofar,{create_empty_types({},tps),t,Consume}},rest);
+create_start_annotated_list(types,sofar,{t,*rest}) match lookup_type_size_pri(t,types) => _,tps -> create_start_annotated_list(types,{*sofar,{create_empty_types({},tps),t,Consume}},rest);
 
 create_empty_types(sofar,{}) -> sofar;
 create_empty_types(sofar,{_,_,*rest}) -> create_empty_types({*sofar,{}},rest);
@@ -532,16 +532,16 @@ const BindImm=1;
 const BindMem=2;
 
 annotate_type_list_reg(types,pri,max_reg,sofar,{}) -> max_reg,{},sofar;
-annotate_type_list_reg(types,pri,max_reg,sofar,{{{{}},t,_},*rest}) match lookup_type_size_pri(t,types) => {p,sz} when p<=pri ->
+annotate_type_list_reg(types,pri,max_reg,sofar,{{{{}},t,_},*rest}) match lookup_type_size_pri(t,types) => _,{p,sz} when p<=pri ->
     annotate_type_list_reg(types,pri,max_reg+1,{*sofar,{{{BindReg,max_reg,sz}},t,Consume}},rest);
-annotate_type_list_reg(types,pri,max_reg,sofar,{{{{},r},t,_},*rest}) match lookup_type_size_pri(t,types) => {p,sz,_,_} when p<=pri ->
+annotate_type_list_reg(types,pri,max_reg,sofar,{{{{},r},t,_},*rest}) match lookup_type_size_pri(t,types) => _,{p,sz,_,_} when p<=pri ->
     annotate_type_list_reg(types,pri,max_reg+1,sofar,{{{{BindReg,max_reg,sz},r},t,Consume},*rest});
-annotate_type_list_reg(types,pri,max_reg,sofar,{{{r,{}},t,_},*rest}) match lookup_type_size_pri(t,types) => {_,_,p,sz} when p<=pri ->
+annotate_type_list_reg(types,pri,max_reg,sofar,{{{r,{}},t,_},*rest}) match lookup_type_size_pri(t,types) => _,{_,_,p,sz} when p<=pri ->
     annotate_type_list_reg(types,pri,max_reg+1,{*sofar,{{r,{BindReg,max_reg,sz}},t,Consume}},rest);
 annotate_type_list_reg(types,pri,max_reg,sofar,todo) -> annotate_type_list_reg(types,pri+1,max_reg,sofar,todo);
 
-lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{1,sz}} -> {0,sz};
-lookup_type_size_pri(t,types) match nth(types,t) => {_,_,{2,_}} -> {0,32,0,32};
+lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{1,sz}} -> {1,sz},{0,sz};
+lookup_type_size_pri(t,types) match nth(types,t) => {_,_,{2,tp}} -> {2,tp},{0,32,0,32};
 
 calc_counts(table,bindings,{_,_,params},clauses,exprs)
     //match println_any(444,params,clauses,exprs) =>
@@ -814,7 +814,7 @@ gen_param_code(owned,committed,bindlevel,stride,ctx,c_match,c_commit,c_post,type
 gen_param_code(owned,committed,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{ParamList,elements},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
     match nth(ctx_get_types(ctx),tp) => {_,_,{2,sub_type}}
-    match lookup_type_size_pri(sub_type,ctx_get_types(ctx)) => sub_alloc
+    match lookup_type_size_pri(sub_type,ctx_get_types(ctx)) => _,sub_alloc
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,pend
     update ctx_newreg(ctx,32) => ctx,len
@@ -976,7 +976,7 @@ gen_code_addref(true,ctx,_,_) -> ctx,{};
 gen_code_addref(committed,ctx,tp,storage) -> gen_types_addref(ctx,tp,storage,1);
 
 gen_expr_code_aux(committed,ctx,stypes,{Const,{tp,val}})
-    match lookup_type_size_pri(tp,ctx_get_types(ctx)) => {_,sz}
+    match lookup_type_size_pri(tp,ctx_get_types(ctx)) => _,{_,sz}
     -> ctx,false,{},{},{},{{{{BindImm,val,sz}},tp,Consume}};
 gen_expr_code_aux(committed,ctx,stypes,{ExprId,{id,count,consumed}})
     update use_binding(ctx,id) => ctx,tp,storage
@@ -1014,7 +1014,7 @@ gen_expr_code_aux(committed,ctx,stypes,{ExprList,elements})
     update ctx_newreg(ctx,32) => ctx,newarray
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,newstart
-    match lookup_type_size_pri(t,types) => subsz
+    match lookup_type_size_pri(t,types) => _,subsz
     match sum_sub_alloc(0,subsz) => sz
     update gen_expr_code_aux_map(committed,ctx,{},{0,t},elements) => ctx,args_code
     update split_splat({},args_code) => pre_splat,splat,post_splat
@@ -1029,7 +1029,7 @@ gen_expr_code_aux(committed,ctx,{0,0},{ExprList,{e1,*elements}}) // Deal with ty
     update ctx_newreg(ctx,32) => ctx,newarray
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,newstart
-    match lookup_type_size_pri(t,types) => subsz
+    match lookup_type_size_pri(t,types) => _,subsz
     match sum_sub_alloc(0,subsz) => sz
     update gen_expr_code_aux_map(committed,ctx,{},{0,t},{e1,*elements}) => ctx,args_code
     update split_splat({},args_code) => pre_splat,splat,post_splat
@@ -1089,7 +1089,7 @@ gen_expr_code_library(2,committed,ctx,stypes,args) // nth
     update gen_expr_code_untyped(committed,ctx,{},{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},tp,consume},{{{indf,ind,64}},TypeI64,_}},c_match,c_commit,c_post
     //match decompose_stypes(stypes) => dsttp,_
     match nth(ctx_get_types(ctx),tp) => {_,_,{2,dsttp}}
-    match lookup_type_size_pri(dsttp,ctx_get_types(ctx)) => storage
+    match lookup_type_size_pri(dsttp,ctx_get_types(ctx)) => _,storage
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,end
     update ctx_newreg(ctx,32) => ctx,index
@@ -1113,7 +1113,7 @@ gen_expr_code_library(3,committed,ctx,stypes,args) // nth_insert
     when committed
     update gen_expr_code_untyped(committed,ctx,{},{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},listtype,consumel},{{{indf,ind,64}},TypeI64,_},{storagee,elttype,consumee}},c_match,c_commit,c_post
     match nth(ctx_get_types(ctx),listtype) => {_,_,{2,elttype}}
-    match lookup_type_size_pri(elttype,ctx_get_types(ctx)) => storage
+    match lookup_type_size_pri(elttype,ctx_get_types(ctx)) => _,storage
     match sum_sub_alloc(0,storage) => sz
     match depth_count(0,ctx_get_types(ctx),elttype) => depth,_
     update ctx_newreg(ctx,32) => ctx,newarray
@@ -1148,7 +1148,7 @@ gen_expr_code_library(4,committed,ctx,stypes,args) // nth_take
     when committed
     update gen_expr_code_untyped(committed,ctx,{},{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},listtype,consumel},{{{indf,ind,64}},TypeI64,_}},c_match,c_commit,c_post
     match nth(ctx_get_types(ctx),listtype) => {_,_,{2,elttype}}
-    match lookup_type_size_pri(elttype,ctx_get_types(ctx)) => storage
+    match lookup_type_size_pri(elttype,ctx_get_types(ctx)) => _,storage
     match sum_sub_alloc(0,storage) => sz
     match depth_count(0,ctx_get_types(ctx),elttype) => depth,_
     update ctx_newreg(ctx,32) => ctx,newarray
