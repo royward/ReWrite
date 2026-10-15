@@ -619,7 +619,7 @@ code_length(n,{{_,a},*rest}) -> code_length(n+length(a),rest);
 // TODO remove bitmask
 compile_function(types,type_lookup,target,reg_count,active,lbl_id,fn_id,table,rule_id,sofar,{},_,_,_,_,_,_)
     match nth(table,fn_id) => {_,fnlineno,symoffset,_,reg_count1,bitmask1,type_left,_,reg_count2,bitmask2,type_right,_} ->
-    types,type_lookup,lbl_id,{*sofar,*code_or_not(true,{{fn_id,rule_id,OpError,0,0,BindImm,ErrNoMatch,0,fnlineno,0,symoffset,0}})};
+    types,type_lookup,lbl_id,{*sofar,*code_or_not(active||target==TargetVM||target==TargetVMLL,{{fn_id,rule_id,OpError,0,0,BindImm,ErrNoMatch,0,fnlineno,0,symoffset,0}})};
 compile_function(types,type_lookup,target,reg_count,active,lbl_id,fn_id,table,rule_id,sofar,{rule,*rest},dummy,bitmask,regs_left,type_left,regs_right,type_right)
     match rule => {linerule,bindings,params,clauses,exprs}
     update calc_counts(table,bindings,params,clauses,exprs) => params,clauses,exprs
@@ -669,20 +669,25 @@ depth_count(n,types,tp) @match nth(types,tp) => {_,_,{2,sub_type}} -> depth_coun
 
 // TODO expand this to deal properly with types. Just scalars and lists of scalars for now
 gen_types_deref_free(false,_,_,_) -> {};
-gen_types_deref_free(_,ctx,tp,{_}) -> {};
-gen_types_deref_free(_,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz1}})
-    match ctx_get_types(ctx) => types
-    match depth_count(0,types,tp) => depth,_
+gen_types_deref_free(_,ctx,tp,storage) -> gen_types_deref_free_aux(ctx,tp,nth(ctx_get_types(ctx),tp),storage);
+
+gen_types_deref_free_aux(ctx,_,{_,_,{1,_}},_) -> {};
+gen_types_deref_free_aux(ctx,tp,{_,_,{2,_}},{{src_flag1,src1,sz1},{src_flag2,src2,sz1}})
+    match depth_count(0,ctx_get_types(ctx),tp) => depth,_
     -> {{ctx_fnr(ctx),if(depth<2,OpDerefFree,OpDerefFreeList),0,0,src_flag1,src1,0,0,0,0,depth-1}};
 
-gen_types_addref(ctx,tp,{},_) -> ctx,{};
-gen_types_addref(ctx,tp,{_},_) -> ctx,{};
-gen_types_addref(ctx,tp,{{src_flag1,src1,sz1},_},v)
+gen_types_addref(ctx,tp,{},_) -> ctx,{}; // TODO this needs to go
+gen_types_addref(ctx,tp,storage,v) -> gen_types_addref_aux(ctx,tp,nth(ctx_get_types(ctx),tp),storage,v);
+
+gen_types_addref_aux(ctx,tp,{_,_,{1,_}},_,_) -> ctx,{};
+gen_types_addref_aux(ctx,tp,{_,_,{2,_}},{{src_flag1,src1,sz1},_},v)
     update ctx_newreg(ctx,64) => ctx,parray
     -> ctx,{{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},{ctx_fnr(ctx),OpIncMem,0,0,0,parray,0,32,BindImm,v,4}};
 
-gen_types_do_compare(ctx,tp,{{srcflag1,src1,sz}},{{srcflag2,src2,sz}}) -> ctx,{},srcflag1,src1,srcflag2,src2,sz;
-gen_types_do_compare(ctx,tp,{{BindReg,src1a,32},{BindReg,src1b,32}},{{BindReg,src2a,32},{BindReg,src2b,32}})
+gen_types_do_compare(ctx,tp,store1,store2) -> gen_types_do_compare_aux(ctx,tp,nth(ctx_get_types(ctx),tp),store1,store2);
+
+gen_types_do_compare_aux(ctx,tp,{_,_,{1,_}},{{srcflag1,src1,sz}},{{srcflag2,src2,sz}}) -> ctx,{},srcflag1,src1,srcflag2,src2,sz;
+gen_types_do_compare_aux(ctx,tp,{_,_,{2,_}},{{BindReg,src1a,32},{BindReg,src1b,32}},{{BindReg,src2a,32},{BindReg,src2b,32}})
     match depth_count(0,ctx_get_types(ctx),tp) => depth,stride
     update ctx_newreg(ctx,1) => ctx,result
     -> ctx,{{ctx_fnr(ctx),OpCompareLists,0,0,BindReg,result,BindReg,src1a+(src1b<<32),BindReg,src2a+(src2b<<32),(depth-1)+((stride>>3)<<12)}},BindReg,result,BindImm,1,1;
@@ -1043,10 +1048,6 @@ gen_expr_code_aux(committed,ctx,{0,t},{ExprSplat,arg})
     match nth(ctx_get_types(ctx),tp2) => {_,_,{2,t}}
     -> println_any(t,tp,tp2),
     println_any(true,c_match,c_commit,c_post),#never;
-
-//gen_expr_code_aux(true,,{1,1,1},{4,{{1,{3,116}}}}) (in
-//gen_expr_code(true,,{-2,-2},{},{},{},{{{{0,0,32},{0,1,32}},1,1}},{{4,{{1,{3,116}}}}}) (in
-//compile_rule(1,9,,{},{1,{},{}},{},{{4,{{1,{3,116}}}}},0,{},2,{{{{0,0,32},{0,1,32}},1,1}})
 
 gen_expr_code_list(ctx,newarray,parray,newstart,sz,stype,subtype,args_code,{},{}) // no splats
     update array_fixed_elt_assign(sz,ctx,parray,0,{},args_code) => c,code
