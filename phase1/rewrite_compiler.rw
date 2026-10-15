@@ -237,7 +237,7 @@ int2s(n) -> {*int2s(n/10),*int2s(n%10)};
 te() -> {"",false,{0}};
 
 parse(target,s) -> parse_aux(target,{},{},{},0,{},
-    {te(),{"string",false,{2,3}},{"bool",false,{1,1}},{"char",false,{1,32}},te(),te(),te(),te(),te(),te(),{"i64",false,{1,64}},te(),te(),te(),te(),te()},
+    {te(),{"string",false,{2,3}},{"bool",false,{1,1,TypeBool}},{"char",false,{1,32,TypeChar}},te(),te(),te(),te(),te(),te(),{"i64",false,{1,64,TypeI64}},te(),te(),te(),te(),te()},
     {{"string",TypeString},{"bool",TypeBool},{"char",TypeChar},{"i64",TypeI64}},s);
 
 // get and add for a straight list of (string,ref)
@@ -561,7 +561,7 @@ annotate_type_list_reg(types,pri,max_reg,sofar,{{{r,{}},t,_},*rest}) match looku
     annotate_type_list_reg(types,pri,max_reg+1,{*sofar,{{r,{BindReg,max_reg,sz}},t,Consume}},rest);
 annotate_type_list_reg(types,pri,max_reg,sofar,todo) -> annotate_type_list_reg(types,pri+1,max_reg,sofar,todo);
 
-lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{1,sz}} -> {1,sz},{0,sz};
+lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{1,sz,tp}} -> {1,sz,tp},{0,sz};
 lookup_type_size_pri(t,types) match nth(types,t) => {_,_,{2,tp}} -> {2,tp},{0,32,0,32};
 
 calc_counts(table,bindings,{_,_,params},clauses,exprs)
@@ -685,14 +685,14 @@ ctx_update_lbl_id({types,type_lookup,target,tailcall,active,lbl_decline,lbl_id,f
     {types,type_lookup,target,tailcall,active,lbl_decline,lbl_id+1,fn_id,rule_id,linerule,bindings,reg_count,table};
 
 depth_count(n,_,0) -> n; // HACK - deal with unknown types to make length({}) work
-depth_count(n,types,tp) @match nth(types,tp) => {_,_,{1,sz}} -> n,sz;
+depth_count(n,types,tp) @match nth(types,tp) => {_,_,{1,sz,_}} -> n,sz;
 depth_count(n,types,tp) @match nth(types,tp) => {_,_,{2,sub_type}} -> depth_count(n+1,types,sub_type);
 
 // TODO expand this to deal properly with types. Just scalars and lists of scalars for now
 gen_types_deref_free(false,_,_,_) -> {};
 gen_types_deref_free(_,ctx,tp,storage) -> gen_types_deref_free_aux(ctx,tp,nth(ctx_get_types(ctx),tp),storage);
 
-gen_types_deref_free_aux(ctx,_,{_,_,{1,_}},_) -> {};
+gen_types_deref_free_aux(ctx,_,{_,_,{1,_,_}},_) -> {};
 gen_types_deref_free_aux(ctx,tp,{_,_,{2,_}},{{src_flag1,src1,sz1},{src_flag2,src2,sz1}})
     match depth_count(0,ctx_get_types(ctx),tp) => depth,_
     -> {{ctx_fnr(ctx),if(depth<2,OpDerefFree,OpDerefFreeList),0,0,src_flag1,src1,0,0,0,0,depth-1}};
@@ -700,14 +700,14 @@ gen_types_deref_free_aux(ctx,tp,{_,_,{2,_}},{{src_flag1,src1,sz1},{src_flag2,src
 gen_types_addref(ctx,tp,{},_) -> ctx,{}; // TODO this needs to go
 gen_types_addref(ctx,tp,storage,v) -> gen_types_addref_aux(ctx,tp,nth(ctx_get_types(ctx),tp),storage,v);
 
-gen_types_addref_aux(ctx,tp,{_,_,{1,_}},_,_) -> ctx,{};
+gen_types_addref_aux(ctx,tp,{_,_,{1,_,_}},_,_) -> ctx,{};
 gen_types_addref_aux(ctx,tp,{_,_,{2,_}},{{src_flag1,src1,sz1},_},v)
     update ctx_newreg(ctx,64) => ctx,parray
     -> ctx,{{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},{ctx_fnr(ctx),OpIncMem,0,0,0,parray,0,32,BindImm,v,4}};
 
 gen_types_do_compare(ctx,tp,store1,store2) -> gen_types_do_compare_aux(ctx,tp,nth(ctx_get_types(ctx),tp),store1,store2);
 
-gen_types_do_compare_aux(ctx,tp,{_,_,{1,_}},{{srcflag1,src1,sz}},{{srcflag2,src2,sz}}) -> ctx,{},srcflag1,src1,srcflag2,src2,sz;
+gen_types_do_compare_aux(ctx,tp,{_,_,{1,_,_}},{{srcflag1,src1,sz}},{{srcflag2,src2,sz}}) -> ctx,{},srcflag1,src1,srcflag2,src2,sz;
 gen_types_do_compare_aux(ctx,tp,{_,_,{2,_}},{{BindReg,src1a,32},{BindReg,src1b,32}},{{BindReg,src2a,32},{BindReg,src2b,32}})
     match depth_count(0,ctx_get_types(ctx),tp) => depth,stride
     update ctx_newreg(ctx,1) => ctx,result
@@ -1200,8 +1200,8 @@ gen_expr_code_library(4,committed,ctx,stypes,args) // nth_take
     },
     {{{{BindReg,newarray,32},{BindReg,newstart,32}},listtype,Consume},{memindex2,elttype,Consume}};
 
-gen_tombstone(ctx,TypeChar,{_,_,{1,sz}}) -> ctx,{},{{{BindImm,65533,sz}},TypeChar,Consume};
-gen_tombstone(ctx,tp,{_,_,{1,sz}}) -> ctx,{},{{{BindImm,0,sz}},tp,Consume};
+gen_tombstone(ctx,tp,{_,_,{1,sz,TypeChar}}) -> ctx,{},{{{BindImm,65533,sz}},TypeChar,Consume};
+gen_tombstone(ctx,tp,{_,_,{1,sz,_}}) -> ctx,{},{{{BindImm,0,sz}},tp,Consume};
 gen_tombstone(ctx,tp,{_,_,{2,_}})
     update ctx_newreg(ctx,32) => ctx,array
     update ctx_newreg(ctx,32) => ctx,start
@@ -1262,13 +1262,13 @@ match_types({a,*rest1},{a,*rest2}) -> match_types(rest1,rest2);
 
 gen_expr_code_infix(ctx,op,{{false,code1,{{{{src_flag1,src1,sz1}},tp1,_}}}})
     @match unop(tp1,op) => true,tp_res,machine_op
-    match nth(ctx_get_types(ctx),tp_res) => {_,_,{1,sz_res}}
+    match nth(ctx_get_types(ctx),tp_res) => {_,_,{1,sz_res,_}}
     match get_size_only_scale(sz_res) => sz
     update ctx_newreg(ctx,1<<sz) => ctx,newreg
     -> ctx,{*code1,{ctx_fnr(ctx),machine_op,xt(tp1),BindReg,newreg,src_flag1,src1}},{{{{BindReg,newreg,sz_res}},tp_res,Consume}};
 gen_expr_code_infix(ctx,op,{{false,code1,{{{{src_flag1,src1,sz1}},tp1,_}}},{false,code2,{{{{src_flag2,src2,sz2}},tp2,_}}}})
     @match binop(tp1,tp2,op) => true,swap,tp_res,machine_op
-    match nth(ctx_get_types(ctx),tp_res) => {_,_,{1,sz_res}}
+    match nth(ctx_get_types(ctx),tp_res) => {_,_,{1,sz_res,_}}
     match get_size_only_scale(sz_res) => sz
     update ctx_newreg(ctx,1<<sz) => ctx,newreg
     -> ctx,{*code1,*code2,{ctx_fnr(ctx),machine_op,xt(tp1),BindReg,newreg,opt_swap_sources(swap,src_flag1,src1,src_flag2,src2)}},{{{{BindReg,newreg,sz_res}},tp_res,Consume}};
@@ -1577,7 +1577,7 @@ create_export_value_sigc(types,sofar,labeln,n,fill0,fill1,{{vals,tp,_},*rest})
     match {*fill1,*int2s(labeln)} => name
     -> create_export_value_sigc(types,{*sofar,',',*fill0,*c_type(nth(types,tp),tp),' ',*name,*ctype_in_extra(nth(types,tp),tp,name)},labeln+1,n+length(vals),fill0,fill1,rest);
 
-c_type({_,_,{1,_}},tp) -> c_type_base(tp);
+c_type({_,_,{1,_,_}},tp) -> c_type_base(tp);
 c_type({_,_,_},TypeString) -> "char*";
 c_type({_,_,{2,tp}},_) -> {*c_type_base(tp),'*'};
 
@@ -1585,7 +1585,7 @@ c_type_base(TypeI64) -> "int64_t";
 c_type_base(TypeChar) -> "codepoint";
 c_type_base(TypeBool) -> "bool";
 
-ctype_in_extra({_,_,{1,_}},tp,name) -> "";
+ctype_in_extra({_,_,{1,_,_}},tp,name) -> "";
 ctype_in_extra({_,_,_},TypeString,name) -> "";
 ctype_in_extra({_,_,{2,_}},tp,name) -> {',size_t ',*name,'_len'};
 
@@ -1681,5 +1681,5 @@ create_export_ll_sigc_out(sofar,n,n) -> sofar;
 create_export_ll_sigc_out(sofar,i,n) -> create_export_ll_sigc_out({*sofar,',ptr %out',*int2s36(i)},i+1,n);
 
 create_export_ll_post_call(types,code,_,{}) -> code;
-create_export_ll_post_call(types,code,n,{{reg,tp,_},*rest}) match nth(types,tp) => {_,_,{1,sz}} match int2s36(n) => ni
+create_export_ll_post_call(types,code,n,{{reg,tp,_},*rest}) match nth(types,tp) => {_,_,{1,sz,_}} match int2s36(n) => ni
     -> create_export_ll_post_call(types,{*code,'\tstore i',*int2s(sz),' %q',*ni,',ptr %out',*ni,',align ',*int2s(bits_to_bytes(sz)),'\n'},n+1,rest);
