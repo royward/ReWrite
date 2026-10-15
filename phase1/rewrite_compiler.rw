@@ -297,15 +297,15 @@ add_symtext(_,symtext,symsz,name) -> {*symtext,*name,'\\00'},symsz+length(name)+
 
 parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,type_lookup;
 parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,rest)
-    update parse_types1(isval,types,type_lookup,rest) => new_isval,newtype,types,type_lookup,rest
+    update parse_types1(isval,"",types,type_lookup,rest) => new_isval,newtype,types,type_lookup,rest
     -> parse_types_aux(top,{*sofar,newtype},{*sfval,new_isval},endtok,types,type_lookup,rest);
 
-parse_types1(isval,endtok,types,type_lookup,{{_,_,_,Identifier,_},{_,_,_,Colon,_},*rest}) -> parse_types1(isval,types,type_lookup,rest);
-parse_types1(_,types,type_lookup,{{_,_,_,Identifier,"value"},*rest}) -> parse_types1(true,types,type_lookup,rest);
-parse_types1(isval,types,type_lookup,{{_,_,_,Identifier,_},{_,_,_,Colon,_},*rest}) -> parse_types1(isval,types,type_lookup,rest);
-parse_types1(isval,types,type_lookup,{{_,_,_,Identifier,tp},*rest}) match lookup_symbol_table(type_lookup,tp) => true,convert -> isval,convert,types,type_lookup,rest;
-parse_types1(isval,types,type_lookup,{{_,_,_,LBracket,_},*rest})
-    update parse_types1(false,types,type_lookup,rest) => _,this_type,types,type_lookup,{{_,_,_,RBracket,_},*rest}
+parse_types1(isval,name,endtok,types,type_lookup,{{_,_,_,Identifier,_},{_,_,_,Colon,_},*rest}) -> parse_types1(isval,name,types,type_lookup,rest);
+parse_types1(_,name,types,type_lookup,{{_,_,_,Identifier,"value"},*rest}) -> parse_types1(true,name,types,type_lookup,rest);
+parse_types1(isval,name,types,type_lookup,{{_,_,_,Identifier,_},{_,_,_,Colon,_},*rest}) -> parse_types1(isval,name,types,type_lookup,rest);
+parse_types1(isval,"",types,type_lookup,{{_,_,_,Identifier,tp},*rest}) match lookup_symbol_table(type_lookup,tp) => true,convert -> isval,convert,types,type_lookup,rest;
+parse_types1(isval,name,types,type_lookup,{{_,_,_,LBracket,_},*rest})
+    update parse_types1(false,"",types,type_lookup,rest) => _,this_type,types,type_lookup,{{_,_,_,RBracket,_},*rest}
     update create_type_list(this_type,types,type_lookup) => newtp,types,type_lookup
     -> isval,newtp,types,type_lookup,rest;
 //parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,LBrace,_},*rest}) match parse_types(top,isval,{},sfval,RBrace,types,type_lookup,rest) => inside,rest,types,type_lookup ->
