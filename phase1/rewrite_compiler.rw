@@ -71,91 +71,43 @@ const ErrUser=10;
 
 const OpBuildIOList=1000000;
 
-fn basename(string) -> string;
-basename(s) -> basename_aux(s, s);
-
-fn basename_aux(string, string) -> string;
-basename_aux({}, last) -> last;
-basename_aux({'/', *rest}, _) -> basename_aux(rest, rest);
-basename_aux({_, *rest}, last) -> basename_aux(rest, last);
-
-full_compile_vm(outfile,f1,s1,f2,s2,f3,s3,f4,s4)
-    match TargetVM =>target
-    match lex_all({},0,{s1,s2,s3,s4}) => lexed
-    match parse(target,lexed) => rules,table,symtext,symsz,types,type_loopup
-    match annotate_table(types,{},table) => annotated_table
-    update compile1(target,types,type_loopup,length(table)-1,0,annotated_table,symtext,symsz,{},rules) => types,lbl_id,table,symtext,symsz,sofar
-    match compile1_vm(target,types,lbl_id,table,symtext,sofar) => header,binary
-    -> c_headerx(target,basename(outfile),header),binary;
-
-full_compile_native(outfile,f1,s1,f2,s2,f3,s3,f4,s4)
-    match TargetX86_64 =>target
-    match lex_all({},0,{s1,s2,s3,s4}) => lexed
-    match parse(target,lexed) => rules,table,symtext,symsz,types,type_loopup
-    match annotate_table(types,{},table) => annotated_table
-    update compile1(target,types,type_loopup,length(table)-1,0,annotated_table,symtext,symsz,{},rules) => types,lbl_id,table,symtext,symsz,sofar
-    update compile1_native(target,types,lbl_id,table,symtext,symsz,sofar) => header,code
-    -> c_headerx(target,basename(outfile),header),code;
-
-compile1(target,types,type_lookup,lbl_id,_,table,symtext,symsz,sofar,{}) -> types,lbl_id,table,symtext,symsz,sofar;
-compile1(target,types,type_lookup,lbl_id,n,table,symtext,symsz,sofar,{rules,*rest})
-    match nth(table,n) => {_,_,_,name,reg_count1,bitmask1,type_left,regs_left,reg_count2,bitmask2,type_right,_}
-    match println_any(name) =>
-    update compile_function(types,type_lookup,target,reg_count1,true,lbl_id,n,table,0,
-        {{n,0,OpLabel,0,0,0,n}},
-        rules,0,bitmask_or({},bitmask1,bitmask2),reg_count1,type_left,reg_count2,type_right) => types,type_lookup,lbl_id,code
-    -> compile1(target,types,type_lookup,lbl_id,n+1,table,symtext,symsz,{*sofar,{n,code}},rest);
-
-compile1_vm(target,types,lbl_id,table,symtext,sofar)
-    match create_export_wrappers_vm(target,types,{},{},0,lbl_id,table) => wrapper_code,wrapperh
-    match {*sofar,*wrapper_code} => vmcode
-    match convert_to_binary({0,0,0,(code_length(0,vmcode)+1)<<32},vmcode) => binary
-    match text_to_u64({},symtext) => binsyms
-    -> wrapperh,{*binary,*binsyms};
-
-compile1_native(target,types,lbl_id,table,symtext,symsz,sofar)
-    match create_export_wrappers_ll(target,types,{},{},lbl_id,table) => wrapper_code,wrapperh ->
-    wrapperh,{*convert_to_llvm(target,table,symtext,symsz,{},sofar),*wrapper_code,*ll_boilerplate_end()};
-
-const Max_u16=65535;
-const Max_u32=4294967295;
-
-c_headerx(target,outfile,content)
-    match to_upper_sanitize({},outfile) => file_upper
-    ->  {'#ifndef RW_',*file_upper,'_H\n#define RW_',*file_upper,'_H\n#include "',*includes(target),'"\n\n',
-        '#ifdef __cplusplus\nnamespace RW_',*outfile,' {\nextern "C" {\n#endif\n',
-        'typedef uint32_t codepoint;\n',
-        *content,
-        '\n#ifdef __cplusplus\n}\n}\n#endif\n\n#endif\n'};
-
-convert_target_string("vm") -> TargetVM;
-convert_target_string("vmll") -> TargetVMLL;
-convert_target_string("x86-64") -> TargetX86_64;
-convert_target_string("aarch64") -> TargetAarch64;
-
+fn is_start_token(char) -> bool;
 is_start_token(c) -> c=='_' || c=='@' || (c>='a' && c<='z') || (c>='A' && c<='Z');
 
+fn is_rest_token(char) -> bool;
 is_rest_token(c) -> c=='_' || (c>='a' && c<='z') || (c>='A' && c<='Z') || (c>='0' && c<='9');
 
+fn is_digit(char) -> bool;
 is_digit(c) -> c>='0' && c<='9';
 
+fn is_whitespace(char) -> bool;
 is_whitespace(c) -> c==' ' || c=='\t' || c=='\r';
 
+fn min(i64,i64) -> i64;
 min(x,y) when x<y -> x;
 min(_,y) -> y;
 
+fn max(i64,i64) -> i64;
 max(x,y) when x>y -> x;
 max(_,y) -> y;
 
+fn listnv(i64,i64) -> [i64];
 listnv(n,v) -> listn_aux(0,n,{},v);
 
+fn listn_aux(i64,i64,[i64],i64) -> [i64];
 listn_aux(n,n,sofar,v) -> sofar;
 listn_aux(n,m,sofar,v) -> listn_aux(n+1,m,{*sofar,v},v);
+
+type token = [i64];
+//type token = {i64,i64,i64,i64,string};
+
+eof_compiler;
 
 lex_all(sofar,_,{}) -> sofar;
 lex_all(sofar,n,{s,*rest}) -> lex_all({*sofar,*lex_aux({},n,0,0,s)},n+1,rest);
 
 lex_aux(acc,f,row,col,{}) -> acc;
+lex_aux(acc,f,row,col,{'eof_compiler',*_}) -> acc;
 lex_aux(acc,f,row,col,{c,*rest}) when is_start_token(c) match lex_get_token(1,{c},rest) => sz,val,newrest ->
     lex_aux({*acc,{f,row,col,lex_check_spec_identifier(val),val}},f,row,col+sz,newrest);
 lex_aux(acc,f,row,col,{c,*rest}) when is_digit(c) match lex_get_digit(1,{c},rest) => sz,val,newrest -> lex_aux({*acc,{f,row,col,Integer,val}},f,row,col+sz,newrest);
@@ -327,6 +279,9 @@ parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,fnline
     update parse_types(true,false,{},{},Semicolon,types,type_lookup,rest) => types_rhs,value_rhs,rest,types,type_lookup
     update get_add_symbol_table(0,{},fnnames,name,{false,fnlineno+1,symsz,types_lhs,types_rhs,value_lhs,value_rhs}) => fnnames,_ ->
     parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,type_lookup,rest);
+// parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,fnlineno,_,Type,_},{_,_,_,Identifier,name},{_,_,_,Equal,_},*rest})
+//     update parse_types(true,false,{},{},Semicolon,types,type_lookup,rest) => types_lhs,value_lhs,rest,types,type_lookup
+//     parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,type_lookup,rest);
 parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,fnlineno,_,Export,_},{_,_,_,TypeFn,_},{_,_,_,Identifier,name},{_,_,_,LParen,_},*rest})
     update parse_types(true,false,{},{},RParen,types,type_lookup,rest) => types_lhs,value_lhs,rest,types,type_lookup
     update rest => {{_,_,_,Arrow,_},*rest}
@@ -341,16 +296,20 @@ add_symtext(TargetVMLL,symtext,symsz,name) -> {*symtext,*name,'\0'},symsz+length
 add_symtext(_,symtext,symsz,name) -> {*symtext,*name,'\\00'},symsz+length(name)+1;
 
 parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,type_lookup;
-parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,Identifier,_},{_,_,_,Colon,_},*rest}) -> parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,rest);
-parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,Identifier,"value"},*rest}) -> parse_types(top,true,sofar,sfval,endtok,types,type_lookup,rest);
-parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,Identifier,tp},*rest}) match lookup_symbol_table(type_lookup,tp) => true,convert ->
-    parse_types1(top,{*sofar,convert},{*sfval,isval},endtok,types,type_lookup,rest);
-parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,LBracket,_},*rest})
-    update parse_types(false,false,{},{},RBracket,types,type_lookup,rest) => {this_type},_,rest,types,type_lookup
-    update create_type_list(this_type,types,type_lookup) => newtp,types,type_lookup ->
-    parse_types1(top,{*sofar,newtp},{*sfval,isval},endtok,types,type_lookup,rest);
+parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,rest)
+    update parse_types1(isval,types,type_lookup,rest) => new_isval,newtype,types,type_lookup,rest
+    -> parse_types_aux(top,{*sofar,newtype},{*sfval,new_isval},endtok,types,type_lookup,rest);
+
+parse_types1(isval,endtok,types,type_lookup,{{_,_,_,Identifier,_},{_,_,_,Colon,_},*rest}) -> parse_types1(isval,types,type_lookup,rest);
+parse_types1(_,types,type_lookup,{{_,_,_,Identifier,"value"},*rest}) -> parse_types1(true,types,type_lookup,rest);
+parse_types1(isval,types,type_lookup,{{_,_,_,Identifier,_},{_,_,_,Colon,_},*rest}) -> parse_types1(isval,types,type_lookup,rest);
+parse_types1(isval,types,type_lookup,{{_,_,_,Identifier,tp},*rest}) match lookup_symbol_table(type_lookup,tp) => true,convert -> isval,convert,types,type_lookup,rest;
+parse_types1(isval,types,type_lookup,{{_,_,_,LBracket,_},*rest})
+    update parse_types1(false,types,type_lookup,rest) => _,this_type,types,type_lookup,{{_,_,_,RBracket,_},*rest}
+    update create_type_list(this_type,types,type_lookup) => newtp,types,type_lookup
+    -> isval,newtp,types,type_lookup,rest;
 //parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,LBrace,_},*rest}) match parse_types(top,isval,{},sfval,RBrace,types,type_lookup,rest) => inside,rest,types,type_lookup ->
-//    parse_types1(top,{*sofar,{true,inside}},{*sfval,isval},endtok,types,type_lookup,rest);
+//    parse_types_aux(top,{*sofar,{true,inside}},{*sfval,isval},endtok,types,type_lookup,rest);
 
 create_type_list(elt_typeid,types,type_lookup)
     match nth(types,elt_typeid) => {elt_name,_,ent_type}
@@ -363,8 +322,8 @@ check_add_type(n,name,def1,type_lookup,sofar,{{name,b,def1},*rest}) -> n,{*sofar
 check_add_type(n,name,def1,type_lookup,sofar,{{name,b,_},*rest}) -> #error(5); // names match, but not types
 check_add_type(n,name,def1,type_lookup,sofar,{x,*rest}) -> check_add_type(n+1,name,def1,type_lookup,{*sofar,x},rest);
 
-parse_types1(top,sofar,sfval,endtok,types,type_lookup,{{_,_,_,Comma,_},*rest}) -> parse_types(top,false,sofar,sfval,endtok,types,type_lookup,rest);
-parse_types1(top,sofar,sfval,endtok,types,type_lookup,{{_,_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,type_lookup; // deal with no trailing comma
+parse_types_aux(top,sofar,sfval,endtok,types,type_lookup,{{_,_,_,Comma,_},*rest}) -> parse_types(top,false,sofar,sfval,endtok,types,type_lookup,rest);
+parse_types_aux(top,sofar,sfval,endtok,types,type_lookup,{{_,_,_,endtok,_},*rest}) -> sofar,sfval,rest,types,type_lookup; // deal with no trailing comma
 
 add_rule(sofar,{},n,x) -> add_rule(sofar,{{}},n,x);
 add_rule(sofar,{r,*rest},0,x) -> {*sofar,{*r,x},*rest};
@@ -491,6 +450,68 @@ parse_params1(consts,bindings,params,rest) -> bindings,params,rest; // deal with
 ///////////////////////////////////////////////////////////
 // Compiler
 ///////////////////////////////////////////////////////////
+
+fn basename(string) -> string;
+basename(s) -> basename_aux(s, s);
+
+fn basename_aux(string, string) -> string;
+basename_aux({}, last) -> last;
+basename_aux({'/', *rest}, _) -> basename_aux(rest, rest);
+basename_aux({_, *rest}, last) -> basename_aux(rest, last);
+
+full_compile_vm(outfile,f1,s1,f2,s2,f3,s3,f4,s4)
+    match TargetVM =>target
+    match lex_all({},0,{s1,s2,s3,s4}) => lexed
+    match parse(target,lexed) => rules,table,symtext,symsz,types,type_loopup
+    match annotate_table(types,{},table) => annotated_table
+    update compile1(target,types,type_loopup,length(table)-1,0,annotated_table,symtext,symsz,{},rules) => types,lbl_id,table,symtext,symsz,sofar
+    match compile1_vm(target,types,lbl_id,table,symtext,sofar) => header,binary
+    -> c_headerx(target,basename(outfile),header),binary;
+
+full_compile_native(outfile,f1,s1,f2,s2,f3,s3,f4,s4)
+    match TargetX86_64 =>target
+    match lex_all({},0,{s1,s2,s3,s4}) => lexed
+    match parse(target,lexed) => rules,table,symtext,symsz,types,type_loopup
+    match annotate_table(types,{},table) => annotated_table
+    update compile1(target,types,type_loopup,length(table)-1,0,annotated_table,symtext,symsz,{},rules) => types,lbl_id,table,symtext,symsz,sofar
+    update compile1_native(target,types,lbl_id,table,symtext,symsz,sofar) => header,code
+    -> c_headerx(target,basename(outfile),header),code;
+
+compile1(target,types,type_lookup,lbl_id,_,table,symtext,symsz,sofar,{}) -> types,lbl_id,table,symtext,symsz,sofar;
+compile1(target,types,type_lookup,lbl_id,n,table,symtext,symsz,sofar,{rules,*rest})
+    match nth(table,n) => {_,_,_,name,reg_count1,bitmask1,type_left,regs_left,reg_count2,bitmask2,type_right,_}
+    match println_any(name) =>
+    update compile_function(types,type_lookup,target,reg_count1,true,lbl_id,n,table,0,
+        {{n,0,OpLabel,0,0,0,n}},
+        rules,0,bitmask_or({},bitmask1,bitmask2),reg_count1,type_left,reg_count2,type_right) => types,type_lookup,lbl_id,code
+    -> compile1(target,types,type_lookup,lbl_id,n+1,table,symtext,symsz,{*sofar,{n,code}},rest);
+
+compile1_vm(target,types,lbl_id,table,symtext,sofar)
+    match create_export_wrappers_vm(target,types,{},{},0,lbl_id,table) => wrapper_code,wrapperh
+    match {*sofar,*wrapper_code} => vmcode
+    match convert_to_binary({0,0,0,(code_length(0,vmcode)+1)<<32},vmcode) => binary
+    match text_to_u64({},symtext) => binsyms
+    -> wrapperh,{*binary,*binsyms};
+
+compile1_native(target,types,lbl_id,table,symtext,symsz,sofar)
+    match create_export_wrappers_ll(target,types,{},{},lbl_id,table) => wrapper_code,wrapperh ->
+    wrapperh,{*convert_to_llvm(target,table,symtext,symsz,{},sofar),*wrapper_code,*ll_boilerplate_end()};
+
+const Max_u16=65535;
+const Max_u32=4294967295;
+
+c_headerx(target,outfile,content)
+    match to_upper_sanitize({},outfile) => file_upper
+    ->  {'#ifndef RW_',*file_upper,'_H\n#define RW_',*file_upper,'_H\n#include "',*includes(target),'"\n\n',
+        '#ifdef __cplusplus\nnamespace RW_',*outfile,' {\nextern "C" {\n#endif\n',
+        'typedef uint32_t codepoint;\n',
+        *content,
+        '\n#ifdef __cplusplus\n}\n}\n#endif\n\n#endif\n'};
+
+convert_target_string("vm") -> TargetVM;
+convert_target_string("vmll") -> TargetVMLL;
+convert_target_string("x86-64") -> TargetX86_64;
+convert_target_string("aarch64") -> TargetAarch64;
 
 get_aligned_bitmask(n,sofar,{},sz) -> get_aligned_bitmask(n,sofar,{0},sz);
 get_aligned_bitmask(n,sofar,{-1,*rest},sz) -> get_aligned_bitmask(n+64,{*sofar,-1},rest,sz); // short circuit if fully allocated
