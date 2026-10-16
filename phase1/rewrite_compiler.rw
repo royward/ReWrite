@@ -310,8 +310,8 @@ parse_types1(fnnames,isval,name,types,type_lookup,{{_,_,_,Identifier,_},{_,_,_,C
 parse_types1(fnnames,isval,"",types,type_lookup,{{_,_,_,Identifier,tp},*rest}) match lookup_symbol_table(type_lookup,tp) => true,convert -> fnnames,isval,convert,types,type_lookup,rest;
 parse_types1(fnnames,isval,name,types,type_lookup,{{_,_,_,Identifier,tp},*rest}) // new name for existing type
     match lookup_symbol_table(type_lookup,tp) => true,convert
-    match nth(types,convert) => {_,_,def,_}
-    update check_add_type(0,name,def,{},type_lookup,{},types) => convert,types,type_lookup
+    match nth(types,convert) => {_,_,def,codec}
+    update check_add_type(0,name,def,codec,type_lookup,{},types) => convert,types,type_lookup
     -> fnnames,isval,convert,types,type_lookup,rest;
 parse_types1(fnnames,isval,name,types,type_lookup,{{_,_,_,LBracket,_},*rest})
     update parse_types1(fnnames,false,"",types,type_lookup,rest) => fnnames,_,elt_typeid,types,type_lookup,{{_,_,_,RBracket,_},*rest}
@@ -320,7 +320,11 @@ parse_types1(fnnames,isval,name,types,type_lookup,{{_,_,_,LBracket,_},*rest})
     -> fnnames,isval,convert,types,type_lookup,rest;
 parse_types1(fnnames,isval,name,types,type_lookup,{{_,_,_,LBrace,_},*rest})
     update parse_types(false,false,{},{},RBrace,types,type_lookup,rest) => inside,_,rest,types,type_lookup
-    update check_add_type(0,firstname(name,concat_type_name(types,{'S',*int2s(length(inside))},inside)),{3,*inside},{},type_lookup,{},types) => convert,types,type_lookup
+    match firstname(name,concat_type_name(types,{'S',*int2s(length(inside))},inside)) => newname
+    update get_add_symbol_table(0,{},fnnames,{*newname,'_del'},false) => fnnames,c0
+    update get_add_symbol_table(0,{},fnnames,{*newname,'_cmp'},false) => fnnames,c1
+    update get_add_symbol_table(0,{},fnnames,{*newname,'_cpy'},false) => fnnames,c2
+    update check_add_type(0,newname,{3,*inside},{},type_lookup,{c0,c1,c2},types) => convert,types,type_lookup
     -> fnnames,isval,convert,types,type_lookup,rest;
 
 concat_type_name(types,sofar,{}) -> sofar;
