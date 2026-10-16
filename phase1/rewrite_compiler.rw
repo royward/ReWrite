@@ -238,10 +238,10 @@ int2s(n) when n<0 -> {'-',*int2s(-n)};
 int2s(n) when n<10 -> {'0'+n};
 int2s(n) -> {*int2s(n/10),*int2s(n%10)};
 
-te() -> {"",false,{0}};
+te() -> {"",false,{0},{}};
 
 parse(target,s) -> parse_aux(target,{},{},{},0,{},
-    {te(),{"string",false,{2,3}},{"bool",false,{1,1,TypeBool}},{"char",false,{1,32,TypeChar}},te(),te(),te(),te(),te(),te(),{"i64",false,{1,64,TypeI64}},te(),te(),te(),te(),te()},
+    {te(),{"string",false,{2,3},{}},{"bool",false,{1,1,TypeBool},{}},{"char",false,{1,32,TypeChar},{}},te(),te(),te(),te(),te(),te(),{"i64",false,{1,64,TypeI64},{}},te(),te(),te(),te(),te()},
     {{"string",TypeString},{"bool",TypeBool},{"char",TypeChar},{"i64",TypeI64}},s);
 
 // get and add for a straight list of (string,ref)
@@ -310,12 +310,12 @@ parse_types1(isval,name,types,type_lookup,{{_,_,_,Identifier,_},{_,_,_,Colon,_},
 parse_types1(isval,"",types,type_lookup,{{_,_,_,Identifier,tp},*rest}) match lookup_symbol_table(type_lookup,tp) => true,convert -> isval,convert,types,type_lookup,rest;
 parse_types1(isval,name,types,type_lookup,{{_,_,_,Identifier,tp},*rest}) // new name for existing type
     match lookup_symbol_table(type_lookup,tp) => true,convert
-    match nth(types,convert) => {_,_,def}
+    match nth(types,convert) => {_,_,def,_}
     update check_add_type(0,name,def,type_lookup,{},types) => convert,types,type_lookup
     -> isval,convert,types,type_lookup,rest;
 parse_types1(isval,name,types,type_lookup,{{_,_,_,LBracket,_},*rest})
     update parse_types1(false,"",types,type_lookup,rest) => _,elt_typeid,types,type_lookup,{{_,_,_,RBracket,_},*rest}
-    match nth(types,elt_typeid) => {elt_name,_,_}
+    match nth(types,elt_typeid) => {elt_name,_,_,_}
     update check_add_type(0,firstname(name,{'L_',*elt_name}),{2,elt_typeid},type_lookup,{},types) => convert,types,type_lookup
     -> isval,convert,types,type_lookup,rest;
 parse_types1(isval,name,types,type_lookup,{{_,_,_,LBrace,_},*rest})
@@ -324,13 +324,13 @@ parse_types1(isval,name,types,type_lookup,{{_,_,_,LBrace,_},*rest})
     -> isval,convert,types,type_lookup,rest;
 
 concat_type_name(types,sofar,{}) -> sofar;
-concat_type_name(types,sofar,{t,*rest}) match nth(types,t) => {n,_,_} -> concat_type_name(types,{*sofar,'_',*n},rest);
+concat_type_name(types,sofar,{t,*rest}) match nth(types,t) => {n,_,_,_} -> concat_type_name(types,{*sofar,'_',*n},rest);
 
 firstname("",name) -> name;
 firstname(name,_) -> name;
 
-check_add_type(n,name,def1,type_lookup,sofar,{}) -> length(sofar),{*sofar,{name,false,def1}},{*type_lookup,{name,length(sofar)}};
-check_add_type(n,name,def1,type_lookup,sofar,{{name,b,def1},*rest}) -> n,{*sofar,{name,b,def1},*rest},type_lookup;
+check_add_type(n,name,def1,type_lookup,sofar,{}) -> length(sofar),{*sofar,{name,false,def1,{}}},{*type_lookup,{name,length(sofar)}};
+check_add_type(n,name,def1,type_lookup,sofar,{{name,b,def1,codec},*rest}) -> n,{*sofar,{name,b,def1,codec},*rest},type_lookup;
 check_add_type(n,name,def1,type_lookup,sofar,{{name,b,_},*rest}) -> #error(5); // names match, but not types
 check_add_type(n,name,def1,type_lookup,sofar,{x,*rest}) -> check_add_type(n+1,name,def1,type_lookup,{*sofar,x},rest);
 
@@ -573,9 +573,9 @@ annotate_type_list_reg(types,pri,max_reg,sofar,{{{r,{}},t,_},*rest}) match looku
     annotate_type_list_reg(types,pri,max_reg+1,{*sofar,{{r,{BindReg,max_reg,sz}},t,Consume}},rest);
 annotate_type_list_reg(types,pri,max_reg,sofar,todo) -> annotate_type_list_reg(types,pri+1,max_reg,sofar,todo);
 
-lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{1,sz,tp}} -> {1,sz,tp},{0,sz};
-lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{2,tp}} -> {2,tp},{0,32,0,32};
-lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{3,*inside}} -> {3,*inside},{0,32};
+lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{1,sz,tp},_} -> {1,sz,tp},{0,sz};
+lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{2,tp},_} -> {2,tp},{0,32,0,32};
+lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{3,*inside},_} -> {3,*inside},{0,32};
 
 calc_counts(table,bindings,{_,_,params},clauses,exprs)
     //match println_any(444,params,clauses,exprs) =>
@@ -698,31 +698,31 @@ ctx_update_lbl_id({types,type_lookup,target,tailcall,active,lbl_decline,lbl_id,f
     {types,type_lookup,target,tailcall,active,lbl_decline,lbl_id+1,fn_id,rule_id,linerule,bindings,reg_count,table};
 
 depth_count(n,_,0) -> n; // HACK - deal with unknown types to make length({}) work
-depth_count(n,types,tp) @match nth(types,tp) => {_,_,{1,sz,_}} -> n,sz,1;
-depth_count(n,types,tp) @match nth(types,tp) => {_,_,{3,*_}} -> n,32,3;
-depth_count(n,types,tp) @match nth(types,tp) => {_,_,{2,sub_type}} -> depth_count(n+1,types,sub_type);
+depth_count(n,types,tp) @match nth(types,tp) => {_,_,{1,sz,_},_} -> n,sz,1;
+depth_count(n,types,tp) @match nth(types,tp) => {_,_,{3,*_},_} -> n,32,3;
+depth_count(n,types,tp) @match nth(types,tp) => {_,_,{2,sub_type},_} -> depth_count(n+1,types,sub_type);
 
 // TODO expand this to deal properly with types. Just scalars and lists of scalars for now
 gen_types_deref_free(false,_,_,_) -> {};
 gen_types_deref_free(_,ctx,tp,storage) -> gen_types_deref_free_aux(ctx,tp,nth(ctx_get_types(ctx),tp),storage);
 
-gen_types_deref_free_aux(ctx,_,{_,_,{1,_,_}},_) -> {};
-gen_types_deref_free_aux(ctx,tp,{_,_,{2,_}},{{src_flag1,src1,sz1},{src_flag2,src2,sz1}})
+gen_types_deref_free_aux(ctx,_,{_,_,{1,_,_},_},_) -> {};
+gen_types_deref_free_aux(ctx,tp,{_,_,{2,_},_},{{src_flag1,src1,sz1},{src_flag2,src2,sz1}})
     match depth_count(0,ctx_get_types(ctx),tp) => depth,_,1
     -> {{ctx_fnr(ctx),if(depth<2,OpDerefFree,OpDerefFreeList),0,0,src_flag1,src1,0,0,0,0,depth-1}};
 
 gen_types_addref(ctx,tp,{},_) -> ctx,{}; // TODO this needs to go
 gen_types_addref(ctx,tp,storage,v) -> gen_types_addref_aux(ctx,tp,nth(ctx_get_types(ctx),tp),storage,v);
 
-gen_types_addref_aux(ctx,tp,{_,_,{1,_,_}},_,_) -> ctx,{};
-gen_types_addref_aux(ctx,tp,{_,_,{2,_}},{{src_flag1,src1,sz1},_},v)
+gen_types_addref_aux(ctx,tp,{_,_,{1,_,_},_},_,_) -> ctx,{};
+gen_types_addref_aux(ctx,tp,{_,_,{2,_},_},{{src_flag1,src1,sz1},_},v)
     update ctx_newreg(ctx,64) => ctx,parray
     -> ctx,{{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},{ctx_fnr(ctx),OpIncMem,0,0,0,parray,0,32,BindImm,v,4}};
 
 gen_types_do_compare(ctx,tp,store1,store2) -> gen_types_do_compare_aux(ctx,tp,nth(ctx_get_types(ctx),tp),store1,store2);
 
-gen_types_do_compare_aux(ctx,tp,{_,_,{1,_,_}},{{srcflag1,src1,sz}},{{srcflag2,src2,sz}}) -> ctx,{},srcflag1,src1,srcflag2,src2,sz;
-gen_types_do_compare_aux(ctx,tp,{_,_,{2,_}},{{BindReg,src1a,32},{BindReg,src1b,32}},{{BindReg,src2a,32},{BindReg,src2b,32}})
+gen_types_do_compare_aux(ctx,tp,{_,_,{1,_,_},_},{{srcflag1,src1,sz}},{{srcflag2,src2,sz}}) -> ctx,{},srcflag1,src1,srcflag2,src2,sz;
+gen_types_do_compare_aux(ctx,tp,{_,_,{2,_},_},{{BindReg,src1a,32},{BindReg,src1b,32}},{{BindReg,src2a,32},{BindReg,src2b,32}})
     match depth_count(0,ctx_get_types(ctx),tp) => depth,stride,1
     update ctx_newreg(ctx,1) => ctx,result
     -> ctx,{{ctx_fnr(ctx),OpCompareLists,0,0,BindReg,result,BindReg,src1a+(src1b<<32),BindReg,src2a+(src2b<<32),(depth-1)+((stride>>3)<<12)}},BindReg,result,BindImm,1,1;
@@ -815,7 +815,7 @@ gen_param_code(owned,true,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{C
 gen_param_code(owned,committed,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{ParamId,{id,count}},*rest})
     @update gen_param_code_next_type(false,ctx,stride,typex) => ctx,mv_code,newstride,{{{BindMem,src1,sz},{BindMem,src2,sz}},tp,_},type_left
     @match newstride => {_,psrc_flagp,srcp,*_}
-    @match nth(ctx_get_types(ctx),tp) => {_,_,{2,sub_type}}
+    @match nth(ctx_get_types(ctx),tp) => {_,_,{2,sub_type},_}
     update ctx_bindings(ctx) => bindings
     update nth(bindings,id) => bind
     update ctx_newreg(ctx,64) => ctx,array
@@ -832,7 +832,7 @@ gen_param_code(owned,committed,bindlevel,stride,ctx,c_match,c_commit,c_post,type
     gen_param_code(owned,committed,bindlevel,newstride,ctx,gen_comm_apply(committed,c_match,c_commit,c_post,{*mv_code,*code0},code1),type_left,rest);
 gen_param_code(owned,committed,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{ParamWild,{}},*rest})
     @update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,{},{{{src_flag,src,sz},_},tp,_},type_left
-    @match nth(ctx_get_types(ctx),tp) => {_,_,{2,_}}
+    @match nth(ctx_get_types(ctx),tp) => {_,_,{2,_},_}
     update ctx_newreg(ctx,32) => ctx,newreg
     match gen_types_deref_free(owned,ctx,tp,{{BindReg,newreg,32},{BindReg,newreg,32}}) => free_code
     -> gen_param_code(owned,committed,bindlevel,{},ctx,gen_comm_apply(committed,c_match,c_commit,c_post,mv_code,
@@ -853,7 +853,7 @@ gen_param_code(owned,committed,bindlevel,stride,ctx,c_match,c_commit,c_post,type
         codefree),type_left,rest);
 gen_param_code(owned,committed,bindlevel,stride,ctx,c_match,c_commit,c_post,typex,{{ParamList,elements},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
-    match nth(ctx_get_types(ctx),tp) => {_,_,{2,sub_type}}
+    match nth(ctx_get_types(ctx),tp) => {_,_,{2,sub_type},_}
     match lookup_type_size_pri(sub_type,ctx_get_types(ctx)) => _,sub_alloc
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,pend
@@ -1049,7 +1049,7 @@ gen_expr_code_aux(committed,ctx,stypes,{ExprList,{}})
 gen_expr_code_aux(committed,ctx,stypes,{ExprList,elements})
     @match decompose_stypes(stypes) => stype,_
     match ctx_get_types(ctx) => types
-    @match nth(types,stype) => {_,_,{2,t}}
+    @match nth(types,stype) => {_,_,{2,t},_}
     // Array - go get the elements then come back to allocate
     update ctx_newreg(ctx,32) => ctx,newarray
     update ctx_newreg(ctx,64) => ctx,parray
@@ -1062,11 +1062,11 @@ gen_expr_code_aux(committed,ctx,stypes,{ExprList,elements})
 gen_expr_code_aux(committed,ctx,{0,0},{ExprList,{e1,*elements}}) // Deal with type derivation for anonymous list. might need to create type
     update gen_expr_code_aux(committed,ctx,{0,0},e1) => ctx,_,_,_,_,{{_,t,_},*_} // just want the type of first elt (error if there isn't one)
     match ctx_get_types_and_lookup(ctx) => types,type_lookup
-    match nth(types,t) => {elt_name,_,ent_type}
+    match nth(types,t) => {elt_name,_,ent_type,_}
     update check_add_type(0,{'L_',*elt_name},{2,t},type_lookup,{},types) => stype,types,type_lookup
     //update create_type_list(t,types,type_lookup) => stype,types,type_lookup
     update ctx_set_types_and_lookup(ctx,types,type_lookup) => ctx
-    match nth(types,stype) => {_,_,{2,subtype}}
+    match nth(types,stype) => {_,_,{2,subtype},_}
     // Array - go get the elements then come back to allocate
     update ctx_newreg(ctx,32) => ctx,newarray
     update ctx_newreg(ctx,64) => ctx,parray
@@ -1081,8 +1081,8 @@ gen_expr_code_aux(committed,ctx,{0,t},{ExprSplat,arg})
     -> ctx,true,c_match,c_commit,c_post,splatdata;
 gen_expr_code_aux(committed,ctx,{0,t},{ExprSplat,arg})
     update gen_expr_code_aux(committed,ctx,{0,t},arg) => ctx,true,c_match,c_commit,c_post,{{{{BindReg,array,32},{BindReg,start,32}},tp,consume}}
-    match nth(ctx_get_types(ctx),tp) => {_,_,{2,tp2}}
-    match nth(ctx_get_types(ctx),tp2) => {_,_,{2,t}}
+    match nth(ctx_get_types(ctx),tp) => {_,_,{2,tp2},_}
+    match nth(ctx_get_types(ctx),tp2) => {_,_,{2,t},_}
     -> println_any(t,tp,tp2),
     println_any(true,c_match,c_commit,c_post),#never;
 
@@ -1109,7 +1109,7 @@ gen_expr_code_aux_map(committed,ctx,sofar,stypelist,{expr,*rest})
     gen_expr_code_aux_map(committed,ctx,{*sofar,{splat,{*c_match,*c_commit,*c_post},results}},trest,rest);
 
 infer_is_list(0,_,{ExprList,_}) -> true; // HACK don't know what the type is, but sure it's a list
-infer_is_list(tp,types,args) match nth(types,tp) => {_,_,{2,_}} -> true;
+infer_is_list(tp,types,args) match nth(types,tp) => {_,_,{2,_},_} -> true;
 
 gen_expr_code_library(1,committed,ctx,stypes,args) // length
     update gen_expr_code_untyped(committed,ctx,{},{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},tp,consume}},c_match,c_commit,c_post
@@ -1126,7 +1126,7 @@ gen_expr_code_library(1,committed,ctx,stypes,args) // length
 gen_expr_code_library(2,committed,ctx,stypes,args) // nth
     update gen_expr_code_untyped(committed,ctx,{},{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},tp,consume},{{{indf,ind,64}},TypeI64,_}},c_match,c_commit,c_post
     //match decompose_stypes(stypes) => dsttp,_
-    match nth(ctx_get_types(ctx),tp) => {_,_,{2,dsttp}}
+    match nth(ctx_get_types(ctx),tp) => {_,_,{2,dsttp},_}
     match lookup_type_size_pri(dsttp,ctx_get_types(ctx)) => _,storage
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,end
@@ -1150,7 +1150,7 @@ gen_expr_code_library(2,committed,ctx,stypes,args) // nth
 gen_expr_code_library(3,committed,ctx,stypes,args) // nth_insert
     when committed
     update gen_expr_code_untyped(committed,ctx,{},{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},listtype,consumel},{{{indf,ind,64}},TypeI64,_},{storagee,elttype,consumee}},c_match,c_commit,c_post
-    match nth(ctx_get_types(ctx),listtype) => {_,_,{2,elttype}}
+    match nth(ctx_get_types(ctx),listtype) => {_,_,{2,elttype},_}
     match lookup_type_size_pri(elttype,ctx_get_types(ctx)) => _,storage
     match sum_sub_alloc(0,storage) => sz
     match depth_count(0,ctx_get_types(ctx),elttype) => depth,_,1
@@ -1185,7 +1185,7 @@ gen_expr_code_library(3,committed,ctx,stypes,args) // nth_insert
 gen_expr_code_library(4,committed,ctx,stypes,args) // nth_take
     when committed
     update gen_expr_code_untyped(committed,ctx,{},{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},listtype,consumel},{{{indf,ind,64}},TypeI64,_}},c_match,c_commit,c_post
-    match nth(ctx_get_types(ctx),listtype) => {_,_,{2,elttype}}
+    match nth(ctx_get_types(ctx),listtype) => {_,_,{2,elttype},_}
     match lookup_type_size_pri(elttype,ctx_get_types(ctx)) => _,storage
     match sum_sub_alloc(0,storage) => sz
     match depth_count(0,ctx_get_types(ctx),elttype) => depth,_,1
@@ -1216,9 +1216,9 @@ gen_expr_code_library(4,committed,ctx,stypes,args) // nth_take
     },
     {{{{BindReg,newarray,32},{BindReg,newstart,32}},listtype,Consume},{memindex2,elttype,Consume}};
 
-gen_tombstone(ctx,tp,{_,_,{1,sz,TypeChar}}) -> ctx,{},{{{BindImm,65533,sz}},TypeChar,Consume};
-gen_tombstone(ctx,tp,{_,_,{1,sz,_}}) -> ctx,{},{{{BindImm,0,sz}},tp,Consume};
-gen_tombstone(ctx,tp,{_,_,{2,_}})
+gen_tombstone(ctx,tp,{_,_,{1,sz,TypeChar},_}) -> ctx,{},{{{BindImm,65533,sz}},TypeChar,Consume};
+gen_tombstone(ctx,tp,{_,_,{1,sz,_},_}) -> ctx,{},{{{BindImm,0,sz}},tp,Consume};
+gen_tombstone(ctx,tp,{_,_,{2,_},_})
     update ctx_newreg(ctx,32) => ctx,array
     update ctx_newreg(ctx,32) => ctx,start
     -> ctx,{{ctx_fnr(ctx),OpEmptyList,0,0,BindReg,array,BindReg,start}},{{{BindReg,array,32},{BindReg,start,32}},tp,Consume};
@@ -1278,13 +1278,13 @@ match_types({a,*rest1},{a,*rest2}) -> match_types(rest1,rest2);
 
 gen_expr_code_infix(ctx,op,{{false,code1,{{{{src_flag1,src1,sz1}},tp1,_}}}})
     @match unop(tp1,op) => true,tp_res,machine_op
-    match nth(ctx_get_types(ctx),tp_res) => {_,_,{1,sz_res,_}}
+    match nth(ctx_get_types(ctx),tp_res) => {_,_,{1,sz_res,_},_}
     match get_size_only_scale(sz_res) => sz
     update ctx_newreg(ctx,1<<sz) => ctx,newreg
     -> ctx,{*code1,{ctx_fnr(ctx),machine_op,xt(tp1),BindReg,newreg,src_flag1,src1}},{{{{BindReg,newreg,sz_res}},tp_res,Consume}};
 gen_expr_code_infix(ctx,op,{{false,code1,{{{{src_flag1,src1,sz1}},tp1,_}}},{false,code2,{{{{src_flag2,src2,sz2}},tp2,_}}}})
     @match binop(tp1,tp2,op) => true,swap,tp_res,machine_op
-    match nth(ctx_get_types(ctx),tp_res) => {_,_,{1,sz_res,_}}
+    match nth(ctx_get_types(ctx),tp_res) => {_,_,{1,sz_res,_},_}
     match get_size_only_scale(sz_res) => sz
     update ctx_newreg(ctx,1<<sz) => ctx,newreg
     -> ctx,{*code1,*code2,{ctx_fnr(ctx),machine_op,xt(tp1),BindReg,newreg,opt_swap_sources(swap,src_flag1,src1,src_flag2,src2)}},{{{{BindReg,newreg,sz_res}},tp_res,Consume}};
@@ -1593,17 +1593,17 @@ create_export_value_sigc(types,sofar,labeln,n,fill0,fill1,{{vals,tp,_},*rest})
     match {*fill1,*int2s(labeln)} => name
     -> create_export_value_sigc(types,{*sofar,',',*fill0,*c_type(nth(types,tp),tp),' ',*name,*ctype_in_extra(nth(types,tp),tp,name)},labeln+1,n+length(vals),fill0,fill1,rest);
 
-c_type({_,_,{1,_,_}},tp) -> c_type_base(tp);
-c_type({_,_,_},TypeString) -> "char*";
-c_type({_,_,{2,tp}},_) -> {*c_type_base(tp),'*'};
+c_type({_,_,{1,_,_},_},tp) -> c_type_base(tp);
+c_type({_,_,_,_},TypeString) -> "char*";
+c_type({_,_,{2,tp},_},_) -> {*c_type_base(tp),'*'};
 
 c_type_base(TypeI64) -> "int64_t";
 c_type_base(TypeChar) -> "codepoint";
 c_type_base(TypeBool) -> "bool";
 
-ctype_in_extra({_,_,{1,_,_}},tp,name) -> "";
-ctype_in_extra({_,_,_},TypeString,name) -> "";
-ctype_in_extra({_,_,{2,_}},tp,name) -> {',size_t ',*name,'_len'};
+ctype_in_extra({_,_,{1,_,_},_},tp,name) -> "";
+ctype_in_extra({_,_,_,_},TypeString,name) -> "";
+ctype_in_extra({_,_,{2,_},_},tp,name) -> {',size_t ',*name,'_len'};
 
 create_export_vm_in(types,code,sofar,_,{},{}) -> code,sofar;
 create_export_vm_in(types,code,sofar,n,{{_,TypeString,_},*rest},{val,*vrest}) match val => true
@@ -1614,7 +1614,7 @@ create_export_vm_in(types,code,sofar,n,{{_,TypeString,_},*rest},{val,*vrest}) ma
         '\tif(err',*i,'!=0) return err',*i,';\n',
         '\trwu_set_len(a,dst',*i,',len',*i,');\n'},
         {*sofar,'(uint64_t)dst',*i,',0,'},n+1,rest,vrest);
-create_export_vm_in(types,code,sofar,n,{{_,tp,_},*rest},{val,*vrest}) @match nth(types,tp) => {_,_,{2,subtp}} match val => true
+create_export_vm_in(types,code,sofar,n,{{_,tp,_},*rest},{val,*vrest}) @match nth(types,tp) => {_,_,{2,subtp},_} match val => true
     match int2s(n) => i ->
     create_export_vm_in(types,{*code,
         '\tuint32_t array',*i,'=alloc(a,(uint64_t)in',*i,'_len,sizeof(',*c_type_base(subtp),'),0);\n',
@@ -1638,7 +1638,7 @@ create_export_vm_out(types,sofar,allocs,labeln,n,{{_,TypeString,_},*rest},{val,*
         '\t\t}\n',
         '\t\tderef_free(a,inout[',*int2s(n),']);\n',
         '\t}\n'},{*allocs,{'out',*int2s(labeln)}},labeln+1,n+2,rest,vrest);
-create_export_vm_out(types,sofar,allocs,labeln,n,{{_,tp,_},*rest},{val,*vrest}) @match nth(types,tp) => {_,_,{2,subtp}} match val => true
+create_export_vm_out(types,sofar,allocs,labeln,n,{{_,tp,_},*rest},{val,*vrest}) @match nth(types,tp) => {_,_,{2,subtp},_} match val => true
     match int2s(n) => i
     -> create_export_vm_out(types,{*sofar,
         '\t{\n\t\tuint32_t* head=rwu_get_header(a,inout[',*i,']);\n',
@@ -1697,5 +1697,5 @@ create_export_ll_sigc_out(sofar,n,n) -> sofar;
 create_export_ll_sigc_out(sofar,i,n) -> create_export_ll_sigc_out({*sofar,',ptr %out',*int2s36(i)},i+1,n);
 
 create_export_ll_post_call(types,code,_,{}) -> code;
-create_export_ll_post_call(types,code,n,{{reg,tp,_},*rest}) match nth(types,tp) => {_,_,{1,sz,_}} match int2s36(n) => ni
+create_export_ll_post_call(types,code,n,{{reg,tp,_},*rest}) match nth(types,tp) => {_,_,{1,sz,_},_} match int2s36(n) => ni
     -> create_export_ll_post_call(types,{*code,'\tstore i',*int2s(sz),' %q',*ni,',ptr %out',*ni,',align ',*int2s(bits_to_bytes(sz)),'\n'},n+1,rest);
