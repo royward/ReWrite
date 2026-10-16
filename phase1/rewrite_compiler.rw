@@ -311,16 +311,16 @@ parse_types1(fnnames,isval,"",types,type_lookup,{{_,_,_,Identifier,tp},*rest}) m
 parse_types1(fnnames,isval,name,types,type_lookup,{{_,_,_,Identifier,tp},*rest}) // new name for existing type
     match lookup_symbol_table(type_lookup,tp) => true,convert
     match nth(types,convert) => {_,_,def,_}
-    update check_add_type(0,name,def,type_lookup,{},types) => convert,types,type_lookup
+    update check_add_type(0,name,def,{},type_lookup,{},types) => convert,types,type_lookup
     -> fnnames,isval,convert,types,type_lookup,rest;
 parse_types1(fnnames,isval,name,types,type_lookup,{{_,_,_,LBracket,_},*rest})
     update parse_types1(fnnames,false,"",types,type_lookup,rest) => fnnames,_,elt_typeid,types,type_lookup,{{_,_,_,RBracket,_},*rest}
     match nth(types,elt_typeid) => {elt_name,_,_,_}
-    update check_add_type(0,firstname(name,{'L_',*elt_name}),{2,elt_typeid},type_lookup,{},types) => convert,types,type_lookup
+    update check_add_type(0,firstname(name,{'L_',*elt_name}),{2,elt_typeid},{},type_lookup,{},types) => convert,types,type_lookup
     -> fnnames,isval,convert,types,type_lookup,rest;
 parse_types1(fnnames,isval,name,types,type_lookup,{{_,_,_,LBrace,_},*rest})
     update parse_types(false,false,{},{},RBrace,types,type_lookup,rest) => inside,_,rest,types,type_lookup
-    update check_add_type(0,firstname(name,concat_type_name(types,{'S',*int2s(length(inside))},inside)),{3,*inside},type_lookup,{},types) => convert,types,type_lookup
+    update check_add_type(0,firstname(name,concat_type_name(types,{'S',*int2s(length(inside))},inside)),{3,*inside},{},type_lookup,{},types) => convert,types,type_lookup
     -> fnnames,isval,convert,types,type_lookup,rest;
 
 concat_type_name(types,sofar,{}) -> sofar;
@@ -329,10 +329,10 @@ concat_type_name(types,sofar,{t,*rest}) match nth(types,t) => {n,_,_,_} -> conca
 firstname("",name) -> name;
 firstname(name,_) -> name;
 
-check_add_type(n,name,def1,type_lookup,sofar,{}) -> length(sofar),{*sofar,{name,false,def1,{}}},{*type_lookup,{name,length(sofar)}};
-check_add_type(n,name,def1,type_lookup,sofar,{{name,b,def1,codec},*rest}) -> n,{*sofar,{name,b,def1,codec},*rest},type_lookup;
-check_add_type(n,name,def1,type_lookup,sofar,{{name,b,_},*rest}) -> #error(5); // names match, but not types
-check_add_type(n,name,def1,type_lookup,sofar,{x,*rest}) -> check_add_type(n+1,name,def1,type_lookup,{*sofar,x},rest);
+check_add_type(n,name,def1,codec,type_lookup,sofar,{}) -> length(sofar),{*sofar,{name,false,def1,{}}},{*type_lookup,{name,length(sofar)}};
+check_add_type(n,name,def1,codec,type_lookup,sofar,{{name,b,def1,codec},*rest}) -> n,{*sofar,{name,b,def1,codec},*rest},type_lookup;
+check_add_type(n,name,def1,codec,type_lookup,sofar,{{name,b,_},*rest}) -> #error(5); // names match, but not types
+check_add_type(n,name,def1,codec,type_lookup,sofar,{x,*rest}) -> check_add_type(n+1,name,def1,codec,type_lookup,{*sofar,x},rest);
 
 parse_types_aux(fnnames,top,sofar,sfval,endtok,types,type_lookup,{{_,_,_,Comma,_},*rest}) -> parse_types(fnnames,top,false,sofar,sfval,endtok,types,type_lookup,rest);
 parse_types_aux(fnnames,top,sofar,sfval,endtok,types,type_lookup,{{_,_,_,endtok,_},*rest}) -> fnnames,sofar,sfval,rest,types,type_lookup; // deal with no trailing comma
@@ -1063,7 +1063,7 @@ gen_expr_code_aux(committed,ctx,{0,0},{ExprList,{e1,*elements}}) // Deal with ty
     update gen_expr_code_aux(committed,ctx,{0,0},e1) => ctx,_,_,_,_,{{_,t,_},*_} // just want the type of first elt (error if there isn't one)
     match ctx_get_types_and_lookup(ctx) => types,type_lookup
     match nth(types,t) => {elt_name,_,ent_type,_}
-    update check_add_type(0,{'L_',*elt_name},{2,t},type_lookup,{},types) => stype,types,type_lookup
+    update check_add_type(0,{'L_',*elt_name},{2,t},{},type_lookup,{},types) => stype,types,type_lookup
     //update create_type_list(t,types,type_lookup) => stype,types,type_lookup
     update ctx_set_types_and_lookup(ctx,types,type_lookup) => ctx
     match nth(types,stype) => {_,_,{2,subtype},_}
