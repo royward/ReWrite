@@ -98,15 +98,21 @@ fn listn_aux(i64,i64,[i64],i64) -> [i64];
 listn_aux(n,n,sofar,v) -> sofar;
 listn_aux(n,m,sofar,v) -> listn_aux(n+1,m,{*sofar,v},v);
 
-type token = [i64];
-//type token = {i64,i64,i64,i64,string};
+type Token = {i64,i64,i64,i64,string};
+
+fn ff([Token]) -> [Token];
+ff(x)->{};
 
 eof_compiler;
 
+fn lex_all([Token],i64,string) -> [Token];
 lex_all(sofar,_,{}) -> sofar;
 lex_all(sofar,n,{s,*rest}) -> lex_all({*sofar,*lex_aux({},n,0,0,s)},n+1,rest);
 
+fn lex_aux([Token],i64,i64,i64,string) -> [Token];
 lex_aux(acc,f,row,col,{}) -> acc;
+
+
 lex_aux(acc,f,row,col,{'eof_compiler',*_}) -> acc;
 lex_aux(acc,f,row,col,{c,*rest}) when is_start_token(c) match lex_get_token(1,{c},rest) => sz,val,newrest ->
     lex_aux({*acc,{f,row,col,lex_check_spec_identifier(val),val}},f,row,col+sz,newrest);
@@ -219,8 +225,6 @@ const ExprCallInternal=8;
 const ExprCallLibrary=9;
 const ExprError=10;
 
-const DerivedTypeArray=2;
-
 string_to_int_pos({},acc) -> acc;
 string_to_int_pos({c,*rest},acc) -> string_to_int_pos(rest,acc*10+(c-'0'));
 
@@ -279,9 +283,9 @@ parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,fnline
     update parse_types(true,false,{},{},Semicolon,types,type_lookup,rest) => types_rhs,value_rhs,rest,types,type_lookup
     update get_add_symbol_table(0,{},fnnames,name,{false,fnlineno+1,symsz,types_lhs,types_rhs,value_lhs,value_rhs}) => fnnames,_ ->
     parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,type_lookup,rest);
-// parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,fnlineno,_,Type,_},{_,_,_,Identifier,name},{_,_,_,Equal,_},*rest})
-//     update parse_types(true,false,{},{},Semicolon,types,type_lookup,rest) => types_lhs,value_lhs,rest,types,type_lookup
-//     parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,type_lookup,rest);
+parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,fnlineno,_,Type,_},{_,_,_,Identifier,name},{_,_,_,Equal,_},*rest})
+    update parse_types1(false,name,types,type_lookup,rest) => _,_,types,type_lookup,{{_,_,_,Semicolon,_},*rest}
+    -> parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,rest);
 parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,fnlineno,_,Export,_},{_,_,_,TypeFn,_},{_,_,_,Identifier,name},{_,_,_,LParen,_},*rest})
     update parse_types(true,false,{},{},RParen,types,type_lookup,rest) => types_lhs,value_lhs,rest,types,type_lookup
     update rest => {{_,_,_,Arrow,_},*rest}
@@ -304,18 +308,26 @@ parse_types1(isval,name,endtok,types,type_lookup,{{_,_,_,Identifier,_},{_,_,_,Co
 parse_types1(_,name,types,type_lookup,{{_,_,_,Identifier,"value"},*rest}) -> parse_types1(true,name,types,type_lookup,rest);
 parse_types1(isval,name,types,type_lookup,{{_,_,_,Identifier,_},{_,_,_,Colon,_},*rest}) -> parse_types1(isval,name,types,type_lookup,rest);
 parse_types1(isval,"",types,type_lookup,{{_,_,_,Identifier,tp},*rest}) match lookup_symbol_table(type_lookup,tp) => true,convert -> isval,convert,types,type_lookup,rest;
+parse_types1(isval,name,types,type_lookup,{{_,_,_,Identifier,tp},*rest}) // new name for existing type
+    match lookup_symbol_table(type_lookup,tp) => true,convert
+    match nth(types,convert) => {_,_,def}
+    update check_add_type(0,name,def,type_lookup,{},types) => convert,types,type_lookup
+    -> isval,convert,types,type_lookup,rest;
 parse_types1(isval,name,types,type_lookup,{{_,_,_,LBracket,_},*rest})
-    update parse_types1(false,"",types,type_lookup,rest) => _,this_type,types,type_lookup,{{_,_,_,RBracket,_},*rest}
-    update create_type_list(this_type,types,type_lookup) => newtp,types,type_lookup
-    -> isval,newtp,types,type_lookup,rest;
-//parse_types(top,isval,sofar,sfval,endtok,types,type_lookup,{{_,_,_,LBrace,_},*rest}) match parse_types(top,isval,{},sfval,RBrace,types,type_lookup,rest) => inside,rest,types,type_lookup ->
-//    parse_types_aux(top,{*sofar,{true,inside}},{*sfval,isval},endtok,types,type_lookup,rest);
+    update parse_types1(false,"",types,type_lookup,rest) => _,elt_typeid,types,type_lookup,{{_,_,_,RBracket,_},*rest}
+    match nth(types,elt_typeid) => {elt_name,_,_}
+    update check_add_type(0,firstname(name,{'L_',*elt_name}),{2,elt_typeid},type_lookup,{},types) => convert,types,type_lookup
+    -> isval,convert,types,type_lookup,rest;
+parse_types1(isval,name,types,type_lookup,{{_,_,_,LBrace,_},*rest})
+    update parse_types(false,false,{},{},RBrace,types,type_lookup,rest) => inside,_,rest,types,type_lookup
+    update check_add_type(0,firstname(name,concat_type_name(types,{'S',*int2s(length(inside))},inside)),{3,*inside},type_lookup,{},types) => convert,types,type_lookup
+    -> isval,convert,types,type_lookup,rest;
 
-create_type_list(elt_typeid,types,type_lookup)
-    match nth(types,elt_typeid) => {elt_name,_,ent_type}
-    match {'L_',*elt_name} => name
-    match {DerivedTypeArray,elt_typeid} => def1
-    -> check_add_type(0,name,def1,type_lookup,{},types);
+concat_type_name(types,sofar,{}) -> sofar;
+concat_type_name(types,sofar,{t,*rest}) match nth(types,t) => {n,_,_} -> concat_type_name(types,{*sofar,'_',*n},rest);
+
+firstname("",name) -> name;
+firstname(name,_) -> name;
 
 check_add_type(n,name,def1,type_lookup,sofar,{}) -> length(sofar),{*sofar,{name,false,def1}},{*type_lookup,{name,length(sofar)}};
 check_add_type(n,name,def1,type_lookup,sofar,{{name,b,def1},*rest}) -> n,{*sofar,{name,b,def1},*rest},type_lookup;
@@ -562,7 +574,8 @@ annotate_type_list_reg(types,pri,max_reg,sofar,{{{r,{}},t,_},*rest}) match looku
 annotate_type_list_reg(types,pri,max_reg,sofar,todo) -> annotate_type_list_reg(types,pri+1,max_reg,sofar,todo);
 
 lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{1,sz,tp}} -> {1,sz,tp},{0,sz};
-lookup_type_size_pri(t,types) match nth(types,t) => {_,_,{2,tp}} -> {2,tp},{0,32,0,32};
+lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{2,tp}} -> {2,tp},{0,32,0,32};
+lookup_type_size_pri(t,types) @match nth(types,t) => {_,_,{3,*inside}} -> {3,*inside},{0,32};
 
 calc_counts(table,bindings,{_,_,params},clauses,exprs)
     //match println_any(444,params,clauses,exprs) =>
@@ -685,7 +698,8 @@ ctx_update_lbl_id({types,type_lookup,target,tailcall,active,lbl_decline,lbl_id,f
     {types,type_lookup,target,tailcall,active,lbl_decline,lbl_id+1,fn_id,rule_id,linerule,bindings,reg_count,table};
 
 depth_count(n,_,0) -> n; // HACK - deal with unknown types to make length({}) work
-depth_count(n,types,tp) @match nth(types,tp) => {_,_,{1,sz,_}} -> n,sz;
+depth_count(n,types,tp) @match nth(types,tp) => {_,_,{1,sz,_}} -> n,sz,1;
+depth_count(n,types,tp) @match nth(types,tp) => {_,_,{3,*_}} -> n,32,3;
 depth_count(n,types,tp) @match nth(types,tp) => {_,_,{2,sub_type}} -> depth_count(n+1,types,sub_type);
 
 // TODO expand this to deal properly with types. Just scalars and lists of scalars for now
@@ -694,7 +708,7 @@ gen_types_deref_free(_,ctx,tp,storage) -> gen_types_deref_free_aux(ctx,tp,nth(ct
 
 gen_types_deref_free_aux(ctx,_,{_,_,{1,_,_}},_) -> {};
 gen_types_deref_free_aux(ctx,tp,{_,_,{2,_}},{{src_flag1,src1,sz1},{src_flag2,src2,sz1}})
-    match depth_count(0,ctx_get_types(ctx),tp) => depth,_
+    match depth_count(0,ctx_get_types(ctx),tp) => depth,_,1
     -> {{ctx_fnr(ctx),if(depth<2,OpDerefFree,OpDerefFreeList),0,0,src_flag1,src1,0,0,0,0,depth-1}};
 
 gen_types_addref(ctx,tp,{},_) -> ctx,{}; // TODO this needs to go
@@ -709,7 +723,7 @@ gen_types_do_compare(ctx,tp,store1,store2) -> gen_types_do_compare_aux(ctx,tp,nt
 
 gen_types_do_compare_aux(ctx,tp,{_,_,{1,_,_}},{{srcflag1,src1,sz}},{{srcflag2,src2,sz}}) -> ctx,{},srcflag1,src1,srcflag2,src2,sz;
 gen_types_do_compare_aux(ctx,tp,{_,_,{2,_}},{{BindReg,src1a,32},{BindReg,src1b,32}},{{BindReg,src2a,32},{BindReg,src2b,32}})
-    match depth_count(0,ctx_get_types(ctx),tp) => depth,stride
+    match depth_count(0,ctx_get_types(ctx),tp) => depth,stride,1
     update ctx_newreg(ctx,1) => ctx,result
     -> ctx,{{ctx_fnr(ctx),OpCompareLists,0,0,BindReg,result,BindReg,src1a+(src1b<<32),BindReg,src2a+(src2b<<32),(depth-1)+((stride>>3)<<12)}},BindReg,result,BindImm,1,1;
 
@@ -1035,7 +1049,7 @@ gen_expr_code_aux(committed,ctx,stypes,{ExprList,{}})
 gen_expr_code_aux(committed,ctx,stypes,{ExprList,elements})
     @match decompose_stypes(stypes) => stype,_
     match ctx_get_types(ctx) => types
-    @match nth(types,stype) => {_,_,{DerivedTypeArray,t}}
+    @match nth(types,stype) => {_,_,{2,t}}
     // Array - go get the elements then come back to allocate
     update ctx_newreg(ctx,32) => ctx,newarray
     update ctx_newreg(ctx,64) => ctx,parray
@@ -1048,7 +1062,9 @@ gen_expr_code_aux(committed,ctx,stypes,{ExprList,elements})
 gen_expr_code_aux(committed,ctx,{0,0},{ExprList,{e1,*elements}}) // Deal with type derivation for anonymous list. might need to create type
     update gen_expr_code_aux(committed,ctx,{0,0},e1) => ctx,_,_,_,_,{{_,t,_},*_} // just want the type of first elt (error if there isn't one)
     match ctx_get_types_and_lookup(ctx) => types,type_lookup
-    update create_type_list(t,types,type_lookup) => stype,types,type_lookup
+    match nth(types,t) => {elt_name,_,ent_type}
+    update check_add_type(0,{'L_',*elt_name},{2,t},type_lookup,{},types) => stype,types,type_lookup
+    //update create_type_list(t,types,type_lookup) => stype,types,type_lookup
     update ctx_set_types_and_lookup(ctx,types,type_lookup) => ctx
     match nth(types,stype) => {_,_,{2,subtype}}
     // Array - go get the elements then come back to allocate
@@ -1075,7 +1091,7 @@ gen_expr_code_list(ctx,newarray,parray,newstart,sz,stype,subtype,args_code,{},{}
     -> ctx,false,{},{},{{ctx_fnr(ctx),OpAlloc,0,0,BindReg,newarray,BindImm,bits_to_bytes(sz),BindImm,c},{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,BindReg,newarray},*code,{ctx_fnr(ctx),OpStore,3,0,0,parray,BindImm,c,0,0,8}},
     {{{{BindReg,newarray,32},{BindImm,0,32}},stype,Consume}};
 gen_expr_code_list(ctx,newarray,parray,newstart,sz,stype,subtype,pre_splat,{{true,precode,{{{array_flag,array,32},{start_flag,start,32}},stype,_}}},post_splat) // first splat - check for prepend and append
-    match depth_count(0,ctx_get_types(ctx),subtype) => depth,_
+    match depth_count(0,ctx_get_types(ctx),subtype) => depth,_,1
     update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,pre_splat) => ctx,sum_const_pre,sum_code_pre,BindImm,0
     update get_post_splat_alloc_size(ctx,0,{},{},BindImm,0,post_splat) => ctx,sum_const_post,sum_code,sum_src_flag,sum_src
     update array_var_elt_assign_pre(sz,ctx,BindReg,newarray,BindReg,newstart,0,{},pre_splat) => code_pre
@@ -1137,7 +1153,7 @@ gen_expr_code_library(3,committed,ctx,stypes,args) // nth_insert
     match nth(ctx_get_types(ctx),listtype) => {_,_,{2,elttype}}
     match lookup_type_size_pri(elttype,ctx_get_types(ctx)) => _,storage
     match sum_sub_alloc(0,storage) => sz
-    match depth_count(0,ctx_get_types(ctx),elttype) => depth,_
+    match depth_count(0,ctx_get_types(ctx),elttype) => depth,_,1
     update ctx_newreg(ctx,32) => ctx,newarray
     update ctx_newreg(ctx,64) => ctx,parrayold
     update ctx_newreg(ctx,64) => ctx,parray
@@ -1172,7 +1188,7 @@ gen_expr_code_library(4,committed,ctx,stypes,args) // nth_take
     match nth(ctx_get_types(ctx),listtype) => {_,_,{2,elttype}}
     match lookup_type_size_pri(elttype,ctx_get_types(ctx)) => _,storage
     match sum_sub_alloc(0,storage) => sz
-    match depth_count(0,ctx_get_types(ctx),elttype) => depth,_
+    match depth_count(0,ctx_get_types(ctx),elttype) => depth,_,1
     update ctx_newreg(ctx,32) => ctx,newarray
     update ctx_newreg(ctx,64) => ctx,parrayold
     update ctx_newreg(ctx,64) => ctx,parray
