@@ -257,6 +257,14 @@ uint32_t program_disassemble1(Program* program, FILE* out, uint32_t i) {
         case OP_DEREF_FREE_LIST: {
             fprintf(out,"deref_free_list (r%u)^%u",opv->fdst.a,opv->fdst.b);
         } break;
+        case OP_DEREF_FREE_CALL: {
+            fprintf(out,"deref_call_free r%u (sp+=%d) ",opv->fsrc1.a,opv->fsrc2.a);
+            program_display_label(program,out,opv);
+        } break;
+        case OP_DEREF_FREE_CALL_LIST: {
+            fprintf(out,"deref_call_free_list (r%u)^%u (sp+=%d) ",opv->fsrc1.a,opv->fsrc1.b,opv->fsrc2.a);
+            program_display_label(program,out,opv);
+        } break;
         case OP_REALLOC_VAR: {
             Operation* opv2=&program->code[i+1];
             fprintf(out,"let (r%u,r%u) = realloc_var (r%u,r%u) stride=%ld pre=%d post=%d+r%u",opv->fdst.a,opv2->fdst.a,opv->fsrc1.a,opv2->fsrc1.a,opv->src2,opv->fdst.b,opv2->fdst.b,opv2->fsrc2.a);
@@ -339,8 +347,7 @@ uint32_t alloc(RWInstance* exe, uint32_t count, uint32_t size, uint32_t pc) {
     return alloc;
 }
 
-void deref_free(RWInstance* exe, uint32_t v) {
-    uint32_t* header=rwu_get_header(exe,v);
+void deref_free_ptr(RWInstance* exe, uint32_t* header) {
     if(header[1]==0) {
         printf("double free\n");
         exit(1);
@@ -350,10 +357,15 @@ void deref_free(RWInstance* exe, uint32_t v) {
         uint32_t sz=header[0];
         exe->allocated-=sz;
         //printf("dealloc -%d=%d %d\n",sz,exe->allocated,v);
+        uint64_t* x=(uint64_t*)header;
         for(uint32_t i=1;i<sz;i++) {
-            exe->heap8[v+i]=0xDEADBEEFDEADBEEF;
+            x[i]=0xDEADBEEFDEADBEEF;
         }
     }
+}
+
+void deref_free(RWInstance* exe, uint32_t v) {
+    deref_free_ptr(exe,rwu_get_header(exe,v));
 }
 
 void deref_free_n(RWInstance* exe, uint32_t v, uint32_t n) {
@@ -365,7 +377,30 @@ void deref_free_n(RWInstance* exe, uint32_t v, uint32_t n) {
             deref_free_n(exe,data[i+i],n-1);
         }
     }
-    deref_free(exe,v);
+    deref_free_ptr(exe,parray);
+}
+
+void deref_free_call(Operation* const code,RWInstance* exe,uint32_t* sp,uint64_t** R,Operation** opvb,uint32_t call,uint32_t spinc,uint32_t* parray) {
+    uint32_t newsp=*sp+spinc;
+    *sp=newsp;
+    exe->registers[newsp]=(uint64_t)parray;
+    *R=exe->registers+*sp;
+    uint64_t* r=&exe->registers[*sp-1];
+    r[0]=(uint64_t)(*opvb);
+    *opvb=code+call;
+}
+
+void deref_free_call_n(Operation* const code,RWInstance* exe,uint32_t* sp,uint64_t** R,Operation** opvb,uint32_t call,uint32_t spinc,uint32_t* parray,uint32_t n) {
+    if(n!=0 && parray[1]==1) {
+        uint32_t* data=rwu_get_data(parray);
+        uint32_t end=parray[2];
+        for(uint32_t i=0;i<end;i++) {
+            deref_free_call_n(code,exe,sp,R,opvb,call,spinc,rwu_get_header(exe,data[i+i]),n);
+        }
+    } else {
+        deref_free_call(code,exe,sp,R,opvb,call,spinc,parray);
+    }
+    deref_free_ptr(exe,parray);
 }
 
 uint32_t splat_count_n(RWInstance* exe, uint32_t n, uint32_t array, uint32_t start) {
@@ -531,6 +566,16 @@ dispatch:
                 exe->errsym=program->symbols+opv->src2;
                 return exe->errtype;
             };
+            CASE(OP_RET_INT) {
+                uint64_t* r=&exe->registers[sp-1];
+                opvb=(Operation*)r[0];
+                for(uint32_t index1=0;index1<opvb->fsrc1.a;index1++) {
+                    R[index1]=R[index1+1000];
+                }
+                sp-=opvb->fsrc2.a; // restore the stack to the old value
+                R=exe->registers+sp;
+                opvb+=1;
+            } NEXT();
             CASE(OP_RET) {
                 int32_t* p0=(int32_t*)(&opv->fdst.b);
                 if(sp==2) {
@@ -896,6 +941,12 @@ dispatch:
             CASE(OP_DEREF_FREE_LIST) {
                 uint32_t array=R[opv->fdst.a];
                 deref_free_n(exe,array,opv->fdst.b);
+            } NEXT();
+            case OP_DEREF_FREE_CALL: {
+                deref_free_call(code,exe,&sp,&R,&opvb,opv->fdst.a,opv->fsrc2.a,(uint32_t*)R[opv->fsrc1.a]);
+            } NEXT();
+            case OP_DEREF_FREE_CALL_LIST: {
+                deref_free_call_n(code,exe,&sp,&R,&opvb,opv->fdst.a,opv->fsrc2.a,(uint32_t*)R[opv->fsrc1.a],opv->fsrc2.a);
             } NEXT();
            CASE(OP_INC_MEM) {
                 uint8_t* addr=(uint8_t*)(R[opv->fdst.a]+opv->fdst.b);

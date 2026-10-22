@@ -64,6 +64,8 @@ op_name(OpReallocListVar) -> "ReallocListVar";
 op_name(OpEmptyList) -> "EmptyList";
 op_name(OpDerefFree) -> "DerefFree";
 op_name(OpDerefFreeList) -> "DerefFreeList";
+op_name(OpDerefFreeCall) -> "DerefFreeCall";
+op_name(OpDerefFreeCallList) -> "DerefFreeCallList";
 op_name(OpIncMem) -> "IncMem";
 op_name(OpCont) -> "Cont";
 op_name(OpPrependImm) -> "PrependImm";
@@ -78,6 +80,7 @@ op_name(OpAppendList) -> "AppendList";
 op_name(OpAppendListConsume) -> "AppendListConsume";
 op_name(OpExtractList) -> "ExtractList";
 op_name(OpCompareLists) -> "CompareLists";
+op_name(OpRetInt) -> "RetInt";
 
 fn some_gen_ops() -> [i64];
 some_gen_ops() -> {OpPlus,OpLt,OpLte};
@@ -90,9 +93,12 @@ all_gen_ops() ->
     OpEqual,OpNotEqual,OpCompEqBr,OpCompNeqBr,OpAnd,OpOr,OpXor,OpSext};
 
 fn all_single_ops() -> [i64];
-all_single_ops() -> {OpZext,OpLabel,OpCall,OpRet,OpGoto,OpLea,OpLeaScaleReg,OpLeaScaleImm,OpError,OpCallIO,
+all_single_ops() -> {OpZext,OpLabel,OpCall,OpRet,OpGoto,OpLea,OpLeaScaleReg,OpLeaScaleImm,OpError,OpCallIO,OpRetInt,
     OpAlloc,OpReallocFixed,OpReallocVar,OpReallocListFixed,OpReallocListVar,OpEmptyList,OpDerefFree,OpDerefFreeList,OpIncMem,OpCont,OpCompareLists,
     OpPrependImm,OpPrependReg,OpPrependList,OpPrependListConsume,OpAppendImm,OpAppendReg,OpAppendSplat,OpAppendSplatConsume,OpAppendList,OpAppendListConsume,OpExtractList};
+
+fn label_single_ops() -> [i64];
+label_single_ops() -> {OpDerefFreeCall,OpDerefFreeCallList};
 
 fn has_label(i64) -> bool;
 has_label(OpCompLtBr) -> true;
@@ -110,6 +116,10 @@ has_label(_) -> false;
 fn add_single_defs(string,[string],[i64]) -> string,[string];
 add_single_defs(defs,oplist,{}) -> defs,oplist;
 add_single_defs(defs,oplist,{op,*rest}) -> add_single_defs(generate_define_list(defs,oplist,{'OP_',*upper_snake_case({},true,op_name(op))},op),rest);
+
+fn add_single_name(string,[i64]) -> string,;
+add_single_name(defs,{}) -> defs;
+add_single_name(defs,{op,*rest}) -> add_single_name({*defs,'case OP_',*upper_snake_case({},true,op_name(op)),':\n'},rest);
 
 fn generate_define_list(string,[string],string,i64) -> string,[string];
 generate_define_list(defs,oplist,name,op)
@@ -335,6 +345,6 @@ export fn generate_inc_files() -> value string,value string,value string,value s
 generate_inc_files()
     match generate_inc_files_aux({},listnv(2048,""),{},{},{},all_gen_ops()) => defs,oplist,dis,exec,branch
     match add_single_defs(defs,oplist,all_single_ops()) => defs2,oplist2
-    match process_oplist(0,{},oplist2) => oplist3
-    -> defs2,oplist3,dis,exec,branch;
+    match add_single_defs(defs2,oplist2,label_single_ops()) => defs3,oplist3
+    -> defs3,process_oplist(0,{},oplist3),dis,exec,add_single_name(branch,label_single_ops());
 

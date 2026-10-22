@@ -284,7 +284,7 @@ parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,fnline
     update get_add_symbol_table(0,{},fnnames,name,{false,fnlineno+1,symsz,types_lhs,types_rhs,value_lhs,value_rhs}) => fnnames,_ ->
     parse_aux(target,rules,fnnames,add_symtext(target,symtext,symsz,name),consts,types,type_lookup,rest);
 parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,fnlineno,_,Type,_},{_,_,_,Identifier,name},{_,_,_,Equal,_},*rest})
-    update parse_types1(false,name,types,type_lookup,rest) => _,_,types,type_lookup,{{_,_,_,Semicolon,_},*rest}
+    update parse_types1(fnnames,false,name,types,type_lookup,rest) => fnnames,_,_,types,type_lookup,{{_,_,_,Semicolon,_},*rest}
     -> parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,rest);
 parse_aux(target,rules,fnnames,symtext,symsz,consts,types,type_lookup,{{_,fnlineno,_,Export,_},{_,_,_,TypeFn,_},{_,_,_,Identifier,name},{_,_,_,LParen,_},*rest})
     update parse_types(fnnames,true,false,{},{},RParen,types,type_lookup,rest) => fnnames,types_lhs,value_lhs,rest,types,type_lookup
@@ -319,12 +319,12 @@ parse_types1(fnnames,isval,name,types,type_lookup,{{_,_,_,LBracket,_},*rest})
     update check_add_type(0,firstname(name,{'L_',*elt_name}),{2,elt_typeid},{},type_lookup,{},types) => convert,types,type_lookup
     -> fnnames,isval,convert,types,type_lookup,rest;
 parse_types1(fnnames,isval,name,types,type_lookup,{{_,_,_,LBrace,_},*rest})
-    update parse_types(false,false,{},{},RBrace,types,type_lookup,rest) => inside,_,rest,types,type_lookup
+    update parse_types(fnnames,false,false,{},{},RBrace,types,type_lookup,rest) => fnnames,inside,_,rest,types,type_lookup
     match firstname(name,concat_type_name(types,{'S',*int2s(length(inside))},inside)) => newname
     update get_add_symbol_table(0,{},fnnames,{*newname,'_del'},false) => fnnames,c0
     update get_add_symbol_table(0,{},fnnames,{*newname,'_cmp'},false) => fnnames,c1
     update get_add_symbol_table(0,{},fnnames,{*newname,'_cpy'},false) => fnnames,c2
-    update check_add_type(0,newname,{3,*inside},{},type_lookup,{c0,c1,c2},types) => convert,types,type_lookup
+    update check_add_type(0,newname,{3,*inside},{c0,c1,c2},type_lookup,{},types) => convert,types,type_lookup
     -> fnnames,isval,convert,types,type_lookup,rest;
 
 concat_type_name(types,sofar,{}) -> sofar;
@@ -333,7 +333,7 @@ concat_type_name(types,sofar,{t,*rest}) match nth(types,t) => {n,_,_,_} -> conca
 firstname("",name) -> name;
 firstname(name,_) -> name;
 
-check_add_type(n,name,def1,codec,type_lookup,sofar,{}) -> length(sofar),{*sofar,{name,false,def1,{}}},{*type_lookup,{name,length(sofar)}};
+check_add_type(n,name,def1,codec,type_lookup,sofar,{}) -> length(sofar),{*sofar,{name,false,def1,codec}},{*type_lookup,{name,length(sofar)}};
 check_add_type(n,name,def1,codec,type_lookup,sofar,{{name,b,def1,codec},*rest}) -> n,{*sofar,{name,b,def1,codec},*rest},type_lookup;
 check_add_type(n,name,def1,codec,type_lookup,sofar,{{name,b,_},*rest}) -> #error(5); // names match, but not types
 check_add_type(n,name,def1,codec,type_lookup,sofar,{x,*rest}) -> check_add_type(n+1,name,def1,codec,type_lookup,{*sofar,x},rest);
@@ -710,6 +710,7 @@ depth_count(n,types,tp) @match nth(types,tp) => {_,_,{2,sub_type},_} -> depth_co
 gen_types_deref_free(false,_,_,_) -> {};
 gen_types_deref_free(_,ctx,tp,storage) -> gen_types_deref_free_aux(ctx,tp,nth(ctx_get_types(ctx),tp),storage);
 
+//gen_types_deref_free_aux(ctx,0,{{},false,{0},{}},{}) -> {}; // TODO REMOVE
 gen_types_deref_free_aux(ctx,_,{_,_,{1,_,_},_},_) -> {};
 gen_types_deref_free_aux(ctx,tp,{_,_,{2,_},_},{{src_flag1,src1,sz1},{src_flag2,src2,sz1}})
     match depth_count(0,ctx_get_types(ctx),tp) => depth,_,1
@@ -769,8 +770,11 @@ extract_types(sofar,{}) -> {1,*sofar};
 extract_types(sofar,{{_,tp,consume},*rest}) -> extract_types({*sofar,tp,consume},rest);
 
 gen_params_clauses(target,ctx,{pf1,pf2,params},clauses,exprs,regs_left,type_left,regs_right)
+    match println_any(774) =>
     update gen_param_code(true,false,1,{},ctx,{},{},{},type_left,params) => ctx,c_match,c_commit,c_post
+    match println_any(775) =>
     update gen_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
+    match println_any(76) =>
     update gen_clause_code(2,ctx,c_match,{*c_commit,*cleanup_code},c_post,clauses) => ctx,c_match,c_commit,c_post ->
     ctx,c_match,c_commit,c_post;
 
@@ -784,7 +788,10 @@ update_bind_level(bind_level,false) -> bind_level,1;
 update_bind_level(bind_level,_) -> bind_level+1,bind_level;
 
 gen_clause_code_aux(bind_level,committed,ctx,c_match,c_commit,c_post,expr,{pf1,pf2,matchx})
+    match println_any(777) =>
     update gen_expr_code_untyped(committed,ctx,c_match,c_commit,c_post,{},expr) => ctx,etypes,c_match,c_commit,c_post
+    match println_any(778) =>
+    match println_any(etypes) =>
     update gen_param_code(true,committed,bind_level,{},ctx,c_match,c_commit,c_post,etypes,matchx) => ctx,c_match,c_commit,c_post,
     update gen_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
     -> ctx,c_match,{*c_commit,*cleanup_code},c_post;
