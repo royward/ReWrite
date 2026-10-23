@@ -740,19 +740,19 @@ compile_rule(target,linerule,ctx,sofar,{pf1,pf2,params},clauses,{{ExprCall,fn_id
 compile_rule(target,linerule,ctx,sofar,params,clauses,exprs,regs_left,type_left,regs_right,type_right)
     //match println_any(params,ctx_bindings(ctx)) =>
     @match ctx_get_tail(ctx) => 0
-    update gen_params_clauses(target,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code,c_commit
-    update gen_expr_code(true,ctx,listnv(regs_right,-2),code,c_commit,type_right,exprs) => ctx,outlist,code,c_commit
+    update gen_params_clauses(target,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code,ccommit
+    update gen_expr_code(true,ctx,listnv(regs_right,-2),code,ccommit,type_right,exprs) => ctx,outlist,code,ccommit
     match slice_iolist(ctx_get_reg_count(ctx),5,{},{},outlist) => {first_slice,*slices}
     -> ctx_get_types_and_lookup(ctx),ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lbl_decline(ctx)!=0,ctx_get_lbl_decline(ctx),ctx_lbl(ctx),
-        code_or_not(ctx_get_lbl_active(ctx),{*code,*c_commit,slice_build_ret(ctx_fnr(ctx),length(slices),regs_right,first_slice),*slices});
+        code_or_not(ctx_get_lbl_active(ctx),{*code,*ccommit,slice_build_ret(ctx_fnr(ctx),length(slices),regs_right,first_slice),*slices});
 compile_rule(target,linerule,ctx,sofar,params,clauses,exprs,regs_left,type_left,regs_right,type_right)
     match ctx_get_tail(ctx)-1 => call_id
     update ctx_get_fn_sig(ctx,call_id) => {_,_,_,_,regs_right,_,type_right,_,_,_,_,_}
-    update gen_params_clauses(target,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code,c_commit
-    update gen_expr_code(true,ctx,listnv(regs_right,-2),code,c_commit,type_right,exprs) => ctx,outlist,code,c_commit
+    update gen_params_clauses(target,ctx,params,clauses,exprs,regs_left,type_left,regs_right) => ctx,code,ccommit
+    update gen_expr_code(true,ctx,listnv(regs_right,-2),code,ccommit,type_right,exprs) => ctx,outlist,code,ccommit
     match slice_iolist(ctx_get_reg_count(ctx),4,{},{},outlist) => {first_slice,*slices}
     -> ctx_get_types_and_lookup(ctx),ctx_get_reg_count(ctx),ctx_get_lbl_active(ctx)&&ctx_get_lbl_decline(ctx)!=0,ctx_get_lbl_decline(ctx),ctx_lbl(ctx),
-        code_or_not(ctx_get_lbl_active(ctx),{*code,*c_commit,slice_build_goto(ctx_fnr(ctx),length(slices),call_id,regs_right,first_slice),*slices});
+        code_or_not(ctx_get_lbl_active(ctx),{*code,*ccommit,slice_build_goto(ctx_fnr(ctx),length(slices),call_id,regs_right,first_slice),*slices});
 
 slice_build_ret(fn_id,rule_id,len,regs_right,first_slice) -> {OpBuildIOList,OpRet,OpRet+(fn_id<<16),(rule_id&255)+(len<<8),regs_right,*first_slice};
 slice_build_goto(fn_id,rule_id,len,call_id,regs_right,first_slice) -> {OpBuildIOList,OpGoto,OpGoto+(fn_id<<16),(rule_id&255)+(len<<8),call_id,regs_right,*first_slice};
@@ -770,29 +770,29 @@ extract_types(sofar,{}) -> {1,*sofar};
 extract_types(sofar,{{_,tp,consume},*rest}) -> extract_types({*sofar,tp,consume},rest);
 
 gen_params_clauses(target,ctx,{pf1,pf2,params},clauses,exprs,regs_left,type_left,regs_right)
-    update gen_param_code(true,false,1,{},ctx,{},{},type_left,params) => ctx,code,c_commit
+    update gen_param_code(true,false,1,{},ctx,{},{},type_left,params) => ctx,code,ccommit
     update gen_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
-    update gen_clause_code(2,ctx,code,c_commit,clauses) => ctx,code,c_commit ->
-    ctx,code,{*c_commit,*cleanup_code};
+    update gen_clause_code(false,2,ctx,code,ccommit,cleanup_code,clauses) => ctx,code,ccommit ->
+    ctx,code,ccommit;
 
-gen_clause_code(bind_level,ctx,code,c_commit,{}) -> ctx,code,c_commit;
-gen_clause_code(bind_level,ctx,code,c_commit,{{update_flag,decline,committed,matchx,expr},*rest})
+gen_clause_code(last_do_commit,bind_level,ctx,code,ccommit,cleanup_code,{}) -> ctx,{*code,*ccommit,*code_or_not(!last_do_commit,cleanup_code)},{};
+gen_clause_code(last_do_commit,bind_level,ctx,code,ccommit,cleanup_code,{{update_flag,decline,committed,matchx,expr},*rest})
     update update_bind_level(bind_level,update_flag) => bind_level,this_bind_level
     match committed==0 && !decline => do_commit
-    update gen_clause_code_aux(this_bind_level,do_commit,ctx,code,c_commit,expr,matchx) => ctx,code,c_commit ->
-    gen_clause_code(bind_level,ctx,gen_combine_code_commit(do_commit,code,c_commit),rest);
+    update gen_clause_code_aux(this_bind_level,do_commit,ctx,gen_combine_code_commit(do_commit,code,{*ccommit,*code_or_not(do_commit && !last_do_commit,cleanup_code)}),expr,matchx) => ctx,code,ccommit ->
+    gen_clause_code(do_commit,bind_level,ctx,code,ccommit,cleanup_code,rest);
 
-gen_combine_code_commit(false,code,c_commit) -> code,c_commit;
-gen_combine_code_commit(true,code,c_commit) -> {*code,*c_commit},{};
+gen_combine_code_commit(false,code,ccommit) -> code,ccommit;
+gen_combine_code_commit(true,code,ccommit) -> {*code,*ccommit},{};
 
 update_bind_level(bind_level,false) -> bind_level,1;
 update_bind_level(bind_level,_) -> bind_level+1,bind_level;
 
-gen_clause_code_aux(bind_level,committed,ctx,code,c_commit,expr,{pf1,pf2,matchx})
-    update gen_expr_code_untyped(committed,ctx,code,c_commit,{},expr) => ctx,etypes,code,c_commit
-    update gen_param_code(true,committed,bind_level,{},ctx,code,c_commit,etypes,matchx) => ctx,code,c_commit,
+gen_clause_code_aux(bind_level,committed,ctx,code,ccommit,expr,{pf1,pf2,matchx})
+    update gen_expr_code_untyped(committed,ctx,code,ccommit,{},expr) => ctx,etypes,code,ccommit
+    update gen_param_code(true,committed,bind_level,{},ctx,code,ccommit,etypes,matchx) => ctx,code,ccommit,
     update gen_commit_cleanup(ctx,pf1,pf2) => ctx,cleanup_code
-    -> ctx,code,{*c_commit,*cleanup_code};
+    -> ctx,code,{*ccommit,*cleanup_code};
 
 gen_commit_cleanup(ctx,1,cleanup) -> gen_commit_cleanup_aux(ctx,{},ctx_bindings(ctx),cleanup);
 gen_commit_cleanup(ctx,_,_) -> ctx,{};
@@ -806,19 +806,19 @@ gen_commit_cleanup_aux(ctx,code,{{_,tp,storage,_},*bindrest},{{n,_},*cleanrest})
     update gen_types_addref(ctx,tp,storage,n-1) => ctx,codeaddref
     -> gen_commit_cleanup_aux(ctx,{*code,*codeaddref},bindrest,cleanrest);
 
-gen_param_code(owned,committed,bindlevel,{},ctx,code,c_commit,{},{}) -> ctx,code,c_commit;
-gen_param_code(owned,committed,bindlevel,{tp,src_flag1,src1,src_flag2,src2,_,_,_},ctx,code,c_commit,{},{})
-    -> ctx,code,c_commit;
-gen_param_code(owned,false,bindlevel,stride,ctx,code,c_commit,typex,{{Const,{tp,val}},*rest})
+gen_param_code(owned,committed,bindlevel,{},ctx,code,ccommit,{},{}) -> ctx,code,ccommit;
+gen_param_code(owned,committed,bindlevel,{tp,src_flag1,src1,src_flag2,src2,_,_,_},ctx,code,ccommit,{},{})
+    -> ctx,code,ccommit;
+gen_param_code(owned,false,bindlevel,stride,ctx,code,ccommit,typex,{{Const,{tp,val}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{{{src_flag,src,sz}},tp,_},type_left
     update gen_conditional(ctx,ctx_get_lbl_stuff(ctx),OpCompNeqBr,tp,sz,src_flag,src,BindImm,val) => lbl_decline,ctx,cond_code
     update ctx_set_lbl_decline(ctx,lbl_decline) => ctx ->
-    gen_param_code(owned,false,bindlevel,newstride,ctx,{*code,*mv_code,*cond_code},c_commit,type_left,rest);
-gen_param_code(owned,true,bindlevel,stride,ctx,code,c_commit,typex,{{Const,{tp,val}},*rest})
+    gen_param_code(owned,false,bindlevel,newstride,ctx,{*code,*mv_code,*cond_code},ccommit,type_left,rest);
+gen_param_code(owned,true,bindlevel,stride,ctx,code,ccommit,typex,{{Const,{tp,val}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{{{src_flag,src,sz}},tp,_},type_left
     update gen_conditional_rhs(ctx,{},tp,OpCompEqBr,ErrNoMatchRhs,src_flag,src,BindImm,val,sz) => ctx,cond_code ->
-    gen_param_code(owned,true,bindlevel,newstride,ctx,{*code,*mv_code,*cond_code},c_commit,type_left,rest);
-gen_param_code(owned,committed,bindlevel,stride,ctx,code,c_commit,typex,{{ParamId,{id,count}},*rest})
+    gen_param_code(owned,true,bindlevel,newstride,ctx,{*code,*mv_code,*cond_code},ccommit,type_left,rest);
+gen_param_code(owned,committed,bindlevel,stride,ctx,code,ccommit,typex,{{ParamId,{id,count}},*rest})
     @update gen_param_code_next_type(false,ctx,stride,typex) => ctx,mv_code,newstride,{{{BindMem,src1,sz},{BindMem,src2,sz}},tp,_},type_left
     @match newstride => {_,psrc_flagp,srcp,*_}
     @match nth(ctx_get_types(ctx),tp) => {_,_,{2,sub_type},_}
@@ -828,24 +828,24 @@ gen_param_code(owned,committed,bindlevel,stride,ctx,code,c_commit,typex,{{ParamI
     update ctx_newreg(ctx,32) => ctx,begin
     update gen_bind_variable(count,committed,bindlevel,ctx,{{BindReg,array,sz},{BindReg,begin,sz}},tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(bindings,id,newbind)) => ctx ->
-    gen_param_code(owned,committed,bindlevel,newstride,ctx,{*code,*mv_code,{ctx_fnr(ctx),OpExtractList,0,0,0,array,BindReg,src1,BindReg,src2,srcp},*code0},{*c_commit,*code1},type_left,rest);
-gen_param_code(owned,committed,bindlevel,stride,ctx,code,c_commit,typex,{{ParamId,{id,count}},*rest})
+    gen_param_code(owned,committed,bindlevel,newstride,ctx,{*code,*mv_code,{ctx_fnr(ctx),OpExtractList,0,0,0,array,BindReg,src1,BindReg,src2,srcp},*code0},{*ccommit,*code1},type_left,rest);
+gen_param_code(owned,committed,bindlevel,stride,ctx,code,ccommit,typex,{{ParamId,{id,count}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{storage,tp,_},type_left
     update ctx_bindings(ctx) => bindings
     update nth(bindings,id) => bind
     update gen_bind_variable(count,committed,bindlevel,ctx,storage,tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(bindings,id,newbind)) => ctx ->
-    gen_param_code(owned,committed,bindlevel,newstride,ctx,{*code,*mv_code,*code0},{*c_commit,*code1},type_left,rest);
-gen_param_code(owned,committed,bindlevel,stride,ctx,code,c_commit,typex,{{ParamWild,{}},*rest})
+    gen_param_code(owned,committed,bindlevel,newstride,ctx,{*code,*mv_code,*code0},{*ccommit,*code1},type_left,rest);
+gen_param_code(owned,committed,bindlevel,stride,ctx,code,ccommit,typex,{{ParamWild,{}},*rest})
     @update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,{},{{{src_flag,src,sz},_},tp,_},type_left
     @match nth(ctx_get_types(ctx),tp) => {_,_,{2,_},_}
     update ctx_newreg(ctx,32) => ctx,newreg
     match gen_types_deref_free(owned,ctx,tp,{{BindReg,newreg,32},{BindReg,newreg,32}}) => free_code
-    -> gen_param_code(owned,committed,bindlevel,{},ctx,{*code,*mv_code},{*c_commit,{ctx_fnr(ctx),OpMove,get_size_scale(sz),BindReg,newreg,src_flag,src},*free_code},type_left,rest);
-gen_param_code(owned,committed,bindlevel,stride,ctx,code,c_commit,typex,{{ParamWild,{}},*rest})
+    -> gen_param_code(owned,committed,bindlevel,{},ctx,{*code,*mv_code},{*ccommit,{ctx_fnr(ctx),OpMove,get_size_scale(sz),BindReg,newreg,src_flag,src},*free_code},type_left,rest);
+gen_param_code(owned,committed,bindlevel,stride,ctx,code,ccommit,typex,{{ParamWild,{}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,_,type_left
-    -> gen_param_code(owned,committed,bindlevel,newstride,ctx,{*code,*mv_code},c_commit,type_left,rest);
-gen_param_code(owned,committed,bindlevel,stride,ctx,code,c_commit,typex,{{ParamList,{}},*rest})
+    -> gen_param_code(owned,committed,bindlevel,newstride,ctx,{*code,*mv_code},ccommit,type_left,rest);
+gen_param_code(owned,committed,bindlevel,stride,ctx,code,ccommit,typex,{{ParamList,{}},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) =>ctx,mv_code,newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
     update ctx_newreg(ctx,64) => ctx,parray
     update ctx_newreg(ctx,32) => ctx,pend
@@ -854,8 +854,8 @@ gen_param_code(owned,committed,bindlevel,stride,ctx,code,c_commit,typex,{{ParamL
     update gen_types_deref_free(owned&&true,ctx,tp,{{src_flag1,src1,sz1},{src_flag2,src2,sz2}}) => codefree
     -> gen_param_code(owned,committed,bindlevel,newstride,ctx,
         {*code,*mv_code,{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,src_flag1,src1},{ctx_fnr(ctx),OpLoad,3,0,BindReg,pend,0,parray+(8<<32)},*cond_code},
-        {*c_commit,*codefree},type_left,rest);
-gen_param_code(owned,committed,bindlevel,stride,ctx,code,c_commit,typex,{{ParamList,elements},*rest})
+        {*ccommit,*codefree},type_left,rest);
+gen_param_code(owned,committed,bindlevel,stride,ctx,code,ccommit,typex,{{ParamList,elements},*rest})
     update gen_param_code_next_type(true,ctx,stride,typex) => ctx,mv_code,newstride,{{{src_flag1,src1,sz1},{src_flag2,src2,sz2}},tp,_},type_left
     match nth(ctx_get_types(ctx),tp) => {_,_,{2,sub_type},_}
     match lookup_type_size_pri(sub_type,ctx_get_types(ctx)) => _,sub_alloc
@@ -873,18 +873,18 @@ gen_param_code(owned,committed,bindlevel,stride,ctx,code,c_commit,typex,{{ParamL
         {ctx_fnr(ctx),OpLoad,3,0,BindReg,pend,0,parray+(8<<32)},
         {ctx_fnr(ctx),OpMinus,xt(TypeU32),BindReg,len,BindReg,pend,src_flag2,src2},*cond_code,
         {ctx_fnr(ctx),if(src_flag2==BindReg,OpLeaScaleReg,OpLeaScaleImm),0,0,BindReg,pbegin,BindReg,parray,src_flag2,src2,bits_to_bytes(sz_tot)}} => code
-    update {*code,*code1},{*c_commit,*code2} => code,c_commit
-    -> gen_param_code(owned,committed,bindlevel,newstride,ctx,code,{*c_commit,*codefree},type_left,rest);
-gen_param_code(owned,committed,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,code,c_commit,{{access,t,_},*_},{{ParamSplatWild,{}}}) // note: no rest here
+    update {*code,*code1},{*ccommit,*code2} => code,ccommit
+    -> gen_param_code(owned,committed,bindlevel,newstride,ctx,code,{*ccommit,*codefree},type_left,rest);
+gen_param_code(owned,committed,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,code,ccommit,{{access,t,_},*_},{{ParamSplatWild,{}}}) // note: no rest here
     match gen_types_deref_free(true,ctx,tp,{{src_flag1,src1,32},{src_flag2,src2,32}}) => codefree
-    -> ctx,code,{*c_commit,*codefree};
-gen_param_code(owned,committed,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,code,c_commit,{{access,t,_},*_},{{ParamSplat,{id,count}}}) // note: no rest here
+    -> ctx,code,{*ccommit,*codefree};
+gen_param_code(owned,committed,bindlevel,{tp,src_flag1,src1,src_flag2,src2,s,pos,len},ctx,code,ccommit,{{access,t,_},*_},{{ParamSplat,{id,count}}}) // note: no rest here
     update ctx_bindings(ctx) => bindings
     update ctx_newreg(ctx,32) => ctx,start
     update nth(bindings,id) => bind
     update gen_bind_variable(count,committed,bindlevel,ctx,{{src_flag1,src1,32},{BindReg,start,32}},tp,bind) => ctx,newbind,code0,code1
     update ctx_newbindings(ctx,nth_insert(bindings,id,newbind)) => ctx
-    -> ctx,{*code,{ctx_fnr(ctx),OpPlus,xt(TypeU32),BindReg,start,src_flag2,src2,BindImm,pos},*code0},{*c_commit,*code1};
+    -> ctx,{*code,{ctx_fnr(ctx),OpPlus,xt(TypeU32),BindReg,start,src_flag2,src2,BindImm,pos},*code0},{*ccommit,*code1};
 
 move_mem_to_reg(false,ctx,_,_,sofar,) -> ctx,{},sofar;
 move_mem_to_reg(_,ctx,code,sofar,{}) -> ctx,code,sofar;
@@ -983,16 +983,16 @@ gen_cond_op(op,tp,sz) -> op,xt(tp);
 
 use_binding(ctx,id) match nth(ctx_bindings(ctx),id) => {bind_level,tp,storage,name} -> ctx_newbindings(ctx,nth_insert(ctx_bindings(ctx),id,{bind_level,tp,storage,name})),tp,storage;
 
-gen_expr_code_untyped(committed,ctx,code,c_commit,etypes,{}) -> ctx,etypes,code,c_commit;
-gen_expr_code_untyped(committed,ctx,code,c_commit,etypes,{expr,*rest})
+gen_expr_code_untyped(committed,ctx,code,ccommit,etypes,{}) -> ctx,etypes,code,ccommit;
+gen_expr_code_untyped(committed,ctx,code,ccommit,etypes,{expr,*rest})
     update gen_expr_code_aux(committed,ctx,{0,0},expr) => ctx,false,code0,code1,callout_ret
-    -> gen_expr_code_untyped(committed,ctx,{*code,*code0},{*c_commit,*code1},{*etypes,*callout_ret},rest);
+    -> gen_expr_code_untyped(committed,ctx,{*code,*code0},{*ccommit,*code1},{*etypes,*callout_ret},rest);
 
-gen_expr_code(committed,ctx,outlist,code,c_commit,{},{}) -> ctx,outlist,code,c_commit;
-gen_expr_code(committed,ctx,outlist,code,c_commit,typelist,{expr,*rest})
+gen_expr_code(committed,ctx,outlist,code,ccommit,{},{}) -> ctx,outlist,code,ccommit;
+gen_expr_code(committed,ctx,outlist,code,ccommit,typelist,{expr,*rest})
     update gen_expr_code_aux(committed,ctx,extract_types({},typelist),expr) => ctx,false,code0,code1,callout_ret
     update callout_insert(ctx,outlist,{},callout_ret,typelist) => ctx,outlist,code_insert,typelist_rest
-    -> gen_expr_code(committed,ctx,outlist,{*code,*code0,*code_insert},{*c_commit,*code1},typelist_rest,rest);
+    -> gen_expr_code(committed,ctx,outlist,{*code,*code0,*code_insert},{*ccommit,*code1},typelist_rest,rest);
 
 callout_insert(ctx,outlist,sofar,{},type_left_rest) -> ctx,outlist,sofar,type_left_rest;
 callout_insert(ctx,outlist,sofar,{{{},_,_},*rest0},{{{},_,_},*rest1}) -> callout_insert(ctx,outlist,sofar,rest0,rest1);
@@ -1033,12 +1033,12 @@ gen_expr_code_aux(committed,ctx,stypes,{ExprCallInternal,op,args})
     ctx,false,code,{},x;
 gen_expr_code_aux(committed,ctx,stypes,{ExprCall,fn_id,args})
     match ctx_get_fn_sig(ctx,fn_id) => {_,fnlineno,_,_,regleft,maskleft,params_left,_,regright,maskright,type_right,_}
-    update gen_expr_code(committed,ctx,listnv(regleft,-2),{},{},params_left,args) => ctx,inlist,code,c_commit
+    update gen_expr_code(committed,ctx,listnv(regleft,-2),{},{},params_left,args) => ctx,inlist,code,ccommit
     match ctx_get_reg_count(ctx)+1 => spinc
     update callout_enter(spinc,listnv(regright,-2),{},type_right) => _,newtyperight
     update ctx_put_reg_count(ctx,spinc+regright) => ctx
     match slice_iolist(ctx_get_reg_count(ctx),3,{},{},inlist) => {first_slice,*slices}
-    -> ctx,false,{*code,slice_build_call(ctx_fnr(ctx),length(slices),fn_id,spinc,regleft,regright,first_slice),*slices},c_commit,newtyperight;
+    -> ctx,false,{*code,slice_build_call(ctx_fnr(ctx),length(slices),fn_id,spinc,regleft,regright,first_slice),*slices},ccommit,newtyperight;
 gen_expr_code_aux(committed,ctx,stypes,{ExprCallLibrary,fn_id,args}) -> gen_expr_code_library(fn_id,committed,ctx,stypes,args);
 gen_expr_code_aux(committed,ctx,stypes,{ExprError,{{Const,{TypeI64,err}}}})
     match ctx_fnr(ctx) => fn_id,_
@@ -1080,14 +1080,14 @@ gen_expr_code_aux(committed,ctx,{0,0},{ExprList,{e1,*elements}}) // Deal with ty
     update split_splat({},args_code) => pre_splat,splat,post_splat
     -> gen_expr_code_list(ctx,newarray,parray,newstart,sz,stype,subtype,pre_splat,splat,post_splat);
 gen_expr_code_aux(committed,ctx,{0,t},{ExprSplat,arg})
-    @update gen_expr_code_aux(committed,ctx,{0,t},arg) => ctx,false,code,c_commit,splatdata
-    -> ctx,true,code,c_commit,splatdata;
+    @update gen_expr_code_aux(committed,ctx,{0,t},arg) => ctx,false,code,ccommit,splatdata
+    -> ctx,true,code,ccommit,splatdata;
 gen_expr_code_aux(committed,ctx,{0,t},{ExprSplat,arg})
-    update gen_expr_code_aux(committed,ctx,{0,t},arg) => ctx,true,code,c_commit,{{{{BindReg,array,32},{BindReg,start,32}},tp,consume}}
+    update gen_expr_code_aux(committed,ctx,{0,t},arg) => ctx,true,code,ccommit,{{{{BindReg,array,32},{BindReg,start,32}},tp,consume}}
     match nth(ctx_get_types(ctx),tp) => {_,_,{2,tp2},_}
     match nth(ctx_get_types(ctx),tp2) => {_,_,{2,t},_}
     -> println_any(t,tp,tp2),
-    println_any(true,code,c_commit),#never;
+    println_any(true,code,ccommit),#never;
 
 gen_expr_code_list(ctx,newarray,parray,newstart,sz,stype,subtype,args_code,{},{}) // no splats
     update array_fixed_elt_assign(sz,ctx,parray,0,{},args_code) => c,code
@@ -1107,14 +1107,14 @@ gen_expr_code_aux_map(committed,ctx,sofar,{0,_},{}) -> ctx,sofar;
 gen_expr_code_aux_map(committed,ctx,sofar,{1},{}) -> ctx,sofar;
 gen_expr_code_aux_map(committed,ctx,sofar,stypelist,{expr,*rest})
     match decompose_stypes(stypelist) => typex,trest
-    update gen_expr_code_aux(committed,ctx,{0,typex},expr) => ctx,splat,code,c_commit,results ->
-    gen_expr_code_aux_map(committed,ctx,{*sofar,{splat,{*code,*c_commit},results}},trest,rest);
+    update gen_expr_code_aux(committed,ctx,{0,typex},expr) => ctx,splat,code,ccommit,results ->
+    gen_expr_code_aux_map(committed,ctx,{*sofar,{splat,{*code,*ccommit},results}},trest,rest);
 
 infer_is_list(0,_,{ExprList,_}) -> true; // HACK don't know what the type is, but sure it's a list
 infer_is_list(tp,types,args) match nth(types,tp) => {_,_,{2,_},_} -> true;
 
 gen_expr_code_library(1,committed,ctx,stypes,args) // length
-    update gen_expr_code_untyped(committed,ctx,{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},tp,consume}},code,c_commit
+    update gen_expr_code_untyped(committed,ctx,{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},tp,consume}},code,ccommit
     when infer_is_list(tp,ctx_get_types(ctx),nth(args,0))
     //match decompose_stypes(stypes) => TypeI64,_
     update ctx_newreg(ctx,64) => ctx,parray
@@ -1123,10 +1123,10 @@ gen_expr_code_library(1,committed,ctx,stypes,args) // length
     -> ctx,false,{*code,{ctx_fnr(ctx),OpLea,0,0,BindReg,parray,sf1,src1},
         {ctx_fnr(ctx),OpLoad,3,0,BindReg,end,0,parray+(8<<32)},
         {ctx_fnr(ctx),OpMinus,xt(TypeU32),BindReg,len,BindReg,end,sf2,src2},
-        *gen_types_deref_free(consume!=0,ctx,tp,{{sf1,src1,32},{sf2,src2,32}})},c_commit,
+        *gen_types_deref_free(consume!=0,ctx,tp,{{sf1,src1,32},{sf2,src2,32}})},ccommit,
     {{{{BindReg,len,64}},TypeI64,Consume}};
 gen_expr_code_library(2,committed,ctx,stypes,args) // nth
-    update gen_expr_code_untyped(committed,ctx,{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},tp,consume},{{{indf,ind,64}},TypeI64,_}},code,c_commit
+    update gen_expr_code_untyped(committed,ctx,{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},tp,consume},{{{indf,ind,64}},TypeI64,_}},code,ccommit
     //match decompose_stypes(stypes) => dsttp,_
     match nth(ctx_get_types(ctx),tp) => {_,_,{2,dsttp},_}
     match lookup_type_size_pri(dsttp,ctx_get_types(ctx)) => _,storage
@@ -1147,11 +1147,11 @@ gen_expr_code_library(2,committed,ctx,stypes,args) // nth
         {ctx_fnr(ctx),OpLeaScaleReg,0,0,BindReg,pbegin,BindReg,parray,BindReg,index,bits_to_bytes(sz_tot)},
         *mv_code,
         *addref,
-        *gen_types_deref_free(consume!=0,ctx,tp,{{sf1,src1,32},{sf2,src2,32}})},c_commit,
+        *gen_types_deref_free(consume!=0,ctx,tp,{{sf1,src1,32},{sf2,src2,32}})},ccommit,
     {{memindex,dsttp,Consume}};
 gen_expr_code_library(3,committed,ctx,stypes,args) // nth_insert
     when committed
-    update gen_expr_code_untyped(committed,ctx,{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},listtype,consumel},{{{indf,ind,64}},TypeI64,_},{storagee,elttype,consumee}},code,c_commit
+    update gen_expr_code_untyped(committed,ctx,{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},listtype,consumel},{{{indf,ind,64}},TypeI64,_},{storagee,elttype,consumee}},code,ccommit
     match nth(ctx_get_types(ctx),listtype) => {_,_,{2,elttype},_}
     match lookup_type_size_pri(elttype,ctx_get_types(ctx)) => _,storage
     match sum_sub_alloc(0,storage) => sz
@@ -1182,11 +1182,11 @@ gen_expr_code_library(3,committed,ctx,stypes,args) // nth_insert
         *code_or_not(consumee==Borrow,add_ref),
         *gen_store(ctx,{},memindex,storagee),
         *gen_types_deref_free(true,ctx,elttype,memindex2)
-    },c_commit,
+    },ccommit,
     {{{{BindReg,newarray,32},{BindReg,newstart,32}},listtype,Consume}};
 gen_expr_code_library(4,committed,ctx,stypes,args) // nth_take
     when committed
-    update gen_expr_code_untyped(committed,ctx,{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},listtype,consumel},{{{indf,ind,64}},TypeI64,_}},code,c_commit
+    update gen_expr_code_untyped(committed,ctx,{},{},{},args) => ctx,{{{{sf1,src1,32},{sf2,src2,32}},listtype,consumel},{{{indf,ind,64}},TypeI64,_}},code,ccommit
     match nth(ctx_get_types(ctx),listtype) => {_,_,{2,elttype},_}
     match lookup_type_size_pri(elttype,ctx_get_types(ctx)) => _,storage
     match sum_sub_alloc(0,storage) => sz
@@ -1215,7 +1215,7 @@ gen_expr_code_library(4,committed,ctx,stypes,args) // nth_take
         {ctx_fnr(ctx),OpLeaScaleReg,0,0,BindReg,pbegin,BindReg,parray,BindReg,index,bits_to_bytes(sz)},
         *mv_code,
         *gen_store(ctx,{},memindex,tomb_store),
-    },c_commit,
+    },ccommit,
     {{{{BindReg,newarray,32},{BindReg,newstart,32}},listtype,Consume},{memindex2,elttype,Consume}};
 
 gen_tombstone(ctx,tp,{_,_,{1,sz,TypeChar},_}) -> ctx,{},{{{BindImm,65533,sz}},TypeChar,Consume};
